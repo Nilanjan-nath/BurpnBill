@@ -1,5 +1,5 @@
 -- =============================================================================
--- QR Cafe Ordering — initial schema
+-- Petuk — initial schema
 -- Build order step 1: Database schema
 --
 -- Safe to run on a fresh Supabase project (Postgres 15+).

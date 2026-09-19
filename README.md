@@ -1,4 +1,6 @@
-# QR Cafe Ordering
+# Petuk
+
+*পেটুক — Bengali for one who loves their food.*
 
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
