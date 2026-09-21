@@ -120,7 +120,7 @@ All routes are under `/api`. Errors are always `{ "error": { "code", "message", 
 - `POST /cart/items` — `{ menu_item_id, quantity, special_instructions }`
 - `PATCH /cart/items/:cartItemId` — change quantity/notes **(added)**
 - `DELETE /cart/items/:cartItemId` — remove a line **(added)**
-- `POST /orders` — convert the open cart into an order (retry-safe)
+- `POST /orders` — `{ cart_id }` converts that cart into an order. 201 the first time, 200 with the same order on a retry; 409 `items_unavailable` (with the lines) if anything was 86d since it was added
 
 Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 `POST /invoices`.
@@ -165,7 +165,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 1. ~~**Database schema**~~ — done
 2. ~~**Backend scaffolding**~~ — done: Express app, database and Supabase wiring, staff
    and guest-session middleware, stubs for every v1 route, tests
-3. **Public flow end-to-end** — QR scan → guest session → menu → cart → order, API and
+3. **Public flow end-to-end** — API done; customer web app pending. QR scan → guest session → menu → cart → order, API and
    customer web app
 4. **SSE + staff dashboard** — live order board, status updates, order timeline
 5. **Owner admin panel** — menu CRUD, availability toggle, tables and printable QR codes

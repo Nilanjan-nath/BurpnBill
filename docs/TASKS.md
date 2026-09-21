@@ -23,26 +23,26 @@ Tick items off as they land.
 ## Step 3 — Public flow end to end
 
 **Database**
-- [ ] Migration: `unique (cart_id)` on `orders` (where not null), so one cart can never become
+- [x] Migration: `unique (cart_id)` on `orders` (where not null), so one cart can never become
       two orders even if two requests race.
 
 **API**
-- [ ] Pick a request validation library (e.g. zod) and validate every body and path param.
-- [ ] `GET /menu/:qrToken`
+- [x] Pick a request validation library (e.g. zod) and validate every body and path param.
+- [x] `GET /menu/:qrToken`
   - unknown token → 404; inactive table or restaurant → 403 `ordering_unavailable`
   - reuse the client's `X-Guest-Session` only if it is live **and** for this table; otherwise
     create a new session
   - return the restaurant, the table label, the session id + expiry, and available,
     non-deleted items grouped by category (uses `menu_items_public_read_idx`)
-- [ ] `GET /cart` — lines with current name/price and a server-computed subtotal
-- [ ] `POST /cart/items`
+- [x] `GET /cart` — lines with current name/price and a server-computed subtotal
+- [x] `POST /cart/items`
   - item must belong to the session's restaurant, be available and not deleted
     (cart_items has no `restaurant_id`, so this check is the only guard)
   - quantity 1–99; notes trimmed, empty → null, ≤ 280 chars
   - same item + same notes → merge into the existing line
-- [ ] `PATCH /cart/items/:cartItemId`, `DELETE /cart/items/:cartItemId` — only lines in the
+- [x] `PATCH /cart/items/:cartItemId`, `DELETE /cart/items/:cartItemId` — only lines in the
       session's own open cart
-- [ ] `POST /orders` with `{ cart_id }` (the id `GET /cart` returned), in one transaction:
+- [x] `POST /orders` with `{ cart_id }` (the id `GET /cart` returned), in one transaction:
   - lock that cart (`for update`); it must belong to the session
   - cart already converted → return the order made from it (200) — this is the
     retry/double-tap case, and naming the cart means a retry can never be mistaken for a
@@ -52,9 +52,12 @@ Tick items off as they land.
   - copy current price and name onto each `order_items` row; compute subtotal/total on the
     server (the client never sends prices)
   - mark the cart `converted`; return the new order (201) with its `order_number`
-- [ ] Integration tests for the order flow against a **local Postgres** with the migration
-      applied (decided; can move to a separate Supabase project later). Needs the Postgres
-      server installed — only the client tools are installed so far.
+- [x] Tests for the whole flow run against a real Postgres: PGlite (Postgres in-process, no
+      install) with the repo's real migrations and seed. Also checked once by hand against
+      Supabase inside a rolled-back transaction.
+- [ ] Concurrency test on a real multi-connection Postgres. PGlite runs one connection, so it
+      proves the retry path but not true parallel locking. Needs a local Postgres server
+      (only the client tools are installed) — or a second Supabase project.
 
 **Customer web app** (React + Vite, in `web/`)
 - [ ] Scaffold the app; proxy `/api` to the server in dev

@@ -2,6 +2,7 @@
 # Apply a .sql file to the Supabase database named by DATABASE_URL in .env
 #
 #   scripts/db.sh init      # the schema migration (skipped if already applied)
+#   scripts/db.sh migrate   # every pending migration, in order
 #   scripts/db.sh seed      # demo cafe + menu, prints QR tokens
 #   scripts/db.sh verify    # invariant checks (rolls back, changes nothing)
 #   scripts/db.sh status    # which migrations have been applied
@@ -45,6 +46,9 @@ case "${1:-}" in
   init)   FILE=supabase/migrations/20260919090000_init.sql ;;
   seed)   FILE=supabase/seed.sql ;;
   verify) FILE=scripts/verify_schema.sql ;;
+  migrate) # every migration, in order; ones already applied are skipped
+    for f in supabase/migrations/*.sql; do "$0" "$f"; done
+    exit 0 ;;
   status)
     ensure_ledger
     run -c "select version, applied_at from public.schema_migrations order by version"

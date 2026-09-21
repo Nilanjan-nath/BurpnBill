@@ -97,10 +97,10 @@ test('malformed JSON is a 400, not a 500', async () => {
   assert.equal(res.body.error.code, 'bad_request');
 });
 
-test('menu route is public and stubbed for step 3', async () => {
+test('menu route is public: an unknown QR token is a 404, not a login wall', async () => {
   const res = await call('GET', '/api/menu/some-qr-token');
-  assert.equal(res.status, 501);
-  assert.equal(res.body.error.step, 3);
+  assert.equal(res.status, 404);
+  assert.equal(res.body.error.code, 'not_found');
 });
 
 test('cart and order routes need a guest session', async () => {
@@ -117,13 +117,17 @@ test('guest session: malformed, unknown, expired, closed table, live', async () 
     ['99999999-9999-4999-8999-999999999999', 401, 'guest_session_invalid'],
     [SESSION.expired, 401, 'guest_session_expired'],
     [SESSION.closedTable, 403, 'ordering_unavailable'],
-    [SESSION.live, 501, 'not_implemented'],
   ];
   for (const [session, status, code] of cases) {
     const res = await call('GET', '/api/cart', { headers: { 'X-Guest-Session': session } });
     assert.equal(res.status, status, session);
     assert.equal(res.body.error.code, code, session);
   }
+
+  // A live session gets through: an empty cart, not an error.
+  const live = await call('GET', '/api/cart', { headers: { 'X-Guest-Session': SESSION.live } });
+  assert.equal(live.status, 200);
+  assert.equal(live.body.cart_id, null);
 });
 
 test('staff routes reject missing and invalid tokens', async () => {

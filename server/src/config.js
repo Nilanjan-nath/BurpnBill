@@ -25,5 +25,6 @@ export function loadConfig(env = process.env) {
     databaseCaCert: env.DATABASE_CA_CERT?.trim() || null,
     // The customer web app. Also the only origin allowed through CORS.
     appBaseUrl: (env.APP_BASE_URL || 'http://localhost:5173').trim().replace(/\/$/, ''),
+    guestSessionTtlHours: 3,
   };
 }

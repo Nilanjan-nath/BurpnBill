@@ -43,7 +43,7 @@ export function createApp({ config, db, supabase, checks = {} }) {
   const requireStaff = createRequireStaff({ supabase, db });
   const requireGuestSession = createRequireGuestSession({ db });
 
-  app.use('/api', publicRoutes({ requireGuestSession }));
+  app.use('/api', publicRoutes({ db, config, requireGuestSession }));
   app.use('/api', staffRoutes({ requireStaff }));
 
   app.use(notFoundHandler);

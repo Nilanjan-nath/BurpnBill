@@ -5,7 +5,7 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 2 of 6 done — API scaffolding.** Next: the public ordering flow.
+Status: **step 3 of 6 in progress — the customer ordering API is done; the customer web app is next.**
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
@@ -33,6 +33,7 @@ server/                                Express API (Node 22+)
   test/                                node:test suite, no database needed
 supabase/
   migrations/20260919090000_init.sql   full schema: tables, enums, triggers, indexes, RLS
+  migrations/20260921120000_one_order_per_cart.sql   one order per cart, enforced by an index
   seed.sql                             demo cafe, 4 tables, 12 menu items (re-runnable)
 scripts/
   verify_schema.sql                    11 invariant checks; runs in a transaction, rolls back
@@ -64,7 +65,7 @@ credentials. Routes for later build steps answer `501` with the step they arrive
    **Project Settings → API** and **Project Settings → Database**.
 3. Apply the schema, seed it, and check it:
    ```bash
-   scripts/db.sh init      # the migration
+   scripts/db.sh migrate   # every migration under supabase/migrations/, in order
    scripts/db.sh seed      # demo cafe + menu; prints your QR tokens
    scripts/db.sh verify    # 11 invariant checks; rolls back, changes nothing
    scripts/db.sh status    # which migrations have been applied
