@@ -5,7 +5,8 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 1 of 6 — database schema.**
+Status: **step 2 of 6 done — API scaffolding.** Next: the public ordering flow.
+Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
 
@@ -18,20 +19,42 @@ sync trigger all ship in the schema and are covered by the invariant checks — 
 endpoint writes to them yet. Turning payments on later is new code against an
 existing model, not a migration.
 
-Also out of v1: customer login, automatic invoices, customer-facing order
-tracking, stock counts, structured modifiers (free-text notes only).
+Also out of v1: invoices, customer login, customer-facing order tracking, stock
+counts, structured modifiers (free-text notes only).
 
 ## Layout
 
 ```
+server/                                Express API (Node 22+)
+  src/index.js                         entry point: config, db pool, listen
+  src/app.js                           middleware, health checks, route mounting
+  src/routes/public.js                 customer routes (guest session)
+  src/routes/staff.js                  staff/owner routes (Supabase Auth)
+  test/                                node:test suite, no database needed
 supabase/
   migrations/20260919090000_init.sql   full schema: tables, enums, triggers, indexes, RLS
   seed.sql                             demo cafe, 4 tables, 12 menu items (re-runnable)
 scripts/
   verify_schema.sql                    11 invariant checks; runs in a transaction, rolls back
 docs/
+  ARCHITECTURE.md                      what v1 is, API, decisions
+  TASKS.md                             pending work, by build step
   schema.md                            entity map and the decisions baked into the schema
 ```
+
+## Running the API
+
+Needs Node 22+ and a filled-in `.env` at the repo root (see below).
+
+```bash
+cd server
+npm install
+npm run dev     # http://localhost:4000, restarts on file changes
+npm test        # no database needed
+```
+
+`GET /health/ready` confirms the database and Supabase Auth are reachable with your
+credentials. Routes for later build steps answer `501` with the step they arrive in.
 
 ## Setting up Supabase
 
@@ -76,11 +99,12 @@ docs/
 ## Build order
 
 1. ~~Database schema~~ — done
-2. Express scaffolding: Supabase client wiring, route stubs
+2. ~~Express scaffolding: Supabase client wiring, route stubs~~ — done
 3. Public flow end to end: QR scan -> guest session -> menu -> cart -> order
 4. SSE stream + live staff dashboard
 5. Owner admin panel: menu CRUD + availability toggle
 6. Landing page
 
-Deferred past v1: payments (`POST /payments` against the existing model), RLS
-policies, Redis pub/sub for multi-instance SSE, customer-facing order status.
+Deferred past v1: payments (`POST /payments` against the existing model), invoices,
+RLS policies, Redis pub/sub for multi-instance SSE, customer-facing order status.
+Full list: [docs/TASKS.md](docs/TASKS.md).

@@ -1,0 +1,23 @@
+{
+  "name": "petuk-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Petuk API — Express backend for QR table ordering",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  }
+}
