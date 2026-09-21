@@ -23,6 +23,10 @@ export async function openMenu(db, { qrToken, sessionHeader, sessionTtlHours }) 
   }
 
   const session = await reuseOrCreateSession(db, table, sessionHeader, sessionTtlHours);
+  const { rows: placed } = await db.query(
+    'select exists (select 1 from public.orders where guest_session_id = $1) as has_orders',
+    [session.id],
+  );
 
   const { rows: items } = await db.query(
     `select id, name, description, category, price, is_veg, image_url
@@ -35,7 +39,7 @@ export async function openMenu(db, { qrToken, sessionHeader, sessionTtlHours }) 
   return {
     restaurant: { name: table.restaurant_name, currency_code: table.currency_code },
     table: { label: table.label },
-    session,
+    session: { ...session, has_orders: placed[0].has_orders },
     categories: groupByCategory(items),
   };
 }
@@ -44,10 +48,10 @@ async function reuseOrCreateSession(db, table, sessionHeader, ttlHours) {
   if (sessionHeader && UUID.test(sessionHeader)) {
     const { rows } = await db.query(
       `update public.guest_sessions
-          set last_seen_at = now()
+          set last_seen_at = now(), expires_at = now() + make_interval(hours => $3)
         where id = $1 and table_id = $2 and expires_at > now()
         returning id, expires_at`,
-      [sessionHeader, table.table_id],
+      [sessionHeader, table.table_id, ttlHours],
     );
     if (rows[0]) return { id: rows[0].id, expires_at: rows[0].expires_at };
   }

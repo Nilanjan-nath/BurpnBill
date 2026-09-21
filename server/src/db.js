@@ -17,6 +17,10 @@ function sslOptions(caCertPath) {
   return { rejectUnauthorized: true, ca: readFileSync(caCertPath, 'utf8') };
 }
 
+// bigint (order_number) as a JS number, like the test database does. Safe: order
+// numbers count orders, nowhere near 2^53.
+pg.types.setTypeParser(pg.types.builtins.INT8, (value) => Number(value));
+
 export function createDb(databaseUrl, { caCertPath } = {}) {
   if (!caCertPath) {
     console.warn('[db] DATABASE_CA_CERT not set: connection is encrypted but the server certificate is not verified');

@@ -17,6 +17,8 @@ and place an order directly — which appears instantly on a live kitchen/recept
 - Customer adds items to a cart, with free-text special instructions per item
 - Customer places an order directly from the app (no login required)
 - Customer pays at the counter; payment happens outside the app **(decided)**
+- Customer can open a read-only **bill** — every order placed from their phone, with the
+  total to pay — and show it at the counter **(decided)**
 - Owner adds, edits, and deletes menu items
 - Owner and staff toggle item availability on/off (86'd items disappear from the menu)
 - Owner and staff see live incoming orders per table on one shared dashboard, update
@@ -28,7 +30,8 @@ and place an order directly — which appears instantly on a live kitchen/recept
 - **Payments** — in-app or mocked. The schema already models them (see §4) so adding them
   later is new code, not a migration **(decided)**
 - **Invoices** (email/SMS) — planned for after v1 **(decided)**
-- Customer-facing live order-status tracking, including polling an order's status **(decided)**
+- Customer-facing live order-status tracking, including polling an order's status **(decided)**.
+  The bill lists what was ordered; it does not show whether the kitchen has started on it.
 - Customer login / OTP-based authentication
 - Stock-count auto-decrementing (boolean availability only)
 - Structured order modifiers (size/spice/add-ons) — free-text notes only
@@ -62,7 +65,7 @@ restaurants ──< menu_items          restaurants ──< staff_members
 - **Restaurant** — one row per cafe/tenant. Everything else scopes to `restaurant_id`.
 - **Table** — belongs to a restaurant; holds an opaque `qr_token` the QR code encodes.
 - **MenuItem** — belongs to a restaurant; `is_available`, price, category, soft delete.
-- **GuestSession** — created per QR scan (no login), tied to a table, expires after 3 hours.
+- **GuestSession** — created per QR scan (no login), tied to a table, expires 3 hours after its last activity.
 - **Cart / CartItem** — server-side cart, at most one open cart per guest session
   **(decided)**. Same item with different notes is a separate line.
 - **Order** — belongs to a table + restaurant + guest session; has a `status` (§5) and
@@ -91,7 +94,8 @@ The API rejects anything else with 400; a database trigger rejects it again as a
 
 - **Guest sessions** are a random id returned by `GET /menu/:qr_token`, stored by the web
   app in `localStorage`, and sent back in an `X-Guest-Session` header **(decided)**. They
-  expire after 3 hours; expiry is checked on every cart/order request.
+  expire 3 hours after the last request (any activity renews them, so a party lingering over
+  chai can still open their bill); expiry is checked on every cart/order/bill request.
 - QR codes encode an opaque `qr_token`, not a table number, so tables can't be enumerated.
 - This is **not** authentication — the threat model is accidental order conflation between
   customers at one table. A shared or bookmarked link can still place an order.
@@ -120,6 +124,9 @@ All routes are under `/api`. Errors are always `{ "error": { "code", "message", 
 - `POST /cart/items` — `{ menu_item_id, quantity, special_instructions }`
 - `PATCH /cart/items/:cartItemId` — change quantity/notes **(added)**
 - `DELETE /cart/items/:cartItemId` — remove a line **(added)**
+- `GET /bill` — read-only summary of this session's orders: items, notes, per-order and grand
+  totals. Cancelled orders are listed but not charged. Scoped to the guest session, never the
+  table, so other guests' orders stay private **(added)**
 - `POST /orders` — `{ cart_id }` converts that cart into an order. 201 the first time, 200 with the same order on a retry; 409 `items_unavailable` (with the lines) if anything was 86d since it was added
 
 Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
@@ -165,8 +172,8 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 1. ~~**Database schema**~~ — done
 2. ~~**Backend scaffolding**~~ — done: Express app, database and Supabase wiring, staff
    and guest-session middleware, stubs for every v1 route, tests
-3. **Public flow end-to-end** — API done; customer web app pending. QR scan → guest session → menu → cart → order, API and
-   customer web app
+3. ~~**Public flow end-to-end**~~ — done: QR scan → guest session → menu → cart → order, in the
+   API and the customer web app (`web/`)
 4. **SSE + staff dashboard** — live order board, status updates, order timeline
 5. **Owner admin panel** — menu CRUD, availability toggle, tables and printable QR codes
 6. **Landing page** — last, once there's a real flow to show

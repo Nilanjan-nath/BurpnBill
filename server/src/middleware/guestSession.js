@@ -9,7 +9,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Not authentication — it only keeps two diners at one table apart.
 //
 //   req.guest = { sessionId, tableId, restaurantId }
-export function createRequireGuestSession({ db }) {
+export function createRequireGuestSession({ db, sessionTtlHours = 3 }) {
   return async function requireGuestSession(req, res, next) {
     const sessionId = req.get(GUEST_SESSION_HEADER);
     if (!sessionId || !UUID.test(sessionId)) {
@@ -38,7 +38,14 @@ export function createRequireGuestSession({ db }) {
       throw new HttpError(403, 'ordering_unavailable', 'Ordering is not available at this table right now');
     }
 
-    await db.query('update public.guest_sessions set last_seen_at = now() where id = $1', [sessionId]);
+    // Any activity keeps the session alive for another full TTL: a party that
+    // lingers over chai must still be able to open their bill.
+    await db.query(
+      `update public.guest_sessions
+          set last_seen_at = now(), expires_at = now() + make_interval(hours => $2)
+        where id = $1`,
+      [sessionId, sessionTtlHours],
+    );
 
     req.guest = { sessionId, tableId: session.table_id, restaurantId: session.restaurant_id };
     next();

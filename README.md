@@ -5,7 +5,7 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 3 of 6 in progress — the customer ordering API is done; the customer web app is next.**
+Status: **step 3 of 6 done — customers can scan, browse, and order.** Next: the live staff dashboard.
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
@@ -31,6 +31,10 @@ server/                                Express API (Node 22+)
   src/routes/public.js                 customer routes (guest session)
   src/routes/staff.js                  staff/owner routes (Supabase Auth)
   test/                                node:test suite, no database needed
+web/                                   customer web app (React + Vite)
+  src/useOrdering.js                   menu, cart, order state and every recovery case
+  src/components/                      menu, item sheet, cart, confirmation screens
+  src/App.test.jsx                     UI tests: real app -> real API -> real Postgres (PGlite)
 supabase/
   migrations/20260919090000_init.sql   full schema: tables, enums, triggers, indexes, RLS
   migrations/20260921120000_one_order_per_cart.sql   one order per cart, enforced by an index
@@ -42,6 +46,20 @@ docs/
   TASKS.md                             pending work, by build step
   schema.md                            entity map and the decisions baked into the schema
 ```
+
+## Quick start
+
+With a filled-in `.env` at the repo root:
+
+```bash
+npm run setup   # once: installs server/ and web/ dependencies
+npm run dev     # starts the API (:4000) and the customer app (:5173) together
+npm test        # all tests, no database or network needed
+```
+
+Open `http://localhost:5173/t/<qr_token>` (`scripts/db.sh seed` prints the demo tokens). The
+servers only run while `npm run dev` is running — if the app says it "can't reach the server",
+that is the first thing to check.
 
 ## Running the API
 
@@ -56,6 +74,22 @@ npm test        # no database needed
 
 `GET /health/ready` confirms the database and Supabase Auth are reachable with your
 credentials. Routes for later build steps answer `501` with the step they arrive in.
+
+## Running the customer app
+
+Start the API first (above), then in a second terminal:
+
+```bash
+cd web
+npm install
+npm run dev     # http://localhost:5173 — `/api` is proxied to the API on :4000
+npm test        # no database or API needed: the tests start their own
+```
+
+Open `http://localhost:5173/t/<qr_token>` (`scripts/db.sh seed` prints the demo tokens).
+The dev server also prints a **Network** URL, so you can open the same page on a phone on
+your Wi-Fi. When the API is hosted on a different domain, build with `VITE_API_URL` set to
+its address, e.g. `VITE_API_URL=https://api.example.com npm run build`.
 
 ## Setting up Supabase
 
@@ -101,7 +135,7 @@ credentials. Routes for later build steps answer `501` with the step they arrive
 
 1. ~~Database schema~~ — done
 2. ~~Express scaffolding: Supabase client wiring, route stubs~~ — done
-3. Public flow end to end: QR scan -> guest session -> menu -> cart -> order
+3. ~~Public flow end to end: QR scan -> guest session -> menu -> cart -> order~~ — done
 4. SSE stream + live staff dashboard
 5. Owner admin panel: menu CRUD + availability toggle
 6. Landing page

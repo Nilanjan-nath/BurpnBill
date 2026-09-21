@@ -59,14 +59,25 @@ Tick items off as they land.
       proves the retry path but not true parallel locking. Needs a local Postgres server
       (only the client tools are installed) — or a second Supabase project.
 
-**Customer web app** (React + Vite, in `web/`)
-- [ ] Scaffold the app; proxy `/api` to the server in dev
-- [ ] `/t/:qrToken` — load menu, store the guest session id in `localStorage`
-- [ ] Menu by category, veg markers, add-to-cart with notes
-- [ ] Cart: edit quantity/notes, remove lines, subtotal from the server
-- [ ] Place order → confirmation screen with the order number and "pay at the counter"
-- [ ] Handle: session expired (ask to rescan), item became unavailable at checkout (show
+**Customer web app** (React + Vite, in `web/`) — done; 13 UI tests run the real app against the real API on Postgres
+- [x] Scaffold the app; proxy `/api` to the server in dev
+- [x] `/t/:qrToken` — load menu, store the guest session id in `localStorage`
+- [x] Menu by category, veg markers, add-to-cart with notes
+- [x] Cart: edit quantity/notes, remove lines, subtotal from the server
+- [x] Place order → confirmation screen with the order number and "pay at the counter"
+- [x] Handle: session expired (ask to rescan), item became unavailable at checkout (show
       which, let them remove it), ordering unavailable, offline/retry without duplicates
+
+- [ ] Try it on a real phone over your LAN (`npm run dev` in `web/` prints a Network URL; open `/t/<qr_token>`) and with a real printed/on-screen QR code.
+
+**Bill** (added after the first hands-on test — orders vanished once you left the confirmation)
+- [x] `GET /bill`: this session's orders + totals; cancelled orders listed, not charged
+- [x] `has_orders` on the menu response drives the "Your bill" button
+- [x] Sessions renew on activity (3 h after the last request), so the bill stays reachable
+- [x] Bill screen (`#bill`): View bill on the confirmation, Your bill on the menu, Refresh, Order more
+- [x] One-command dev: `npm run dev` at the repo root starts API + web
+- [ ] Known limit: a session idle for 3+ hours expires and its bill is no longer reachable from
+      that phone — the customer asks at the counter. A staff-side table bill (step 4/5) covers it.
 
 ## Step 4 — SSE + staff dashboard
 
@@ -121,6 +132,8 @@ Tick items off as they land.
 - RLS policies (and `restaurant_id` on `cart_items` / `order_items` to support them)
 - Redis pub/sub for SSE across multiple API instances
 - Staff "mark as paid" without a payment row, if cafes want paid/unpaid on the board
+- Table-level bill on the staff side (all sessions at a table, incl. after a session expires)
+- Print / save the bill as PDF; tax invoices (with invoices, above)
 - Pause QR ordering for a single table
 - Separate kitchen and reception views
 - Structured modifiers, stock counts, tax engine, customer login

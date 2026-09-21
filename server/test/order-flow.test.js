@@ -397,3 +397,93 @@ test('order: an expired session cannot place an order', async () => {
   assert.equal(res.status, 401);
   assert.equal(res.body.error.code, 'guest_session_expired');
 });
+
+// --- bill ----------------------------------------------------------------------
+
+async function orderOf(session, itemName, quantity = 1, note) {
+  const cart = (await add(session, await itemId(itemName), quantity, note)).body;
+  const res = await api('POST', '/api/orders', { session, body: { cart_id: cart.cart_id } });
+  assert.equal(res.status, 201);
+  return res.body.order;
+}
+
+test('bill: lists this session\'s orders with items, notes and totals — never another guest\'s', async () => {
+  const mine = await scan('T2');
+  const theirs = await scan('T2');
+  const first = await orderOf(mine.session, 'Masala Chai', 2, 'less sugar');
+  const second = await orderOf(mine.session, 'Paneer Tikka Roll');
+  await orderOf(theirs.session, 'Filter Coffee');
+
+  const res = await api('GET', '/api/bill', { session: mine.session });
+  assert.equal(res.status, 200);
+  const bill = res.body;
+
+  assert.equal(bill.restaurant.name, 'Chai Point Cafe');
+  assert.equal(bill.restaurant.currency_code, 'INR');
+  assert.equal(bill.table.label, 'T2');
+  assert.ok(!Number.isNaN(Date.parse(bill.generated_at)));
+
+  assert.deepEqual(bill.orders.map((o) => o.order_number), [first.order_number, second.order_number]);
+  assert.deepEqual(bill.orders[0].items, [
+    { name: 'Masala Chai', price: '30.00', quantity: 2, special_instructions: 'less sugar', line_total: '60.00' },
+  ]);
+  assert.equal(bill.orders[0].total_amount, '60.00');
+  assert.equal(bill.orders[0].cancelled, false);
+  assert.deepEqual(bill.totals, { subtotal: '200.00', tax: '0.00', total: '200.00' });
+  assert.ok(!('status' in bill.orders[0]), 'order status is not exposed: tracking is out of scope');
+
+  const other = (await api('GET', '/api/bill', { session: theirs.session })).body;
+  assert.equal(other.orders.length, 1);
+  assert.deepEqual(other.totals, { subtotal: '40.00', tax: '0.00', total: '40.00' });
+});
+
+test('bill: a cancelled order is listed but not charged', async () => {
+  const { session } = await scan('T3');
+  const keep = await orderOf(session, 'Masala Chai');
+  const cancelled = await orderOf(session, 'Butter Chicken Bowl');
+  await db.query("update orders set status = 'cancelled' where id = $1", [cancelled.id]);
+
+  const bill = (await api('GET', '/api/bill', { session })).body;
+  assert.equal(bill.orders.length, 2);
+  assert.equal(bill.orders.find((o) => o.order_number === cancelled.order_number).cancelled, true);
+  assert.equal(bill.orders.find((o) => o.order_number === keep.order_number).cancelled, false);
+  assert.deepEqual(bill.totals, { subtotal: '30.00', tax: '0.00', total: '30.00' });
+});
+
+test('bill: empty before any order, and needs a guest session', async () => {
+  const { session } = await scan();
+  const bill = (await api('GET', '/api/bill', { session })).body;
+  assert.deepEqual(bill.orders, []);
+  assert.deepEqual(bill.totals, { subtotal: '0.00', tax: '0.00', total: '0.00' });
+
+  assert.equal((await api('GET', '/api/bill')).status, 401);
+});
+
+test('menu: says whether this session already has orders (drives the Bill button)', async () => {
+  const { session, menu } = await scan();
+  assert.equal(menu.session.has_orders, false);
+
+  await orderOf(session, 'Masala Chai');
+  const again = await scan('T1', session);
+  assert.equal(again.session, session);
+  assert.equal(again.menu.session.has_orders, true);
+});
+
+test('sessions: any activity keeps them alive for a fresh 3 hours (a slow chai must not lose the bill)', async () => {
+  const soon = "now() + interval '1 minute'";
+  const extended = async (id) =>
+    (await db.query("select expires_at > now() + interval '2 hours' as ok from guest_sessions where id = $1", [id])).rows[0].ok;
+
+  const { session } = await scan();
+  await db.query(`update guest_sessions set expires_at = ${soon} where id = $1`, [session]);
+  await api('GET', '/api/cart', { session });
+  assert.equal(await extended(session), true, 'a cart request extends it');
+
+  await db.query(`update guest_sessions set expires_at = ${soon} where id = $1`, [session]);
+  await api('GET', '/api/bill', { session });
+  assert.equal(await extended(session), true, 'viewing the bill extends it');
+
+  await db.query(`update guest_sessions set expires_at = ${soon} where id = $1`, [session]);
+  await scan('T1', session);
+  assert.equal(await extended(session), true, 'rescanning the QR extends it');
+});

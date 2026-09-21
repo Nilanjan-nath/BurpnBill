@@ -87,7 +87,7 @@ async function readOrder(q, orderId) {
   );
   const { rows: items } = await q.query(
     `select name_at_order as name, price_at_order as price, quantity, special_instructions, line_total
-       from public.order_items where order_id = $1 order by created_at, id`,
+       from public.order_items where order_id = $1 order by name_at_order, id`,
     [orderId],
   );
   return { ...rows[0], items };

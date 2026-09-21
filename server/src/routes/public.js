@@ -3,6 +3,7 @@ import { GUEST_SESSION_HEADER } from '../middleware/guestSession.js';
 import { openMenu } from '../services/menu.js';
 import * as cart from '../services/cart.js';
 import { placeOrder } from '../services/orders.js';
+import { getBill } from '../services/bill.js';
 import { parse, addCartItemBody, updateCartItemBody, placeOrderBody, cartItemParams } from '../validate.js';
 
 // Customer-facing routes. No login: the table's QR token starts a guest
@@ -49,6 +50,11 @@ export function publicRoutes({ db, config, requireGuestSession }) {
     const body = parse(placeOrderBody, req.body);
     const { order, created } = await placeOrder(db, req.guest, body);
     res.status(created ? 201 : 200).json({ order });
+  });
+
+  // Read-only summary of this guest session's orders, to show at the counter.
+  router.get('/bill', requireGuestSession, async (req, res) => {
+    res.json(await getBill(db, req.guest));
   });
 
   return router;

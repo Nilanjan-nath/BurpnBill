@@ -1,0 +1,14 @@
+{
+  "name": "petuk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QR table ordering for cafes",
+  "scripts": {
+    "setup": "npm install --prefix server && npm install --prefix web",
+    "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors blue,green \"npm run dev --prefix server\" \"npm run dev --prefix web\"",
+    "test": "npm test --prefix server && npm test --prefix web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
