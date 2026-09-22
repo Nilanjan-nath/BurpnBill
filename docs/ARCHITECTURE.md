@@ -159,6 +159,11 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - Broadcast via an in-memory connection map keyed by `restaurant_id`, inside the single
   Express instance. Multiple instances would need shared pub/sub (e.g. Redis) — a known
   limitation, not solved now.
+- Read with `fetch` + an `Authorization` header, not the browser's `EventSource` — it can't send
+  custom headers, and the alternative (a token in the URL, or a separate cookie-based session
+  just for this one endpoint) isn't worth it for one stream **(decided)**. No replay: a
+  dashboard that reconnects just calls `GET /orders` again rather than the server trying to
+  catch it up on what it missed.
 
 ## 8. Tech stack
 

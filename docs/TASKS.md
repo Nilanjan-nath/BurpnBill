@@ -113,14 +113,27 @@ Five slices, each tested, documented and committed on its own:
       caveat as the order-placement race test below; both need the local Postgres / second
       Supabase project already listed there.
 
-**Slice 2 — Live push (SSE)**
-- [ ] In-memory hub keyed by `restaurant_id`; publish AFTER commit from `POST /orders` and the
-      status route; events `order_created` / `order_status_changed` carry the full order
-- [ ] `GET /orders/stream` (the `:restaurantId` in the old path was redundant); heartbeat ~25s;
-      close all streams on shutdown
-- [ ] Auth: read the stream with `fetch` + an `Authorization` header (`EventSource` can't send
-      headers), reconnect with backoff, refetch the board on every reconnect. No token in URLs
-- [ ] Tests: an event reaches only the right restaurant; nothing is sent before commit
+**Slice 2 — Live push (SSE)** — done (server side; the dashboard that connects to it is slice 3/4)
+- [x] `src/orderStream.js`: in-memory hub, `Set<res>` keyed by `restaurant_id`. `subscribe` wires
+      its own cleanup (`res.on('close')`); `publish` writes an SSE frame to every open connection
+      for that café only; `closeAll` ends every stream so shutdown doesn't hang waiting for
+      connections that never finish on their own; `connectionCount` for tests/diagnostics
+- [x] `getBoardCard` + `publishBoardCard` in `staffOrders.js`: fetches the fresh, committed row in
+      the same shape `GET /orders` returns, and publishes it — shared by `POST /orders`
+      (`order_created`, only on a genuine create, never on the idempotent-retry path) and
+      `PATCH /orders/:id/status` (`order_status_changed`); publish failures only log, never break
+      the request that triggered them
+- [x] `GET /orders/stream` — registered before `/orders/:orderId` (dropped the redundant
+      `:restaurantId` path prefix from the original design); `X-Accel-Buffering: no`; opening
+      frame so the client knows the connection is live; ~25s heartbeat (configurable, for tests)
+- [x] Auth: read with `fetch` + `Authorization`, not `EventSource` (can't send headers) — see
+      ARCHITECTURE §7. No reconnect logic yet; that's the dashboard's job in slice 4
+- [x] `src/index.js`: hub closed first on shutdown, before `server.close()`
+- [x] Tests (real Postgres): a live stream reads real pushed frames from real placed/moved
+      orders; retries never double-push; rejected moves never push; heartbeats arrive; café
+      isolation; a closed connection is actually removed (`connectionCount`), not just silent.
+      Three mutations checked by hand — one (a `node -e` string-replace) silently failed to
+      apply and gave a false pass; redone with the Edit tool and confirmed for real
 
 **Slice 3 — Sign-in and static board**
 - [ ] `/staff` route, lazy-loaded; Supabase Auth email + password; expose only `SUPABASE_URL` and

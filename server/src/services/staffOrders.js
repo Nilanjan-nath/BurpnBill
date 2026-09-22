@@ -126,6 +126,62 @@ export async function getRecentOrders(db, restaurantId, { hours = 4 } = {}) {
   };
 }
 
+// The single-order version of the per-row shape above, used to build the
+// payload for a pushed SSE event (order_created, order_status_changed) — so a
+// card that arrives over the stream looks exactly like a fresh row from
+// GET /orders would. Called once per event, right after it happens, so a
+// second query here is cheap; it is NOT reused inside listActiveOrders
+// itself, which needs one query for the whole board, not one per row.
+// Keep this SELECT's shape in sync with listActiveOrders's if either changes.
+export async function getBoardCard(db, restaurantId, orderId) {
+  const { rows } = await db.query(
+    `select o.id, o.order_number, o.status, o.total_amount, o.placed_at,
+            coalesce(
+              (select e.created_at from public.order_status_events e
+                where e.order_id = o.id order by e.id desc limit 1),
+              o.placed_at
+            ) as status_changed_at,
+            t.id as table_id, t.label as table_label,
+            coalesce(
+              (select json_agg(
+                        json_build_object(
+                          'name', oi.name_at_order,
+                          'quantity', oi.quantity,
+                          'special_instructions', oi.special_instructions
+                        )
+                        order by oi.name_at_order, oi.id)
+                 from public.order_items oi
+                where oi.order_id = o.id),
+              '[]'::json
+            ) as items
+       from public.orders o
+       join public.restaurant_tables t on t.id = o.table_id
+      where o.id = $1 and o.restaurant_id = $2`,
+    [orderId, restaurantId],
+  );
+  if (!rows.length) return null;
+  const { table_id, table_label, ...order } = rows[0];
+  return { ...order, table: { id: table_id, label: table_label } };
+}
+
+// Fetches the current board-card shape for one order and publishes it over
+// the SSE hub. Shared by POST /orders (order_created) and PATCH /status
+// (order_status_changed) — the only two things that ever change what a
+// dashboard should show.
+//
+// A failure here must never break the request that triggered it: the order
+// or status change was already safely committed before this runs. A
+// dashboard that doesn't hear about it right away just finds out on its next
+// refresh — so this only ever logs, it never throws back into the route.
+export async function publishBoardCard(hub, db, restaurantId, orderId, event) {
+  try {
+    const card = await getBoardCard(db, restaurantId, orderId);
+    if (card) hub.publish(restaurantId, event, card);
+  } catch (err) {
+    console.error(`[sse] failed to publish ${event}`, err);
+  }
+}
+
 // GET /orders/:id — one order's full detail plus its status timeline, for a
 // staff member who already has the id (a board card, a search, a link).
 // Scoped to the signed-in staff member's restaurant, like every staff query:

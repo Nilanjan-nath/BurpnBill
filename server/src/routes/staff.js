@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import { notImplemented } from '../errors.js';
 import { requireOwner } from '../middleware/auth.js';
-import { listActiveOrders, getRecentOrders, getOrderDetail, updateOrderStatus } from '../services/staffOrders.js';
+import {
+  listActiveOrders,
+  getRecentOrders,
+  getOrderDetail,
+  updateOrderStatus,
+  publishBoardCard,
+} from '../services/staffOrders.js';
 import { notFound } from '../errors.js';
 import { parse, listOrdersQuery, recentOrdersQuery, orderIdParams, updateOrderStatusBody } from '../validate.js';
 
@@ -9,7 +15,7 @@ import { parse, listOrdersQuery, recentOrdersQuery, orderIdParams, updateOrderSt
 // query is scoped to req.staff.restaurantId.
 //   owner: everything
 //   staff: work the order board, 86 items
-export function staffRoutes({ db, requireStaff }) {
+export function staffRoutes({ db, requireStaff, hub }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
@@ -29,6 +35,23 @@ export function staffRoutes({ db, requireStaff }) {
     const { hours } = parse(recentOrdersQuery, req.query);
     res.json(await getRecentOrders(db, req.staff.restaurantId, { hours }));
   });
+  // Registered before /orders/:orderId, same reason as /orders/recent above
+  // — otherwise "stream" would be read as an order id.
+  //
+  // Not read with the browser's EventSource: it can't send an Authorization
+  // header, and this route needs the same staff token as everything else
+  // here. The dashboard instead opens it with fetch() and reads the body as
+  // it streams — see docs/TASKS.md slice 2 for why.
+  router.get('/orders/stream', staff, (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // ask any reverse proxy in front of this not to buffer the stream
+    });
+    res.write(': connected\n\n'); // an immediate frame, so the client can tell the stream is actually open
+    hub.subscribe(req.staff.restaurantId, res);
+  });
   router.get('/orders/:orderId', staff, async (req, res) => {
     const { orderId } = parse(orderIdParams, req.params);
     const order = await getOrderDetail(db, req.staff.restaurantId, orderId);
@@ -41,8 +64,8 @@ export function staffRoutes({ db, requireStaff }) {
     const order = await updateOrderStatus(db, req.staff.restaurantId, orderId, status, req.staff.userId);
     if (!order) throw notFound('Order not found');
     res.json({ order });
+    publishBoardCard(hub, db, req.staff.restaurantId, orderId, 'order_status_changed'); // after the response — never blocks it
   });
-  router.get('/restaurants/:restaurantId/orders/stream', staff, notImplemented(4)); // SSE
 
   // Menu management (step 5). Availability is open to all staff so the
   // kitchen can 86 an item mid-service.
