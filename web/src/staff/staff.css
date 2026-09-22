@@ -63,6 +63,7 @@
   background: var(--surface);
 }
 .staff-header h1 { font-size: 1.2rem; }
+.staff-header-left { display: flex; align-items: center; gap: 12px; }
 .staff-header-right { display: flex; align-items: center; gap: 12px; }
 .staff-who { color: var(--muted); font-size: 0.9rem; }
 .staff-link {
@@ -72,6 +73,27 @@
   text-decoration: underline;
   font-size: 0.9rem;
   padding: 4px;
+}
+
+.staff-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.staff-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.staff-live-live .staff-live-dot { background: var(--veg); }
+.staff-live-live { color: var(--veg); }
+.staff-live-reconnecting .staff-live-dot { background: var(--warn-text); animation: staff-pulse 1s ease-in-out infinite; }
+.staff-live-reconnecting { color: var(--warn-text); }
+@keyframes staff-pulse {
+  50% { opacity: 0.3; }
 }
 
 .staff-loading { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -124,8 +146,15 @@
   display: grid;
   gap: 8px;
 }
-.staff-card-head { display: flex; justify-content: space-between; align-items: baseline; }
-.staff-table { color: var(--muted); font-size: 0.9rem; }
+.staff-card-head { display: flex; align-items: baseline; gap: 8px; }
+.staff-card-head strong { flex: none; }
+.staff-table { color: var(--muted); font-size: 0.9rem; flex: 1; }
+.staff-age { flex: none; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.staff-age-warn { color: var(--warn-text); font-weight: 600; }
+.staff-age-danger { color: var(--nonveg); font-weight: 700; }
+
+.staff-card-warn { border-color: var(--warn-text); background: color-mix(in srgb, var(--warn-bg) 60%, var(--surface)); }
+.staff-card-danger { border-color: var(--nonveg); background: color-mix(in srgb, var(--warn-bg) 85%, var(--surface)); }
 .staff-items { list-style: none; margin: 0; padding: 0; font-size: 0.92rem; display: grid; gap: 3px; }
 .staff-items em { color: var(--muted); font-style: normal; }
 

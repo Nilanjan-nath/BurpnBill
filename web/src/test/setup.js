@@ -18,3 +18,28 @@ if (!HTMLDialogElement.prototype.showModal) {
     this.dispatchEvent(new Event('close'));
   };
 }
+
+// jsdom doesn't implement the Web Audio API at all — the staff dashboard's
+// "new order" chime (staff/chime.js) needs just enough of AudioContext to
+// run its code path without throwing, not real sound.
+if (!window.AudioContext) {
+  class FakeAudioContext {
+    state = 'suspended';
+    currentTime = 0;
+    destination = {};
+    resume() {
+      this.state = 'running';
+      return Promise.resolve();
+    }
+    createGain() {
+      return {
+        gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        connect: (dest) => dest, // real AudioNode#connect returns its argument, for a.connect(b).connect(c) chaining
+      };
+    }
+    createOscillator() {
+      return { frequency: { value: 0 }, connect: (dest) => dest, start() {}, stop() {} };
+    }
+  }
+  window.AudioContext = FakeAudioContext;
+}

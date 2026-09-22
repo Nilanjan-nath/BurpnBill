@@ -164,6 +164,12 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   just for this one endpoint) isn't worth it for one stream **(decided)**. No replay: a
   dashboard that reconnects just calls `GET /orders` again rather than the server trying to
   catch it up on what it missed.
+- The dashboard (`web/src/staff/useOrderStream.js`) reconnects on any drop with exponential
+  backoff (1s, capped at 15s), always shows "Live" or "Reconnecting…" rather than failing
+  silently, and patches a pushed order straight into its own list — a full `GET /orders` only
+  runs on first load, after an action that tab itself took, or after a reconnect. Order ages use
+  `server_time` (already in `GET /orders`) rather than the device's own clock, which a kitchen
+  tablet cannot be trusted to have set correctly.
 
 ## 8. Tech stack
 

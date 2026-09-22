@@ -165,10 +165,32 @@ Five slices, each tested, documented and committed on its own:
       module load time, so a missing/misconfigured env var would have blanked the page with an
       uncaught error the instant `/staff` loaded, instead of a normal message
 
-**Slice 4 — Going live**
-- [ ] Connect the stream; `server_time` offset so age timers ignore the device clock
-- [ ] "Live / Reconnecting…" indicator (never fail silently); full refetch after a reconnect
-- [ ] New-order sound + tab title "(2) New orders"; stuck highlight (amber/red by minutes waiting)
+**Slice 4 — Going live** — done
+- [x] `useOrderStream.js`: opens `GET /orders/stream` with `fetch` (never `EventSource`, see slice 2)
+      and reconnects with exponential backoff (1s → 15s cap) on any drop; `sse.js` parses the raw
+      SSE frames by hand for the same reason
+- [x] `useBoard.js` patches a pushed order straight into local state (`applyBoardEvent`) instead of
+      refetching per-event — a full `GET /orders` only runs on the initial load, after an action
+      THIS tab took, and after a reconnect (a gap may have missed events)
+- [x] `age.js`: `skewFromServerTime` — `server_time` (already in `GET /orders`, slice 1) minus the
+      device's own clock, so a kitchen tablet with a wrong clock still shows correct ages
+- [x] "Live / Reconnecting…" indicator in the header — never fails silently; a dropped connection
+      is always visible, not just invisible until someone notices orders stopped moving
+- [x] New-order sound (`chime.js`, Web Audio, no audio file) behind a real "Turn on sound" click —
+      browsers block audio without one; flashing tab title with the count
+      (`useNewOrderAlerts.js`), both clearing themselves the moment the tab is looked at again
+- [x] Stuck highlight: amber at 5 min, red at 10 min, using the server-corrected clock; each card
+      ticks its own age independently (`useNowTick.js`) rather than re-rendering the whole board
+- [x] Tests: a live push updates an already-open dashboard with zero clicks; a genuinely dropped
+      connection (not a mocked status flag) recovers and resyncs an order placed during the gap;
+      sound arms without replaying old orders; tab title sets/clears; stuck highlight from
+      server-corrected age, independent of the test machine's own clock. Mutation-checked (live
+      patching, reconnect retry, stuck threshold) — all three caught; 6 clean repeat runs, no flake
+- [x] Fixed along the way: the ORIGINAL "lost race" test from slice 3 became unreliable once the
+      board was actually live — the competing "other device" call's own push now reaches the same
+      dashboard almost instantly, so the UI's stale button could vanish before the test could
+      click it. Fixed by moving the order out-of-band (raw SQL, bypassing the API) for that one
+      test, so it stays genuinely stale, and added a SEPARATE test for the live-push path itself
 
 **Slice 5 — Detail and Recent**
 - [ ] Order detail drawer with the timeline (who moved it, when)

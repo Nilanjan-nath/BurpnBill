@@ -5,8 +5,9 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 4 of 6 in progress — staff can sign in and work a static order board.**
-Next: making it update live, without a refresh.
+Status: **step 4 of 6 in progress — the staff board is live**: orders appear the instant
+they're placed or moved, with a sound, a flashing tab title, and a stuck-order highlight.
+Next: an order-detail view and a Recent tab for served/cancelled orders.
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
@@ -150,8 +151,8 @@ Supabase login linked in `staff_members` (see **Setting up Supabase**, step 4, b
 1. ~~Database schema~~ — done
 2. ~~Express scaffolding: Supabase client wiring, route stubs~~ — done
 3. ~~Public flow end to end: QR scan -> guest session -> menu -> cart -> order~~ — done
-4. SSE stream + live staff dashboard — orders API, live push, and sign-in + a static board are
-   done; connecting the board to the live stream is what's left (see `docs/TASKS.md`)
+4. SSE stream + live staff dashboard — orders API, live push, sign-in, and the board going live
+   are all done; an order-detail view and a Recent tab are what's left (see `docs/TASKS.md`)
 5. Owner admin panel: menu CRUD + availability toggle
 6. Landing page
 

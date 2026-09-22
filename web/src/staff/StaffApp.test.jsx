@@ -189,22 +189,114 @@ describe('the board', () => {
     await signIn(user, STAFF_USER);
 
     const newColumn = await screen.findByRole('region', { name: 'New' });
-    within(newColumn).getByText(`#${order.order_number}`); // the board has loaded this order as "placed"
+    const card = within(newColumn).getByText(`#${order.order_number}`).closest('article');
 
-    // Another device moves it first, behind the board's back — the UI still
-    // shows the now-stale "Start preparing" button until it acts and finds out.
-    const direct = await realFetch(`${base}/api/orders/${order.id}/status`, {
+    // Moved out-of-band, bypassing the API entirely — on purpose, so no SSE
+    // event fires for it. This dashboard is now genuinely, indefinitely
+    // stale about this order (not just "stale for the next few ms until the
+    // live push catches up", which the real API path would be — and isn't
+    // something a UI test can reliably win a race against on a fast local
+    // server; see the live-push test above for that path instead).
+    await sql('update orders set status = $1 where id = $2', ['preparing', order.id]);
+
+    await user.click(within(card).getByRole('button', { name: 'Start preparing' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/is already "preparing"/);
+    // And the board resyncs: the order now correctly shows under Preparing.
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Preparing' })).getByText(`#${order.order_number}`)).toBeInTheDocument());
+  });
+
+  test('another device\'s move appears on this dashboard live, with no action taken here', async () => {
+    const order = await place('T2', 'Masala Chai');
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+
+    await screen.findByText(`#${order.order_number}`); // the board has loaded it as "placed"
+    await screen.findByText('Live'); // the stream is actually connected before we act
+
+    const res = await realFetch(`${base}/api/orders/${order.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer valid-${STAFF_USER}` },
       body: JSON.stringify({ status: 'preparing' }),
     });
-    expect(direct.status).toBe(200);
+    expect(res.status).toBe(200);
 
-    const card = within(newColumn).getByText(`#${order.order_number}`).closest('article');
-    await user.click(within(card).getByRole('button', { name: 'Start preparing' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/already moved to "preparing" by Mita/);
-    // And the board resyncs: the order now correctly shows under Preparing.
+    // Nobody clicked anything on THIS dashboard — the card just moves.
     await waitFor(() => expect(within(screen.getByRole('region', { name: 'Preparing' })).getByText(`#${order.order_number}`)).toBeInTheDocument());
+    expect(within(screen.getByRole('region', { name: 'New' })).queryByText(`#${order.order_number}`)).not.toBeInTheDocument();
+  });
+});
+
+describe('going live', () => {
+  test('a new order arriving live chimes the tab title with a count, which clears on focus', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+    await screen.findByText('Live');
+    document.title = 'Petuk staff — Order board';
+
+    const order = await place('T3', 'Masala Chai'); // arrives as a live order_created push, not the initial load
+    await screen.findByText(`#${order.order_number}`);
+
+    await waitFor(() => expect(document.title).toMatch(/^\(1\) New order/));
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(document.title).toBe('Petuk staff — Order board'));
+  });
+
+  test('"Turn on sound" arms it, without replaying for orders already on the board', async () => {
+    const user = userEvent.setup();
+    await place('T4', 'Masala Chai'); // already on the board before sound is armed — must not chime retroactively
+    await signIn(user, STAFF_USER);
+
+    const soundButton = await screen.findByRole('button', { name: '🔔 Turn on sound' });
+    await user.click(soundButton);
+    expect(screen.queryByRole('button', { name: '🔔 Turn on sound' })).not.toBeInTheDocument();
+
+    // A genuinely new order after arming still works end to end (no crash from the audio path).
+    const order = await place('T4', 'Filter Coffee');
+    await waitFor(() => expect(screen.getByText(`#${order.order_number}`)).toBeInTheDocument());
+  });
+
+  test('an order waiting a long time is highlighted, using the server\'s clock, not the age at page load', async () => {
+    const user = userEvent.setup();
+    const order = await place('T1', 'Masala Chai');
+    await sql(`update order_status_events set created_at = now() - interval '12 minutes' where order_id = $1`, [order.id]);
+
+    await signIn(user, STAFF_USER);
+    const card = (await screen.findByText(`#${order.order_number}`)).closest('article');
+    expect(card).toHaveClass('staff-card-danger');
+    expect(within(card).getByText('12m')).toBeInTheDocument();
+  });
+
+  test('a dropped stream recovers and resyncs on its own, with no action from the staff member', async () => {
+    const user = userEvent.setup();
+    let streamAttempts = 0;
+    const wrap = fetchImpl;
+    fetchImpl = (input, init) => {
+      if (String(input).includes('/orders/stream')) {
+        streamAttempts += 1;
+        if (streamAttempts === 1) {
+          // A connection that opens, then ends immediately — the same shape
+          // a dropped Wi-Fi connection leaves useOrderStream to recover from.
+          return Promise.resolve(
+            new Response(new ReadableStream({ start: (c) => c.close() }), {
+              status: 200,
+              headers: { 'Content-Type': 'text/event-stream' },
+            }),
+          );
+        }
+      }
+      return wrap(input, init);
+    };
+
+    await signIn(user, STAFF_USER);
+    // The first (broken) connection opens and ends almost instantly; placing
+    // an order right here lands it in the ~1s backoff gap before the retry —
+    // no connection is up to push it, so only the eventual reconnect's
+    // resync can reveal it on the board.
+    const order = await place('T3', 'Masala Chai');
+
+    await waitFor(() => expect(streamAttempts).toBeGreaterThanOrEqual(2)); // it actually retried, not just stayed live by luck
+    await screen.findByText('Live', {}, { timeout: 5000 });
+    await waitFor(() => expect(screen.getByText(`#${order.order_number}`)).toBeInTheDocument());
   });
 });
