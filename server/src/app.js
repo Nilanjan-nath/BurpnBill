@@ -44,7 +44,7 @@ export function createApp({ config, db, supabase, checks = {} }) {
   const requireGuestSession = createRequireGuestSession({ db, sessionTtlHours: config.guestSessionTtlHours });
 
   app.use('/api', publicRoutes({ db, config, requireGuestSession }));
-  app.use('/api', staffRoutes({ requireStaff }));
+  app.use('/api', staffRoutes({ db, requireStaff }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -88,7 +88,11 @@ Valid transitions only:
 - `preparing → cancelled`
 - `ready → served`
 
-The API rejects anything else with 400; a database trigger rejects it again as a backstop.
+`PATCH /orders/:id/status` locks the order's row first, so two staff tapping the same order at
+once are serialised by Postgres, not by app code; the request that loses the race gets 409 with
+the order's real current status and who set it — the same response a genuinely illegal move gets,
+since both cases mean "your view is stale, here's what's actually true" **(decided)**. A database
+trigger enforces the same table as a backstop, in case the two ever drift apart.
 
 ## 6. Security model (prototype-level, explicitly not full auth)
 
@@ -135,10 +139,11 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 ### Private (staff/owner, authenticated + restaurant-scoped)
 
 - `GET /me` — the signed-in staff member and their restaurant **(added)**
-- `GET /orders?status=&table_id=` — order board initial load
-- `GET /orders/:orderId` — lines + status timeline **(added)**
-- `PATCH /orders/:orderId/status` — validated against §5
-- `GET /restaurants/:restaurantId/orders/stream` — SSE stream for the live board
+- `GET /orders?status=&table_id=` — order board initial load (active orders + server time)
+- `GET /orders/recent` — served/cancelled orders, newest-finished first; default 4h, `?hours=` up to a week **(added)**
+- `GET /orders/:orderId` — lines, notes, totals and status timeline (who changed it, when) **(added)**
+- `PATCH /orders/:orderId/status` — validated against §5; 409 on an illegal or lost-race move
+- `GET /orders/stream` — SSE stream for the live board; scoped by the signed-in staff member and read with fetch + an Authorization header **(changed)**
 - `GET /items` — admin menu list, including 86'd items **(added)**
 - `POST /items`, `PATCH /items/:itemId`, `DELETE /items/:itemId` (soft) — owner only
 - `PATCH /items/:itemId/availability` — owner and staff

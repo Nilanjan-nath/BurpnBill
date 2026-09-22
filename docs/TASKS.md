@@ -57,7 +57,8 @@ Tick items off as they land.
       Supabase inside a rolled-back transaction.
 - [ ] Concurrency test on a real multi-connection Postgres. PGlite runs one connection, so it
       proves the retry path but not true parallel locking. Needs a local Postgres server
-      (only the client tools are installed) — or a second Supabase project.
+      (only the client tools are installed) — or a second Supabase project. Same gap applies to
+      the `PATCH /orders/:id/status` race test in step 4.
 
 **Customer web app** (React + Vite, in `web/`) — done; 13 UI tests run the real app against the real API on Postgres
 - [x] Scaffold the app; proxy `/api` to the server in dev
@@ -79,31 +80,63 @@ Tick items off as they land.
 - [ ] Known limit: a session idle for 3+ hours expires and its bill is no longer reachable from
       that phone — the customer asks at the counter. A staff-side table bill (step 4/5) covers it.
 
-## Step 4 — SSE + staff dashboard
+## Step 4 — Live staff dashboard
 
-**API**
-- [ ] `GET /orders?status=&table_id=` — scoped to the staff member's restaurant, newest first
-- [ ] `GET /orders/:orderId` — lines + timeline from `order_status_events`, with staff names
-- [ ] `PATCH /orders/:orderId/status` — reject illegal transitions with 400; run it through
-      `db.withTransaction(fn, { actorId })` so the event log records who made the change
-- [ ] SSE stream
-  - in-memory connections keyed by `restaurant_id`; `:restaurantId` must match the staff
-    member's own
-  - heartbeat comment every ~25s so proxies don't drop idle connections
-  - send `order_created` from `POST /orders` and `order_status_changed` from the status
-    route, after commit
-  - **auth:** the browser's `EventSource` can't send an `Authorization` header — decide
-    between a short-lived stream ticket in the query string or a cookie
-  - on reconnect the dashboard refetches `GET /orders` rather than replaying missed events
-  - close all streams on shutdown (`src/index.js`)
+**Decided:** lives in the same web app at `/staff` (lazy-loaded, so customers never download it) ·
+three columns New | Preparing | Ready · served/cancelled leave the board and a Recent tab keeps the
+last few hours · new-order sound (one-time "Turn on sound" tap) plus a flashing tab title with the
+count · owner and staff share one board · no undo (the state machine is forward-only); only Cancel
+asks for confirmation.
 
-**Dashboard UI**
-- [ ] Staff sign-in with Supabase Auth; `GET /me` for role and restaurant
-- [ ] Order board: columns by status, table label, order number, lines and notes
-- [ ] One-tap status moves, showing only the legal next states
-- [ ] Time in current status; highlight orders stuck too long
-- [ ] Order detail with timeline (who moved it, when)
-- [ ] Sound or visual alert on new orders
+Five slices, each tested, documented and committed on its own:
+
+**Slice 0 — Link your staff login** (you; needed before slice 1 can be tried for real)
+- [x] Supabase → Authentication → Users → Add user (email + password, auto-confirm); copy the UID
+- [x] `insert into public.staff_members (user_id, restaurant_id, role, display_name) values ('<uid>', '11111111-1111-1111-1111-111111111111', 'owner', '<name>');`
+
+**Slice 1 — Orders API**
+- [x] `GET /orders` — board load: active orders (placed/preparing/ready) plus `server_time`;
+      optional `?status=&table_id=`; scoped to the staff member's restaurant, oldest first
+- [x] `GET /orders/:id` — lines + status timeline with staff names (join `staff_members`)
+- [x] `GET /orders/recent` — served/cancelled orders, newest FINISHED first (not newest placed);
+      default 4h window, `?hours=` 1-168
+- [x] `PATCH /orders/:id/status` `{ status }` — locks the row (`for update`) before checking the
+      transition, so two staff tapping at once are serialised by Postgres itself, not by app
+      code; the loser gets 409 with the order's real current status and who set it; another
+      café's order or a made-up id is 404; runs through `db.withTransaction(fn, { actorId })` so
+      the log records who. The database's own trigger is a backstop: disabling the app-level
+      check on purpose still gets rejected, just as a plain 400 instead of the friendlier 409.
+- [x] Tests on real Postgres: every legal edge, terminal states, cross-café 404, actor recorded,
+      and a genuine `Promise.all` race between two staff. **Known gap:** the race test runs on
+      PGlite, which is a single connection — it proves the app logic picks exactly one winner,
+      not that real, separately-connected Postgres clients actually block on the row lock. Same
+      caveat as the order-placement race test below; both need the local Postgres / second
+      Supabase project already listed there.
+
+**Slice 2 — Live push (SSE)**
+- [ ] In-memory hub keyed by `restaurant_id`; publish AFTER commit from `POST /orders` and the
+      status route; events `order_created` / `order_status_changed` carry the full order
+- [ ] `GET /orders/stream` (the `:restaurantId` in the old path was redundant); heartbeat ~25s;
+      close all streams on shutdown
+- [ ] Auth: read the stream with `fetch` + an `Authorization` header (`EventSource` can't send
+      headers), reconnect with backoff, refetch the board on every reconnect. No token in URLs
+- [ ] Tests: an event reaches only the right restaurant; nothing is sent before commit
+
+**Slice 3 — Sign-in and static board**
+- [ ] `/staff` route, lazy-loaded; Supabase Auth email + password; expose only `SUPABASE_URL` and
+      `SUPABASE_ANON_KEY` to the web build — never the service-role key
+- [ ] Three-column board; card = order number, table, items + notes, age; one-tap forward button;
+      Cancel with confirmation; "already moved by <name>" handled by refreshing
+- [ ] Tablet/desktop layout; UI tests with a stubbed auth module
+
+**Slice 4 — Going live**
+- [ ] Connect the stream; `server_time` offset so age timers ignore the device clock
+- [ ] "Live / Reconnecting…" indicator (never fail silently); full refetch after a reconnect
+- [ ] New-order sound + tab title "(2) New orders"; stuck highlight (amber/red by minutes waiting)
+
+**Slice 5 — Detail and Recent**
+- [ ] Order detail drawer with the timeline (who moved it, when)
+- [ ] Recent tab (served/cancelled, last few hours)
 
 ## Step 5 — Owner admin panel
 

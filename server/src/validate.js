@@ -34,6 +34,27 @@ export const placeOrderBody = z.strictObject({ cart_id: id });
 
 export const cartItemParams = z.strictObject({ cartItemId: id });
 
+export const orderIdParams = z.strictObject({ orderId: id });
+
+// GET /orders/recent. Default 4 hours (a shift); capped at a week so a typo
+// like ?hours=99999 can't force a full-table scan of every order ever placed.
+export const recentOrdersQuery = z.strictObject({
+  hours: z.coerce.number().int().min(1).max(24 * 7).optional().default(4),
+});
+
+// PATCH /orders/:id/status. 'placed' is never a valid target — it's set once,
+// automatically, when the customer's order is created.
+export const updateOrderStatusBody = z.strictObject({
+  status: z.enum(['preparing', 'ready', 'served', 'cancelled']),
+});
+
+// GET /orders. Only statuses that still need work: served and cancelled orders live
+// under GET /orders/recent.
+export const listOrdersQuery = z.strictObject({
+  status: z.enum(['placed', 'preparing', 'ready']).optional(),
+  table_id: id.optional(),
+});
+
 // Throws a 400 listing every problem, or returns the parsed (cleaned) value.
 export function parse(schema, data) {
   const result = schema.safeParse(data ?? {});

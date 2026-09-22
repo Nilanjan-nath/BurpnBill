@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { notImplemented } from '../errors.js';
 import { requireOwner } from '../middleware/auth.js';
+import { listActiveOrders, getRecentOrders, getOrderDetail, updateOrderStatus } from '../services/staffOrders.js';
+import { notFound } from '../errors.js';
+import { parse, listOrdersQuery, recentOrdersQuery, orderIdParams, updateOrderStatusBody } from '../validate.js';
 
 // Staff/owner routes. Every one requires a signed-in staff member, and every
 // query is scoped to req.staff.restaurantId.
 //   owner: everything
 //   staff: work the order board, 86 items
-export function staffRoutes({ requireStaff }) {
+export function staffRoutes({ db, requireStaff }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
@@ -17,9 +20,28 @@ export function staffRoutes({ requireStaff }) {
   });
 
   // Live order board (step 4).
-  router.get('/orders', staff, notImplemented(4)); // ?status=&table_id=
-  router.get('/orders/:orderId', staff, notImplemented(4)); // lines + status timeline
-  router.patch('/orders/:orderId/status', staff, notImplemented(4));
+  router.get('/orders', staff, async (req, res) => {
+    const { status, table_id } = parse(listOrdersQuery, req.query);
+    res.json(await listActiveOrders(db, req.staff.restaurantId, { status, tableId: table_id }));
+  });
+  // Registered before /orders/:orderId — otherwise "recent" would be read as an order id.
+  router.get('/orders/recent', staff, async (req, res) => {
+    const { hours } = parse(recentOrdersQuery, req.query);
+    res.json(await getRecentOrders(db, req.staff.restaurantId, { hours }));
+  });
+  router.get('/orders/:orderId', staff, async (req, res) => {
+    const { orderId } = parse(orderIdParams, req.params);
+    const order = await getOrderDetail(db, req.staff.restaurantId, orderId);
+    if (!order) throw notFound('Order not found');
+    res.json({ order });
+  });
+  router.patch('/orders/:orderId/status', staff, async (req, res) => {
+    const { orderId } = parse(orderIdParams, req.params);
+    const { status } = parse(updateOrderStatusBody, req.body);
+    const order = await updateOrderStatus(db, req.staff.restaurantId, orderId, status, req.staff.userId);
+    if (!order) throw notFound('Order not found');
+    res.json({ order });
+  });
   router.get('/restaurants/:restaurantId/orders/stream', staff, notImplemented(4)); // SSE
 
   // Menu management (step 5). Availability is open to all staff so the

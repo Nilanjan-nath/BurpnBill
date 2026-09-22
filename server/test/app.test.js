@@ -153,7 +153,7 @@ test('owner-only routes: staff get 403, owner reaches the stub', async () => {
 
 test('staff can work the board and 86 items', async () => {
   const opts = { headers: asUser(STAFF_USER), body: '{}' };
-  assert.equal((await call('GET', '/api/orders', { headers: asUser(STAFF_USER) })).status, 501);
-  assert.equal((await call('PATCH', '/api/orders/x/status', opts)).status, 501);
+  assert.equal((await call('GET', '/api/orders', { headers: asUser(STAFF_USER) })).status, 200); // built in step 4, slice 1
+  assert.equal((await call('PATCH', '/api/orders/x/status', opts)).status, 400); // 'x' is not a uuid — built in slice 1
   assert.equal((await call('PATCH', '/api/items/x/availability', opts)).status, 501);
 });
