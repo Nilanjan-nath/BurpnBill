@@ -5,9 +5,10 @@ Tick items off as they land.
 
 ## Housekeeping (do soon)
 
-- [ ] **Link your staff login.** `staff_members` is empty, so every staff route returns 403.
-      Create the user in Supabase → Authentication → Users, then:
-      `insert into public.staff_members (user_id, restaurant_id, role) values ('<auth user id>', '11111111-1111-1111-1111-111111111111', 'owner');`
+- [x] **Link your staff login.** Done — linked as `owner` on Chai Point Cafe.
+- [ ] **Copy `web/.env.example` to `web/.env`** and fill in `VITE_SUPABASE_URL` /
+      `VITE_SUPABASE_ANON_KEY` (same values as the server's own `.env`) so `/staff` can sign in.
+      Only needed for a fresh clone/machine — already done here.
 - [ ] **Verify the database certificate.** Download Supabase's CA certificate
       (Project Settings → Database → SSL Configuration) and set `DATABASE_CA_CERT` in `.env`.
       Until then the API's database connection is encrypted but not verified.
@@ -135,12 +136,34 @@ Five slices, each tested, documented and committed on its own:
       Three mutations checked by hand — one (a `node -e` string-replace) silently failed to
       apply and gave a false pass; redone with the Edit tool and confirmed for real
 
-**Slice 3 — Sign-in and static board**
-- [ ] `/staff` route, lazy-loaded; Supabase Auth email + password; expose only `SUPABASE_URL` and
-      `SUPABASE_ANON_KEY` to the web build — never the service-role key
-- [ ] Three-column board; card = order number, table, items + notes, age; one-tap forward button;
-      Cancel with confirmation; "already moved by <name>" handled by refreshing
-- [ ] Tablet/desktop layout; UI tests with a stubbed auth module
+**Slice 3 — Sign-in and static board** — done
+- [x] `/staff` route, lazy-loaded (customers never download this bundle — verified: the string
+      "Supabase" appears only in the split-off chunk, not the main one). `web/.env` /
+      `web/.env.example`: `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` only, kept separate from
+      the server's own `.env` — the service-role key never goes near a browser build
+- [x] Supabase Auth email + password (`useStaffSession.js`), session persisted by Supabase's own
+      client. Being logged in and being LINKED to a café are different things (see Housekeeping) —
+      `GET /me` tells them apart; a 403 there shows "not linked", not a broken board
+- [x] Three-column board (New / Preparing / Ready); card = order number, table, items + notes;
+      one-tap forward button showing only the single legal next status (`staff/transitions.js`
+      mirrors the server's `ORDER_TRANSITIONS` — comment linking them so they don't drift);
+      Cancel asks for confirmation (`window.confirm` — no undo once sent, per the state machine)
+- [x] A 409 (lost race / stale view) shows who got there first, then resyncs the board — same
+      idea planned for slices 4/5, built now since `PATCH /status` already returns it
+- [x] Tablet/desktop layout (three columns; stacks to one on a narrow screen)
+- [x] Tests: real dashboard -> real API -> real Postgres, with only the Supabase Auth CLIENT
+      faked (`createFakeAuth` in the test file) — its token still has to satisfy the server's own
+      fake verifier (shared `web/src/test/globalSetup.js`, now seeded with a linked staff login),
+      so both fakes agree on one convention rather than diverging. Sign-in, wrong password,
+      not-linked, real placed orders shown and moved, cancel-with-confirm, and the lost-race path
+      — mutation-checked (column filtering, conflict-message branch) and confirmed for real
+- [x] Live-checked against real Supabase in the browser: the sign-in form renders with real
+      config, and a genuine wrong-password attempt round-trips to Supabase and displays "Invalid
+      login credentials" — the same message the fake tests already cover. A full successful
+      sign-in still needs your real password (not tested here)
+- [x] Found and fixed before it shipped: the production Supabase client was being constructed at
+      module load time, so a missing/misconfigured env var would have blanked the page with an
+      uncaught error the instant `/staff` loaded, instead of a normal message
 
 **Slice 4 — Going live**
 - [ ] Connect the stream; `server_time` offset so age timers ignore the device clock

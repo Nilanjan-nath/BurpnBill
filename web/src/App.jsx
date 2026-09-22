@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useOrdering } from './useOrdering.js';
 import { Banners } from './components/Banners.jsx';
 import { BillScreen } from './components/BillScreen.jsx';
@@ -7,6 +7,10 @@ import { Confirmation } from './components/Confirmation.jsx';
 import { MenuScreen } from './components/MenuScreen.jsx';
 import { Message } from './components/Message.jsx';
 
+// Loaded only once someone actually opens /staff — a customer scanning a
+// table's QR code never downloads any of the staff dashboard's code.
+const StaffApp = lazy(() => import('./staff/StaffApp.jsx'));
+
 // The QR code encodes {APP_BASE_URL}/t/{qr_token}.
 export function qrTokenFromPath(pathname) {
   const match = pathname.match(/^\/t\/([^/]+)\/?$/);
@@ -14,7 +18,16 @@ export function qrTokenFromPath(pathname) {
 }
 
 export default function App() {
-  const qrToken = qrTokenFromPath(window.location.pathname);
+  const path = window.location.pathname;
+  if (path === '/staff' || path.startsWith('/staff/')) {
+    return (
+      <Suspense fallback={<Message title="Loading…">One moment.</Message>}>
+        <StaffApp />
+      </Suspense>
+    );
+  }
+
+  const qrToken = qrTokenFromPath(path);
   if (!qrToken) {
     return (
       <Message title="Scan your table's QR code">

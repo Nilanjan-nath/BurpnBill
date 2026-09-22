@@ -5,7 +5,8 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 3 of 6 done — customers can scan, browse, and order.** Next: the live staff dashboard.
+Status: **step 4 of 6 in progress — staff can sign in and work a static order board.**
+Next: making it update live, without a refresh.
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
@@ -91,6 +92,19 @@ The dev server also prints a **Network** URL, so you can open the same page on a
 your Wi-Fi. When the API is hosted on a different domain, build with `VITE_API_URL` set to
 its address, e.g. `VITE_API_URL=https://api.example.com npm run build`.
 
+## Running the staff dashboard
+
+Same dev server as the customer app, at `/staff` — it's lazy-loaded, so it costs customers
+nothing. It needs its own Supabase login, separate from the server's `.env`:
+
+```bash
+cp web/.env.example web/.env   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+```
+
+Use the **same** URL and anon key as the server's `.env` — never the service-role key, which
+must never reach a browser build. Then open `http://localhost:5173/staff` and sign in with a
+Supabase login linked in `staff_members` (see **Setting up Supabase**, step 4, below).
+
 ## Setting up Supabase
 
 1. Create a project at [supabase.com/dashboard](https://supabase.com/dashboard) (free tier is fine).
@@ -136,7 +150,8 @@ its address, e.g. `VITE_API_URL=https://api.example.com npm run build`.
 1. ~~Database schema~~ — done
 2. ~~Express scaffolding: Supabase client wiring, route stubs~~ — done
 3. ~~Public flow end to end: QR scan -> guest session -> menu -> cart -> order~~ — done
-4. SSE stream + live staff dashboard
+4. SSE stream + live staff dashboard — orders API, live push, and sign-in + a static board are
+   done; connecting the board to the live stream is what's left (see `docs/TASKS.md`)
 5. Owner admin panel: menu CRUD + availability toggle
 6. Landing page
 

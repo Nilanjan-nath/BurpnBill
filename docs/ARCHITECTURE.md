@@ -173,7 +173,10 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   `@supabase/supabase-js` is used only to verify staff access tokens.
 - **Database**: Supabase (hosted Postgres 15+)
 - **Auth**: Supabase Auth, staff/owner only (email + password)
-- **Frontend**: React (Vite) — one web app for customers and staff, no native app
+- **Frontend**: React (Vite) — one web app for customers and staff, no native app. The staff
+  dashboard (`/staff`) is lazy-loaded, so customers never download it. It signs in with its own
+  Supabase Auth client, built from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in a separate
+  `web/.env` — never the service-role key, which stays in the server's own `.env` **(decided)**
 - **Package manager**: npm
 - **Hosting (later)**: Render/Railway (backend), Vercel/Netlify (frontend), Supabase
 
