@@ -333,6 +333,35 @@
 
 .staff-confirm-inline { flex: 1; }
 
+/* --- Tables tab --- */
+.staff-tables-tab { padding: 12px 20px 32px; }
+.staff-tables-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+
+.staff-qr-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.staff-qr-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: center;
+}
+.staff-qr-card-label { font-weight: 700; font-size: 1.1rem; }
+.staff-qr-card-url { font-size: 0.75rem; color: var(--muted); word-break: break-all; }
+.staff-qr-card-inactive { color: var(--nonveg); font-size: 0.85rem; font-weight: 600; }
+
+/* Print QR sheet: the browser's own Print / Save-as-PDF (no server-side
+   image generation) — only the cards themselves are meant to print, one
+   comfortably per page-friendly block, everything else in the dashboard
+   chrome (header, tabs, toolbar) is hidden. */
+@media print {
+  .staff-header, .staff-tabs, .staff-banner, .staff-print-hide { display: none !important; }
+  .staff-qr-sheet { grid-template-columns: repeat(2, 1fr); }
+  .staff-qr-card { break-inside: avoid; border-style: solid; }
+}
+
 /* Phones: stack the columns instead of squeezing three side by side. */
 @media (max-width: 760px) {
   .staff-columns { grid-template-columns: 1fr; }

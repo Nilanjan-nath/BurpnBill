@@ -147,7 +147,9 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `GET /items` — admin menu list, including 86'd items **(added)**
 - `POST /items`, `PATCH /items/:itemId`, `DELETE /items/:itemId` (soft) — owner only
 - `PATCH /items/:itemId/availability` — owner and staff
-- `GET /tables` — owner and staff; `POST /tables` — owner only
+- `GET /tables` — owner and staff; `POST /tables` — owner only. The Tables *tab* in the dashboard
+  is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
+  wider allowance is unused by the UI, not a mismatch
 
 ### Realtime (SSE)
 
@@ -193,8 +195,8 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
    and guest-session middleware, stubs for every v1 route, tests
 3. ~~**Public flow end-to-end**~~ — done: QR scan → guest session → menu → cart → order, in the
    API and the customer web app (`web/`)
-4. **SSE + staff dashboard** — live order board, status updates, order timeline
-5. **Owner admin panel** — menu CRUD, availability toggle, tables and printable QR codes
+4. ~~**SSE + staff dashboard**~~ — done: live order board, status updates, order timeline
+5. ~~**Owner admin panel**~~ — done: menu CRUD, availability toggle, tables and printable QR codes
 6. **Landing page** — last, once there's a real flow to show
 
 After v1: payments, invoices (see §2).

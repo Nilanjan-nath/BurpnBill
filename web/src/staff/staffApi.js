@@ -55,4 +55,6 @@ export const staffApi = {
   deleteItem: (token, itemId) => request('DELETE', `/items/${itemId}`, { token }),
   setItemAvailability: (token, itemId, isAvailable) =>
     request('PATCH', `/items/${itemId}/availability`, { token, body: { is_available: isAvailable } }),
+  listTables: (token) => request('GET', '/tables', { token }),
+  createTable: (token, body) => request('POST', '/tables', { token, body }),
 };

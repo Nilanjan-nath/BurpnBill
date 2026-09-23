@@ -271,9 +271,31 @@ an existing table stays deferred (already on the "after v1" list below).
       surfaced now by deliberately mutation-testing something unrelated in its neighbourhood.
       Fixed both by waiting for real, loaded content before asserting an absence
 
-**Slice 4 — Tables tab** — not started
-- [ ] Owner only. Add a table; a printable QR sheet (`{APP_BASE_URL}/t/{qr_token}` per table),
-      using the browser's own Print / Save-as-PDF — no server-side image generation
+**Slice 4 — Tables tab** — done
+- [x] Owner only (the whole tab is hidden from staff, not just its add control — unlike Menu,
+      staff have no reduced-view need here). `TablesTab.jsx`: add a table (`TableForm.jsx`, label
+      + optional seats; no edit/delete yet, both on the "after v1" list) and a QR card per table
+      (label, seats, QR code, the printable `{origin}/t/{qr_token}` URL as text)
+- [x] QR codes rendered client-side with the `qrcode` package's pure-JS SVG string renderer (not
+      its canvas renderer — canvas needs a real `<canvas>` 2D context, which jsdom doesn't provide
+      without the native `canvas` package; SVG needs none, in tests or in a real browser), wrapped
+      as a `data:image/svg+xml;base64,` URL so it drops into a plain `<img>`. No server-side image
+      generation, per the original decision
+- [x] "Print QR sheet" uses the browser's own Print / Save-as-PDF (`window.print()`); `@media
+      print` in `staff.css` hides the dashboard chrome (header, tabs, toolbar) and leaves just the
+      QR cards, two per row, each `break-inside: avoid`
+- [x] `useTablesAdmin.js` mirrors `useMenuAdmin.js` (no live push — table changes are as
+      infrequent as menu edits, made by whoever's on this exact screen)
+- [x] Tests: owner sees the Tables tab, staff don't; the seeded tables list with their QR image
+      and printable URL; adding a table reaches the real API and its QR token resolves to a real,
+      working menu; a duplicate label surfaces the server's error inline, dialog stays open.
+      Mutation-checked (owner-only tab gating, the create call actually persisting, the QR URL
+      actually encoding the right token, the duplicate-label error actually surfacing) — all four
+      caught
+- [x] Live-checked in the browser: `/staff` (lazy-loaded chunk) loads cleanly with the new
+      `qrcode` dependency bundled in, no console errors. A full sign-in as owner to see the Tables
+      tab rendered for real still needs your actual password — same limit as every other
+      staff-side slice; not tested here
 
 ## Step 6 — Landing page
 

@@ -499,3 +499,67 @@ describe('the Menu tab', () => {
     expect(menu.categories.flatMap((c) => c.items).some((i) => i.name === 'Test Special')).toBe(false);
   });
 });
+
+describe('the Tables tab', () => {
+  test('owner sees a Tables tab', async () => {
+    const owner = userEvent.setup();
+    await signIn(owner, STAFF_USER);
+    expect(await screen.findByRole('button', { name: 'Tables' })).toBeInTheDocument();
+  });
+
+  test('staff do not see a Tables tab', async () => {
+    const staff = userEvent.setup();
+    await signIn(staff, SECOND_STAFF);
+    await screen.findByRole('heading', { name: 'Order board' });
+    expect(screen.queryByRole('button', { name: 'Tables' })).not.toBeInTheDocument();
+  });
+
+  test('lists the seeded tables with a QR code and its printable URL', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Tables' }));
+
+    const card = (await screen.findByText('T1')).closest('.staff-qr-card');
+    expect(within(card).getByText('2 seats')).toBeInTheDocument();
+    expect(within(card).getByText(new RegExp(`/t/${tokens.T1}$`))).toBeInTheDocument();
+    const qrImg = await within(card).findByRole('img', { name: 'QR code for table T1' });
+    expect(qrImg.src).toMatch(/^data:image\/svg\+xml;base64,/);
+  });
+
+  test('owner can add a table, and its QR token resolves to a real, working menu', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Tables' }));
+
+    await user.click(await screen.findByRole('button', { name: '+ Add table' }));
+    const form = await screen.findByRole('dialog', { name: 'Add table' });
+    await user.type(within(form).getByLabelText('Label'), 'T9');
+    await user.type(within(form).getByLabelText(/Seats/), '5');
+    await user.click(within(form).getByRole('button', { name: 'Add table' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const card = (await screen.findByText('T9')).closest('.staff-qr-card');
+    expect(within(card).getByText('5 seats')).toBeInTheDocument();
+
+    const urlText = within(card).getByText(/\/t\//).textContent;
+    const qrToken = urlText.split('/t/')[1];
+    const menu = (await api('GET', `/api/menu/${qrToken}`)).body;
+    expect(menu.table.label).toBe('T9');
+
+    await sql("delete from restaurant_tables where label = 'T9'");
+  });
+
+  test('a duplicate table label shows the server\'s error inline', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Tables' }));
+
+    await user.click(await screen.findByRole('button', { name: '+ Add table' }));
+    const form = await screen.findByRole('dialog', { name: 'Add table' });
+    await user.type(within(form).getByLabelText('Label'), 'T1');
+    await user.click(within(form).getByRole('button', { name: 'Add table' }));
+
+    expect(await within(form).findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Add table' })).toBeInTheDocument(); // stays open
+  });
+});

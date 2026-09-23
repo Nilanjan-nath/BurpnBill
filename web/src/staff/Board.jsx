@@ -4,6 +4,7 @@ import { ActiveColumns } from './ActiveColumns.jsx';
 import { RecentOrders } from './RecentOrders.jsx';
 import { OrderDetailDrawer } from './OrderDetailDrawer.jsx';
 import { MenuTab } from './MenuTab.jsx';
+import { TablesTab } from './TablesTab.jsx';
 
 const LIVE_LABEL = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' };
 const TABS = [
@@ -11,9 +12,14 @@ const TABS = [
   { id: 'recent', label: 'Recent' },
   { id: 'menu', label: 'Menu' },
 ];
+// Tables is owner only — unlike Menu, staff have no reduced view here (no
+// reason for the kitchen to be adding tables or printing QR sheets).
+const OWNER_TABS = [...TABS, { id: 'tables', label: 'Tables' }];
 
 export function Board({ identity, board, token, onSignOut }) {
   const alerts = useNewOrderAlerts(board.newOrderCount, board.acknowledgeNewOrders);
+  const isOwner = identity.role === 'owner';
+  const tabs = isOwner ? OWNER_TABS : TABS;
   const [tab, setTab] = useState('board');
   const [detailOrderId, setDetailOrderId] = useState(null);
 
@@ -41,7 +47,7 @@ export function Board({ identity, board, token, onSignOut }) {
       </header>
 
       <nav className="staff-tabs" aria-label="View">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -73,7 +79,8 @@ export function Board({ identity, board, token, onSignOut }) {
 
       {tab === 'board' && <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />}
       {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
-      {tab === 'menu' && <MenuTab isOwner={identity.role === 'owner'} token={token} />}
+      {tab === 'menu' && <MenuTab isOwner={isOwner} token={token} />}
+      {tab === 'tables' && isOwner && <TablesTab token={token} />}
 
       {detailOrderId && (
         <OrderDetailDrawer token={token} orderId={detailOrderId} onClose={() => setDetailOrderId(null)} />
