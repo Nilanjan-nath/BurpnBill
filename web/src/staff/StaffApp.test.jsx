@@ -10,7 +10,8 @@ import StaffApp from './StaffApp.jsx';
 // on one convention: a token is "valid-<user id>".
 
 const base = inject('apiBase');
-const STAFF_USER = inject('staffUserId');
+const STAFF_USER = inject('staffUserId'); // 'Mita', owner
+const SECOND_STAFF = inject('secondStaffUserId'); // 'Ravi', staff
 const NOT_LINKED_USER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const realFetch = globalThis.fetch;
 let fetchImpl;
@@ -158,8 +159,11 @@ describe('the board', () => {
     await waitFor(() => expect(within(screen.getByRole('region', { name: 'Preparing' })).getByText(`#${order.order_number}`)).toBeInTheDocument());
     expect(within(screen.getByRole('region', { name: 'New' })).queryByText(`#${order.order_number}`)).not.toBeInTheDocument();
 
+    // The card can move columns (via the live push) a moment before this
+    // click's own request clears its busy flag — both are correct, just not
+    // perfectly ordered, so wait rather than assert the instant it moves.
     const movedCard = within(screen.getByRole('region', { name: 'Preparing' })).getByText(`#${order.order_number}`).closest('article');
-    expect(within(movedCard).getByRole('button', { name: 'Mark ready' })).toBeInTheDocument();
+    await waitFor(() => expect(within(movedCard).getByRole('button', { name: 'Mark ready' })).toBeInTheDocument());
     expect(within(movedCard).queryByRole('button', { name: 'Start preparing' })).not.toBeInTheDocument();
   });
 
@@ -298,5 +302,79 @@ describe('going live', () => {
     await waitFor(() => expect(streamAttempts).toBeGreaterThanOrEqual(2)); // it actually retried, not just stayed live by luck
     await screen.findByText('Live', {}, { timeout: 5000 });
     await waitFor(() => expect(screen.getByText(`#${order.order_number}`)).toBeInTheDocument());
+  });
+});
+
+async function moveViaApi(orderId, status, as = STAFF_USER) {
+  const res = await realFetch(`${base}/api/orders/${orderId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer valid-${as}` },
+    body: JSON.stringify({ status }),
+  });
+  expect(res.status).toBe(200);
+}
+
+describe('order detail and Recent', () => {
+  test('opening an order from the board shows its items, total and timeline', async () => {
+    const user = userEvent.setup();
+    const order = await place('T1', 'Masala Chai', 'less sugar');
+    await signIn(user, STAFF_USER);
+
+    await user.click(await screen.findByRole('button', { name: `#${order.order_number}` }));
+    const drawer = await screen.findByRole('dialog', { name: `Order #${order.order_number}` });
+
+    expect(drawer.querySelector('.staff-status-pill')).toHaveTextContent('placed');
+    expect(within(drawer).getByText('Table T1')).toBeInTheDocument();
+    const itemLine = within(drawer).getByText(/Masala Chai/).closest('li');
+    expect(within(itemLine).getByText(/less sugar/)).toBeInTheDocument();
+    expect(within(itemLine).getByText('₹30.00')).toBeInTheDocument(); // one item, so its line total...
+    expect(within(drawer).getByText('Total').nextSibling).toHaveTextContent('₹30.00'); // ...equals the order total
+
+    const timeline = within(drawer).getByRole('list', { name: 'Status timeline' });
+    expect(within(timeline).getByText('placed')).toBeInTheDocument();
+    expect(within(timeline).getByText('—')).toBeInTheDocument(); // placed by the customer, no staff actor
+
+    await user.click(within(drawer).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  test('the Recent tab lists served/cancelled orders, and opening one shows who moved it through each step', async () => {
+    const user = userEvent.setup();
+    const served = await place('T2', 'Masala Chai');
+    await moveViaApi(served.id, 'preparing'); // Mita
+    await moveViaApi(served.id, 'ready', SECOND_STAFF); // Ravi
+    await moveViaApi(served.id, 'served'); // Mita again
+    const cancelled = await place('T2', 'Masala Chai');
+    await moveViaApi(cancelled.id, 'cancelled');
+
+    await signIn(user, STAFF_USER);
+    expect(screen.queryByText(`#${served.order_number}`)).not.toBeInTheDocument(); // not on the live board
+
+    await user.click(await screen.findByRole('button', { name: 'Recent' }));
+    const servedRow = await screen.findByRole('button', { name: new RegExp(`#${served.order_number}`) });
+    expect(within(servedRow).getByText('served')).toBeInTheDocument();
+    const cancelledRow = screen.getByRole('button', { name: new RegExp(`#${cancelled.order_number}`) });
+    expect(within(cancelledRow).getByText('cancelled')).toBeInTheDocument();
+
+    await user.click(servedRow);
+    const drawer = await screen.findByRole('dialog', { name: `Order #${served.order_number}` });
+    const timelineText = within(drawer).getByRole('list', { name: 'Status timeline' }).textContent;
+    expect(timelineText).toMatch(/placed.*preparing.*ready.*served/s);
+    expect(within(drawer).getByText('Ravi')).toBeInTheDocument(); // moved it to ready
+    expect(within(drawer).getAllByText('Mita').length).toBe(2); // moved it to preparing, then served it
+  });
+
+  test('Recent has its own Refresh, independent of the live board', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Recent' }));
+    await screen.findByText('Last 4 hours');
+
+    const order = await place('T4', 'Masala Chai');
+    await moveViaApi(order.id, 'cancelled');
+    expect(screen.queryByText(new RegExp(`#${order.order_number}`))).not.toBeInTheDocument(); // not live-updated
+
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByRole('button', { name: new RegExp(`#${order.order_number}`) })).toBeInTheDocument();
   });
 });

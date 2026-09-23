@@ -146,14 +146,14 @@ test('GET /api/me returns the staff member and their restaurant', async () => {
   assert.deepEqual(res.body.staff, { userId: STAFF_USER, restaurantId: 'r1', role: 'staff', displayName: 'Ravi' });
 });
 
-test('owner-only routes: staff get 403, owner reaches the stub', async () => {
+test('owner-only routes: staff get 403 before validation even runs; owner reaches real validation', async () => {
   assert.equal((await call('POST', '/api/items', { headers: asUser(STAFF_USER), body: '{}' })).status, 403);
-  assert.equal((await call('POST', '/api/items', { headers: asUser(OWNER_USER), body: '{}' })).status, 501);
+  assert.equal((await call('POST', '/api/items', { headers: asUser(OWNER_USER), body: '{}' })).status, 400); // missing name/price — built in step 5, slice 1
 });
 
 test('staff can work the board and 86 items', async () => {
   const opts = { headers: asUser(STAFF_USER), body: '{}' };
   assert.equal((await call('GET', '/api/orders', { headers: asUser(STAFF_USER) })).status, 200); // built in step 4, slice 1
   assert.equal((await call('PATCH', '/api/orders/x/status', opts)).status, 400); // 'x' is not a uuid — built in slice 1
-  assert.equal((await call('PATCH', '/api/items/x/availability', opts)).status, 501);
+  assert.equal((await call('PATCH', '/api/items/x/availability', opts)).status, 400); // 'x' is not a uuid — built in step 5, slice 1
 });

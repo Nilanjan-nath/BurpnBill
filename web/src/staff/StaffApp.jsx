@@ -88,7 +88,7 @@ function SignedIn({ token, onSignOut }) {
       </Centered>
     );
   }
-  return <Board identity={identity} board={board} onSignOut={onSignOut} />;
+  return <Board identity={identity} board={board} token={token} onSignOut={onSignOut} />;
 }
 
 function Centered({ children }) {

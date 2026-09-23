@@ -17,5 +17,13 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
     globalSetup: ['./src/test/globalSetup.js'],
+    // globalSetup runs once and every test file shares its server + database
+    // (see globalSetup.js) — Vitest's default is to still run FILES in
+    // parallel, though, which raced two files' tests against that one
+    // shared database (a customer-app test counting *all* orders could see
+    // ones a concurrently-running staff test had just placed). Each file's
+    // own tests were always sequential and safe; only cross-file
+    // concurrency was the problem.
+    fileParallelism: false,
   },
 });

@@ -1,18 +1,19 @@
-import { OrderCard } from './OrderCard.jsx';
+import { useState } from 'react';
 import { useNewOrderAlerts } from './useNewOrderAlerts.js';
-
-// Three columns, per the plan: New | Preparing | Ready. Served and cancelled
-// orders leave the board entirely (slice 5 adds a Recent tab for them).
-const COLUMNS = [
-  { status: 'placed', title: 'New' },
-  { status: 'preparing', title: 'Preparing' },
-  { status: 'ready', title: 'Ready' },
-];
+import { ActiveColumns } from './ActiveColumns.jsx';
+import { RecentOrders } from './RecentOrders.jsx';
+import { OrderDetailDrawer } from './OrderDetailDrawer.jsx';
 
 const LIVE_LABEL = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' };
+const TABS = [
+  { id: 'board', label: 'Board' },
+  { id: 'recent', label: 'Recent' },
+];
 
-export function Board({ identity, board, onSignOut }) {
+export function Board({ identity, board, token, onSignOut }) {
   const alerts = useNewOrderAlerts(board.newOrderCount, board.acknowledgeNewOrders);
+  const [tab, setTab] = useState('board');
+  const [detailOrderId, setDetailOrderId] = useState(null);
 
   return (
     <div className="staff-app">
@@ -37,6 +38,20 @@ export function Board({ identity, board, onSignOut }) {
         </div>
       </header>
 
+      <nav className="staff-tabs" aria-label="View">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`staff-tab${tab === t.id ? ' staff-tab-active' : ''}`}
+            aria-current={tab === t.id}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
       {board.conflict && (
         <div className="staff-banner" role="alert">
           <span>{board.conflict}</span>
@@ -54,33 +69,14 @@ export function Board({ identity, board, onSignOut }) {
         </div>
       )}
 
-      {board.orders === null && !board.error ? (
-        <p className="staff-loading">Loading the board…</p>
+      {tab === 'board' ? (
+        <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />
       ) : (
-        <div className="staff-columns">
-          {COLUMNS.map((col) => {
-            const inColumn = (board.orders ?? []).filter((o) => o.status === col.status);
-            return (
-              <section key={col.status} className="staff-column" aria-label={col.title}>
-                <h2>
-                  {col.title} <span className="staff-count">{inColumn.length}</span>
-                </h2>
-                <div className="staff-cards">
-                  {inColumn.map((order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      busy={board.busyId === order.id}
-                      skewMs={board.skewMs}
-                      onMove={board.move}
-                    />
-                  ))}
-                  {inColumn.length === 0 && <p className="staff-empty">Nothing here</p>}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <RecentOrders token={token} onOpenDetail={setDetailOrderId} />
+      )}
+
+      {detailOrderId && (
+        <OrderDetailDrawer token={token} orderId={detailOrderId} onClose={() => setDetailOrderId(null)} />
       )}
     </div>
   );

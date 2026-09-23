@@ -55,6 +55,52 @@ export const listOrdersQuery = z.strictObject({
   table_id: id.optional(),
 });
 
+// Menu admin (step 5). description/is_veg are nullable — a client can send
+// `null` on purpose to clear one, which is different from leaving it out to
+// mean "don't touch this field" (see updateMenuItem in services/menuAdmin.js).
+const itemName = z.string().trim().min(1, 'Name is required').max(200);
+const itemDescription = z
+  .string()
+  .trim()
+  .max(500, 'Description can be at most 500 characters')
+  .transform((s) => (s === '' ? null : s))
+  .nullable();
+const itemCategory = z.string().trim().min(1, 'Category cannot be blank').max(60);
+const itemPrice = z.number().min(0, 'Price cannot be negative').max(100_000, 'That price looks like a typo');
+const itemIsVeg = z.boolean().nullable();
+const itemSortOrder = z.number().int().min(0).max(100_000);
+
+export const itemIdParams = z.strictObject({ itemId: id });
+
+export const createMenuItemBody = z.strictObject({
+  name: itemName,
+  description: itemDescription.optional(),
+  category: itemCategory.optional(),
+  price: itemPrice,
+  is_veg: itemIsVeg.optional(),
+  sort_order: itemSortOrder.optional(),
+});
+
+export const updateMenuItemBody = z
+  .strictObject({
+    name: itemName.optional(),
+    description: itemDescription.optional(),
+    category: itemCategory.optional(),
+    price: itemPrice.optional(),
+    is_veg: itemIsVeg.optional(),
+    sort_order: itemSortOrder.optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
+
+export const setAvailabilityBody = z.strictObject({ is_available: z.boolean() });
+
+// POST /tables. `seats` is nullable — not every table needs a seat count on
+// the printed QR sheet.
+export const createTableBody = z.strictObject({
+  label: z.string().trim().min(1, 'Label is required').max(40, 'Label can be at most 40 characters'),
+  seats: z.number().int().min(1).max(100).nullable().optional(),
+});
+
 // Throws a 400 listing every problem, or returns the parsed (cleaned) value.
 export function parse(schema, data) {
   const result = schema.safeParse(data ?? {});

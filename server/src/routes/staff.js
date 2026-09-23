@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { notImplemented } from '../errors.js';
 import { requireOwner } from '../middleware/auth.js';
 import {
   listActiveOrders,
@@ -8,8 +7,27 @@ import {
   updateOrderStatus,
   publishBoardCard,
 } from '../services/staffOrders.js';
+import {
+  listMenuItemsAdmin,
+  createMenuItem,
+  updateMenuItem,
+  deleteMenuItem,
+  setItemAvailability,
+} from '../services/menuAdmin.js';
+import { listTables, createTable } from '../services/tables.js';
 import { notFound } from '../errors.js';
-import { parse, listOrdersQuery, recentOrdersQuery, orderIdParams, updateOrderStatusBody } from '../validate.js';
+import {
+  parse,
+  listOrdersQuery,
+  recentOrdersQuery,
+  orderIdParams,
+  updateOrderStatusBody,
+  itemIdParams,
+  createMenuItemBody,
+  updateMenuItemBody,
+  setAvailabilityBody,
+  createTableBody,
+} from '../validate.js';
 
 // Staff/owner routes. Every one requires a signed-in staff member, and every
 // query is scoped to req.staff.restaurantId.
@@ -68,16 +86,43 @@ export function staffRoutes({ db, requireStaff, hub }) {
   });
 
   // Menu management (step 5). Availability is open to all staff so the
-  // kitchen can 86 an item mid-service.
-  router.get('/items', staff, notImplemented(5)); // includes 86'd items
-  router.post('/items', owner, notImplemented(5));
-  router.patch('/items/:itemId', owner, notImplemented(5));
-  router.delete('/items/:itemId', owner, notImplemented(5)); // soft delete
-  router.patch('/items/:itemId/availability', staff, notImplemented(5));
+  // kitchen can 86 an item mid-service; create/edit/delete are owner only.
+  router.get('/items', staff, async (req, res) => {
+    res.json({ items: await listMenuItemsAdmin(db, req.staff.restaurantId) });
+  });
+  router.post('/items', owner, async (req, res) => {
+    const body = parse(createMenuItemBody, req.body);
+    res.status(201).json({ item: await createMenuItem(db, req.staff.restaurantId, body) });
+  });
+  router.patch('/items/:itemId', owner, async (req, res) => {
+    const { itemId } = parse(itemIdParams, req.params);
+    const body = parse(updateMenuItemBody, req.body);
+    const item = await updateMenuItem(db, req.staff.restaurantId, itemId, body);
+    if (!item) throw notFound('Item not found');
+    res.json({ item });
+  });
+  router.delete('/items/:itemId', owner, async (req, res) => {
+    const { itemId } = parse(itemIdParams, req.params);
+    const deleted = await deleteMenuItem(db, req.staff.restaurantId, itemId);
+    if (!deleted) throw notFound('Item not found');
+    res.status(204).end();
+  });
+  router.patch('/items/:itemId/availability', staff, async (req, res) => {
+    const { itemId } = parse(itemIdParams, req.params);
+    const { is_available } = parse(setAvailabilityBody, req.body);
+    const item = await setItemAvailability(db, req.staff.restaurantId, itemId, is_available);
+    if (!item) throw notFound('Item not found');
+    res.json({ item });
+  });
 
   // Tables and their QR tokens (step 5).
-  router.get('/tables', staff, notImplemented(5));
-  router.post('/tables', owner, notImplemented(5));
+  router.get('/tables', staff, async (req, res) => {
+    res.json({ tables: await listTables(db, req.staff.restaurantId) });
+  });
+  router.post('/tables', owner, async (req, res) => {
+    const body = parse(createTableBody, req.body);
+    res.status(201).json({ table: await createTable(db, req.staff.restaurantId, body) });
+  });
 
   return router;
 }

@@ -5,9 +5,9 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 4 of 6 in progress — the staff board is live**: orders appear the instant
-they're placed or moved, with a sound, a flashing tab title, and a stuck-order highlight.
-Next: an order-detail view and a Recent tab for served/cancelled orders.
+Status: **step 4 of 6 done**, **step 5 in progress** — the menu and table management APIs
+(create, edit, delete, 86 an item, add a table with its QR code) are both built; the admin
+dashboard UI is next.
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
@@ -151,9 +151,10 @@ Supabase login linked in `staff_members` (see **Setting up Supabase**, step 4, b
 1. ~~Database schema~~ — done
 2. ~~Express scaffolding: Supabase client wiring, route stubs~~ — done
 3. ~~Public flow end to end: QR scan -> guest session -> menu -> cart -> order~~ — done
-4. SSE stream + live staff dashboard — orders API, live push, sign-in, and the board going live
-   are all done; an order-detail view and a Recent tab are what's left (see `docs/TASKS.md`)
-5. Owner admin panel: menu CRUD + availability toggle
+4. ~~SSE stream + live staff dashboard~~ — done: orders API, live push, sign-in, the board
+   going live, an order-detail view and a Recent tab (see `docs/TASKS.md`)
+5. Owner admin panel: menu CRUD + availability toggle — both APIs (menu and tables) are done;
+   the dashboard UI is what's left (see `docs/TASKS.md`)
 6. Landing page
 
 Deferred past v1: payments (`POST /payments` against the existing model), invoices,

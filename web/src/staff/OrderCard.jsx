@@ -3,7 +3,7 @@ import { nextStatus, nextStatusLabel, canCancel } from './transitions.js';
 import { ageMinutes, ageLabel, stuckLevel } from './age.js';
 import { useNowTick } from './useNowTick.js';
 
-export function OrderCard({ order, busy, skewMs, onMove }) {
+export function OrderCard({ order, busy, skewMs, onMove, onOpenDetail }) {
   const next = nextStatus(order.status);
   const cancellable = canCancel(order.status);
   const [confirming, setConfirming] = useState(false);
@@ -25,7 +25,9 @@ export function OrderCard({ order, busy, skewMs, onMove }) {
   return (
     <article className={`staff-card${stuck ? ` staff-card-${stuck}` : ''}`}>
       <div className="staff-card-head">
-        <strong>#{order.order_number}</strong>
+        <button type="button" className="staff-order-link" onClick={() => onOpenDetail(order.id)}>
+          #{order.order_number}
+        </button>
         <span className="staff-table">Table {order.table.label}</span>
         <span className={`staff-age${stuck ? ` staff-age-${stuck}` : ''}`}>{ageLabel(minutes)}</span>
       </div>

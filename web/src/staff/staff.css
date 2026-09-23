@@ -147,7 +147,18 @@
   gap: 8px;
 }
 .staff-card-head { display: flex; align-items: baseline; gap: 8px; }
-.staff-card-head strong { flex: none; }
+.staff-order-link {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+}
+.staff-order-link:hover, .staff-order-link:focus-visible { text-decoration-color: currentColor; }
 .staff-table { color: var(--muted); font-size: 0.9rem; flex: 1; }
 .staff-age { flex: none; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .staff-age-warn { color: var(--warn-text); font-weight: 600; }
@@ -194,7 +205,92 @@
 .staff-keep { background: var(--surface); color: var(--text); border: 1px solid var(--border) !important; }
 .staff-cancel-confirm { background: var(--warn-text); color: var(--surface); }
 
+/* --- tabs (Board / Recent) --- */
+.staff-tabs { display: flex; gap: 4px; padding: 10px 20px 0; border-bottom: 1px solid var(--border); }
+.staff-tab {
+  border: 0;
+  background: none;
+  padding: 8px 14px;
+  border-radius: 8px 8px 0 0;
+  font-weight: 600;
+  color: var(--muted);
+}
+.staff-tab-active { color: var(--accent); background: var(--accent-soft); }
+
+/* --- status pill (shared by the drawer and Recent rows) --- */
+.staff-status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.staff-status-served { background: color-mix(in srgb, var(--veg) 18%, var(--surface)); color: var(--veg); }
+.staff-status-cancelled { background: var(--warn-bg); color: var(--warn-text); }
+
+/* --- Recent tab --- */
+.staff-recent { padding: 12px 20px 32px; }
+.staff-recent-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.staff-muted { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.staff-recent-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.staff-recent-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+}
+.staff-recent-number { font-weight: 700; }
+.staff-recent-items { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.staff-recent-time { color: var(--muted); font-size: 0.85rem; }
+.staff-recent-total { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* --- order detail drawer --- */
+.staff-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  height: 100dvh;
+  width: min(420px, 100%);
+  margin: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+.staff-drawer::backdrop { background: rgb(0 0 0 / 0.4); }
+.staff-drawer-body { padding: 20px; overflow-y: auto; height: 100%; }
+.staff-drawer-close { position: absolute; top: 12px; right: 12px; }
+.staff-drawer h2 { display: flex; align-items: center; gap: 10px; padding-right: 30px; }
+.staff-drawer h3 { margin: 20px 0 8px; font-size: 0.95rem; }
+
+.staff-drawer-items { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; }
+.staff-drawer-items li { display: flex; justify-content: space-between; gap: 12px; font-size: 0.92rem; }
+.staff-drawer-items em { color: var(--muted); font-style: normal; }
+
+.staff-drawer-totals { margin: 10px 0; padding-top: 8px; border-top: 1px dashed var(--border); }
+.staff-drawer-totals div { display: flex; justify-content: space-between; padding: 2px 0; }
+.staff-drawer-totals dt, .staff-drawer-totals dd { margin: 0; }
+.staff-drawer-total-row { font-weight: 700; font-size: 1.05rem; margin-top: 4px; }
+
+.staff-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.staff-timeline li { display: flex; align-items: baseline; gap: 10px; font-size: 0.9rem; }
+.staff-timeline-status { font-weight: 600; text-transform: capitalize; min-width: 80px; }
+.staff-timeline-time { color: var(--muted); }
+.staff-timeline-who { color: var(--muted); margin-left: auto; }
+
 /* Phones: stack the columns instead of squeezing three side by side. */
 @media (max-width: 760px) {
   .staff-columns { grid-template-columns: 1fr; }
+  .staff-drawer { width: 100%; }
+  .staff-recent-row { display: flex; flex-wrap: wrap; }
+  .staff-recent-items { flex-basis: 100%; white-space: normal; }
 }

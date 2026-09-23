@@ -47,4 +47,6 @@ export const staffApi = {
   me: (token) => request('GET', '/me', { token }),
   listOrders: (token) => request('GET', '/orders', { token }),
   updateStatus: (token, orderId, status) => request('PATCH', `/orders/${orderId}/status`, { token, body: { status } }),
+  orderDetail: (token, orderId) => request('GET', `/orders/${orderId}`, { token }),
+  recentOrders: (token, hours) => request('GET', `/orders/recent${hours ? `?hours=${hours}` : ''}`, { token }),
 };
