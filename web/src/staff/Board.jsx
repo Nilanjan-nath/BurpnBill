@@ -3,11 +3,13 @@ import { useNewOrderAlerts } from './useNewOrderAlerts.js';
 import { ActiveColumns } from './ActiveColumns.jsx';
 import { RecentOrders } from './RecentOrders.jsx';
 import { OrderDetailDrawer } from './OrderDetailDrawer.jsx';
+import { MenuTab } from './MenuTab.jsx';
 
 const LIVE_LABEL = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' };
 const TABS = [
   { id: 'board', label: 'Board' },
   { id: 'recent', label: 'Recent' },
+  { id: 'menu', label: 'Menu' },
 ];
 
 export function Board({ identity, board, token, onSignOut }) {
@@ -69,11 +71,9 @@ export function Board({ identity, board, token, onSignOut }) {
         </div>
       )}
 
-      {tab === 'board' ? (
-        <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />
-      ) : (
-        <RecentOrders token={token} onOpenDetail={setDetailOrderId} />
-      )}
+      {tab === 'board' && <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />}
+      {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
+      {tab === 'menu' && <MenuTab isOwner={identity.role === 'owner'} token={token} />}
 
       {detailOrderId && (
         <OrderDetailDrawer token={token} orderId={detailOrderId} onClose={() => setDetailOrderId(null)} />

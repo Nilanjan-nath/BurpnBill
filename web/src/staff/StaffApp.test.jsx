@@ -348,6 +348,7 @@ describe('order detail and Recent', () => {
     await moveViaApi(cancelled.id, 'cancelled');
 
     await signIn(user, STAFF_USER);
+    await screen.findByRole('region', { name: 'New' }); // wait for the board to actually load, not still "Loading…"
     expect(screen.queryByText(`#${served.order_number}`)).not.toBeInTheDocument(); // not on the live board
 
     await user.click(await screen.findByRole('button', { name: 'Recent' }));
@@ -376,5 +377,125 @@ describe('order detail and Recent', () => {
 
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await screen.findByRole('button', { name: new RegExp(`#${order.order_number}`) })).toBeInTheDocument();
+  });
+});
+
+describe('the Menu tab', () => {
+  // STAFF_USER (Mita) is seeded as 'owner'; SECOND_STAFF (Ravi) as 'staff' —
+  // see ../test/globalSetup.js. Named for the ORDER-board tests they were
+  // first used in; kept here rather than renamed to avoid an unrelated diff.
+  const openMenuTab = async (user, asUserId) => {
+    await signIn(user, asUserId);
+    await user.click(await screen.findByRole('button', { name: 'Menu' }));
+  };
+
+  test('owner sees Add item and per-item Edit/Delete', async () => {
+    const owner = userEvent.setup();
+    await openMenuTab(owner, STAFF_USER);
+
+    expect(await screen.findByRole('button', { name: '+ Add item' })).toBeInTheDocument();
+    const chaiRow = (await screen.findByText('Masala Chai')).closest('li');
+    expect(within(chaiRow).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(within(chaiRow).getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(within(chaiRow).getByRole('checkbox')).toBeInTheDocument();
+  });
+
+  test('staff see the same list with only the availability toggle — no add/edit/delete', async () => {
+    const staff = userEvent.setup();
+    await openMenuTab(staff, SECOND_STAFF);
+
+    // Wait for the menu to actually finish loading BEFORE checking anything
+    // is absent — a "not present" check against a still-loading screen
+    // (nothing rendered yet either way) would pass vacuously either way.
+    const staffChaiRow = (await screen.findByText('Masala Chai')).closest('li');
+    expect(screen.queryByRole('button', { name: '+ Add item' })).not.toBeInTheDocument();
+    expect(within(staffChaiRow).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(within(staffChaiRow).queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(within(staffChaiRow).getByRole('checkbox')).toBeInTheDocument();
+  });
+
+  test('staff can 86 an item from here, and it disappears from the real customer menu immediately', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, SECOND_STAFF);
+
+    const row = (await screen.findByText('Filter Coffee')).closest('li');
+    const toggle = within(row).getByRole('checkbox');
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    await waitFor(() => expect(within(row).getByRole('checkbox')).not.toBeChecked());
+
+    try {
+      const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
+      expect(menu.categories.flatMap((c) => c.items).some((i) => i.name === 'Filter Coffee')).toBe(false);
+    } finally {
+      await sql("update menu_items set is_available = true where name = 'Filter Coffee'");
+    }
+  });
+
+  test('owner can add an item, and it\'s on the real customer menu right away', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    await user.click(await screen.findByRole('button', { name: '+ Add item' }));
+    const form = await screen.findByRole('dialog', { name: 'Add item' });
+    await user.type(within(form).getByLabelText('Name'), 'Cold Kokum Sherbet');
+    await user.clear(within(form).getByLabelText('Category'));
+    await user.type(within(form).getByLabelText('Category'), 'Beverages');
+    await user.type(within(form).getByLabelText(/Price/), '45');
+    await user.click(within(form).getByRole('radio', { name: 'Veg' }));
+    await user.click(within(form).getByRole('button', { name: 'Add item' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('Cold Kokum Sherbet')).toBeInTheDocument();
+
+    const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
+    const item = menu.categories.flatMap((c) => c.items).find((i) => i.name === 'Cold Kokum Sherbet');
+    expect(item?.price).toBe('45.00');
+  });
+
+  test('owner can edit an item — the whole form resubmits, values update everywhere', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    const row = (await screen.findByText('Samosa (2 pcs)')).closest('li');
+    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    const form = await screen.findByRole('dialog', { name: 'Edit Samosa (2 pcs)' });
+
+    const priceInput = within(form).getByLabelText(/Price/);
+    await user.clear(priceInput);
+    await user.type(priceInput, '50');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const updatedRow = (await screen.findByText('Samosa (2 pcs)')).closest('li');
+    expect(within(updatedRow).getByText('₹50.00')).toBeInTheDocument();
+
+    await sql("update menu_items set price = 40 where name = 'Samosa (2 pcs)'");
+  });
+
+  test('deleting uses an inline confirmation, not a native popup, and "Keep it" changes nothing', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    await user.click(await screen.findByRole('button', { name: '+ Add item' }));
+    const form = await screen.findByRole('dialog', { name: 'Add item' });
+    await user.type(within(form).getByLabelText('Name'), 'Test Special');
+    await user.type(within(form).getByLabelText(/Price/), '99');
+    await user.click(within(form).getByRole('button', { name: 'Add item' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    const row = (await screen.findByText('Test Special')).closest('li');
+    await user.click(within(row).getByRole('button', { name: 'Delete' }));
+    expect(within(row).getByText('Delete this item?')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Keep it' }));
+    expect(screen.getByText('Test Special')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Delete' }));
+    await user.click(within(row).getByRole('button', { name: 'Yes, delete it' }));
+    await waitFor(() => expect(screen.queryByText('Test Special')).not.toBeInTheDocument());
+
+    const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
+    expect(menu.categories.flatMap((c) => c.items).some((i) => i.name === 'Test Special')).toBe(false);
   });
 });

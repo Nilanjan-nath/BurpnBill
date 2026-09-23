@@ -287,10 +287,58 @@
 .staff-timeline-time { color: var(--muted); }
 .staff-timeline-who { color: var(--muted); margin-left: auto; }
 
+/* --- item add/edit form (reuses .sheet/.field/.icon-btn/.primary from the
+   customer app's global styles.css; these fill in what that stylesheet
+   doesn't cover — plain <input>s and the veg radio group) --- */
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.staff-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.staff-veg-field { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.staff-veg-field legend { font-size: 0.85rem; color: var(--muted); padding: 0 0 4px; }
+.staff-radio { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+
+/* --- Menu tab --- */
+.staff-menu-tab { padding: 12px 20px 32px; }
+.staff-menu-toolbar { margin-bottom: 14px; }
+.staff-menu-category { margin-bottom: 20px; }
+.staff-menu-category h2 { padding-bottom: 8px; font-size: 1rem; }
+.staff-menu-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+.staff-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.staff-menu-item-off { opacity: 0.65; border-style: dashed; }
+.staff-menu-item-main { flex: 1; min-width: 0; }
+.staff-menu-item-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.staff-menu-item-main .staff-muted { font-size: 0.88rem; margin: 2px 0; }
+
+.staff-toggle { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); flex: none; }
+.staff-toggle input { width: 16px; height: 16px; }
+
+.staff-menu-item-actions { display: flex; gap: 10px; flex: none; }
+.staff-danger-link { color: var(--nonveg); }
+
+.staff-confirm-inline { flex: 1; }
+
 /* Phones: stack the columns instead of squeezing three side by side. */
 @media (max-width: 760px) {
   .staff-columns { grid-template-columns: 1fr; }
   .staff-drawer { width: 100%; }
   .staff-recent-row { display: flex; flex-wrap: wrap; }
   .staff-recent-items { flex-basis: 100%; white-space: normal; }
+  .staff-form-row { grid-template-columns: 1fr; }
+  .staff-menu-item { flex-wrap: wrap; }
 }

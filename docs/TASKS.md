@@ -250,9 +250,26 @@ an existing table stays deferred (already on the "after v1" list below).
       rejection, nothing persisted after
 - [x] `notImplemented` import removed from `staff.js` — every route stub in that file is now real
 
-**Slice 3 — Menu tab in the dashboard** — not started
-- [ ] Owner: add/edit/delete items, full form
-- [ ] Staff: same list, availability toggle only — no add/edit/delete controls shown
+**Slice 3 — Menu tab in the dashboard** — done
+- [x] Owner: add/edit item (`ItemForm.jsx`, one form for both — editing always sends every field,
+      a full replace rather than exposing the API's partial-update as a UI concept) and delete,
+      with the same inline confirmation pattern as Cancel (not `window.confirm` — same
+      button-label-collision problem it would reintroduce)
+- [x] Staff: the identical list, availability toggle only — no add/edit/delete controls rendered
+      at all for them, not just disabled
+- [x] `useMenuAdmin.js`: no live push (menu edits are infrequent, made by whoever's looking at
+      this exact screen) — a refetch after every action is enough
+- [x] Tests: role-based visibility (owner vs. staff), toggling availability from here reaching the
+      real customer menu immediately, add/edit reaching the real customer menu, delete via the
+      inline confirm (not a native popup) with "Keep it" changing nothing. Mutation-checked
+      (role gate on the toolbar, the delete confirmation step), both caught
+- [x] **Found and fixed two more vacuous tests** while mutation-checking (same class of bug as
+      step 4's `fileParallelism` investigation): a negative assertion (`not.toBeInTheDocument()`)
+      run before the screen had actually finished its own async load passes trivially either way,
+      since nothing relevant has rendered yet regardless of the code being right or wrong. One was
+      in this slice's own new test; the other was **latent in a slice-4 Recent-tab test**, only
+      surfaced now by deliberately mutation-testing something unrelated in its neighbourhood.
+      Fixed both by waiting for real, loaded content before asserting an absence
 
 **Slice 4 — Tables tab** — not started
 - [ ] Owner only. Add a table; a printable QR sheet (`{APP_BASE_URL}/t/{qr_token}` per table),

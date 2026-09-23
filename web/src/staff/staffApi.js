@@ -49,4 +49,10 @@ export const staffApi = {
   updateStatus: (token, orderId, status) => request('PATCH', `/orders/${orderId}/status`, { token, body: { status } }),
   orderDetail: (token, orderId) => request('GET', `/orders/${orderId}`, { token }),
   recentOrders: (token, hours) => request('GET', `/orders/recent${hours ? `?hours=${hours}` : ''}`, { token }),
+  listItems: (token) => request('GET', '/items', { token }),
+  createItem: (token, body) => request('POST', '/items', { token, body }),
+  updateItem: (token, itemId, body) => request('PATCH', `/items/${itemId}`, { token, body }),
+  deleteItem: (token, itemId) => request('DELETE', `/items/${itemId}`, { token }),
+  setItemAvailability: (token, itemId, isAvailable) =>
+    request('PATCH', `/items/${itemId}/availability`, { token, body: { is_available: isAvailable } }),
 };
