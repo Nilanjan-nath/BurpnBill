@@ -251,9 +251,9 @@ describe('going live', () => {
     await place('T4', 'Masala Chai'); // already on the board before sound is armed — must not chime retroactively
     await signIn(user, STAFF_USER);
 
-    const soundButton = await screen.findByRole('button', { name: '🔔 Turn on sound' });
+    const soundButton = await screen.findByRole('button', { name: 'Turn on sound' });
     await user.click(soundButton);
-    expect(screen.queryByRole('button', { name: '🔔 Turn on sound' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn on sound' })).not.toBeInTheDocument();
 
     // A genuinely new order after arming still works end to end (no crash from the audio path).
     const order = await place('T4', 'Filter Coffee');
@@ -561,5 +561,196 @@ describe('the Tables tab', () => {
 
     expect(await within(form).findByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Add table' })).toBeInTheDocument(); // stays open
+  });
+});
+
+describe('the owner dashboard shell (step 7 slice 1)', () => {
+  test('owner sees Dashboard, POS and Staff tabs; staff see none of them', async () => {
+    const owner = userEvent.setup();
+    await signIn(owner, STAFF_USER);
+    expect(await screen.findByRole('button', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'POS' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Staff' })).toBeInTheDocument();
+  });
+
+  test('staff do not see Dashboard, POS or Staff tabs', async () => {
+    const staff = userEvent.setup();
+    await signIn(staff, SECOND_STAFF);
+    await screen.findByRole('heading', { name: 'Order board' });
+    expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'POS' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Staff' })).not.toBeInTheDocument();
+  });
+
+  test('Dashboard and Staff are still placeholders; POS is the real thing', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+
+    await user.click(await screen.findByRole('button', { name: 'Dashboard' }));
+    expect(await screen.findByText(/Dashboard —/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Staff' }));
+    expect(await screen.findByText(/Staff —/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'POS' }));
+    expect(await screen.findByRole('heading', { name: 'Floor' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Search items' })).toBeInTheDocument();
+  });
+});
+
+describe('the POS tab (step 7 slices 2-3)', () => {
+  const openPOS = async (user) => {
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'POS' }));
+    await screen.findByRole('heading', { name: 'Floor' });
+  };
+
+  test('a table with no active order shows free on the floor map', async () => {
+    const user = userEvent.setup();
+    // Earlier describe blocks in this shared-DB file leave active orders on
+    // several tables — force a clean slate for T1 regardless of that.
+    await sql(
+      `update orders set status = 'cancelled'
+        where table_id = (select id from restaurant_tables where label = 'T1') and status in ('placed', 'preparing', 'ready')`,
+    );
+    await openPOS(user);
+    const t1 = screen.getAllByText('T1')[0].closest('button');
+    expect(within(t1).getByText('free')).toBeInTheDocument();
+  });
+
+  test('selecting a table, adding items, and sending to kitchen places a real order', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+
+    await user.click((await screen.findByText('T3')).closest('button'));
+    expect(await screen.findAllByText('T3')).toHaveLength(2); // the floor card, and now the cart header badge
+
+    const chaiCard = (await screen.findByText('Masala Chai')).closest('button');
+    await user.click(chaiCard);
+    await user.click(chaiCard); // quantity 2
+
+    const cartLine = (await screen.findAllByText('Masala Chai')).map((el) => el.closest('li')).find(Boolean);
+    expect(within(cartLine).getByText('2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+
+    // The cart clears and the table now shows occupied on the floor map.
+    // (Two "T3"s on screen now: the floor card, and the still-selected
+    // cart header badge — the floor card renders first in DOM order.)
+    await waitFor(() => expect(screen.queryByText('No items yet — tap a menu item to add it.')).toBeInTheDocument());
+    const t3Card = screen.getAllByText('T3')[0].closest('button');
+    await waitFor(() => expect(within(t3Card).getByText('occupied')).toBeInTheDocument());
+
+    // ...and shows up on the real kitchen board, exactly like a QR order.
+    // Identified by order_number, not by item name — other tests in this
+    // shared-DB file also leave active "Masala Chai" orders on other tables.
+    const [{ order_number: orderNumber }] = await sql(
+      `select order_number from orders
+        where table_id = (select id from restaurant_tables where label = 'T3')
+        order by placed_at desc limit 1`,
+    );
+    await user.click(screen.getByRole('button', { name: 'Board' }));
+    const newColumn = await screen.findByRole('region', { name: 'New' });
+    const card = within(newColumn).getByText(`#${orderNumber}`).closest('article');
+    expect(within(card).getByText('Table T3')).toBeInTheDocument();
+    expect(within(card).getByText(/2 × Masala Chai/)).toBeInTheDocument();
+  });
+
+  test('switching tables discards the in-progress cart', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+
+    await user.click((await screen.findByText('T4')).closest('button'));
+    await user.click((await screen.findByText('Filter Coffee')).closest('button'));
+    await waitFor(() => expect(screen.queryByText('No items yet — tap a menu item to add it.')).not.toBeInTheDocument());
+
+    await user.click(screen.getByText('T1').closest('button'));
+    expect(await screen.findByText('No items yet — tap a menu item to add it.')).toBeInTheDocument();
+  });
+
+  test('the "Send to kitchen" button is disabled with no table selected or an empty cart', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+    expect(screen.getByRole('button', { name: 'Send to kitchen' })).toBeDisabled();
+
+    await user.click((await screen.findByText('T2')).closest('button'));
+    expect(screen.getByRole('button', { name: 'Send to kitchen' })).toBeDisabled();
+
+    await user.click((await screen.findByText('Masala Chai')).closest('button'));
+    expect(screen.getByRole('button', { name: 'Send to kitchen' })).not.toBeDisabled();
+  });
+
+  test('search and category filters narrow the item grid', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search items' }), 'chai');
+    expect(await screen.findByText('Masala Chai')).toBeInTheDocument();
+    expect(screen.queryByText('Filter Coffee')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByRole('searchbox', { name: 'Search items' }));
+    await user.click(screen.getByRole('button', { name: 'Desserts' }));
+    expect(await screen.findByText('Chocolate Brownie')).toBeInTheDocument();
+    expect(screen.queryByText('Masala Chai')).not.toBeInTheDocument();
+  });
+
+  test('item cards show the same veg/non-veg mark as the customer menu and the Menu tab', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+
+    const chaiCard = (await screen.findByText('Masala Chai')).closest('button');
+    expect(within(chaiCard).getByRole('img', { name: 'Vegetarian' })).toBeInTheDocument();
+  });
+
+  test('a table stays occupied, with no Checkout offered, while its order is still with the kitchen', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+
+    await user.click((await screen.findByText('T2')).closest('button'));
+    await user.click((await screen.findByText('Filter Coffee')).closest('button'));
+    await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+
+    await waitFor(() => {
+      const t2Card = screen.getAllByText('T2')[0].closest('button').parentElement;
+      expect(within(t2Card).getByText('occupied')).toBeInTheDocument();
+      expect(within(t2Card).queryByRole('button', { name: /Checkout/ })).not.toBeInTheDocument();
+    });
+  });
+
+  test('checking out a served order frees the table', async () => {
+    const user = userEvent.setup();
+    await openPOS(user);
+
+    await user.click((await screen.findByText('T1')).closest('button'));
+    await user.click((await screen.findByText('Masala Chai')).closest('button'));
+    await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+    await waitFor(() => {
+      const t1Card = screen.getAllByText('T1')[0].closest('button').parentElement;
+      expect(within(t1Card).getByText('occupied')).toBeInTheDocument();
+    });
+
+    // Walked to served out-of-band — this test is about checkout, not about
+    // re-proving the board's own status-move UI (covered elsewhere).
+    const [{ id: orderId }] = await sql(
+      `select id from orders where table_id = (select id from restaurant_tables where label = 'T1') order by placed_at desc limit 1`,
+    );
+    for (const status of ['preparing', 'ready', 'served']) {
+      await sql(`update orders set status = $2 where id = $1`, [orderId, status]);
+    }
+
+    // The floor has no live push — it refetches on mount, not on a poll.
+    // Leaving POS and coming back is the same real user action that would
+    // pick this up: the kitchen served it while this staff member was on
+    // another tab.
+    await user.click(screen.getByRole('button', { name: 'Board' }));
+    await user.click(screen.getByRole('button', { name: 'POS' }));
+    await screen.findByRole('heading', { name: 'Floor' });
+
+    await user.click(await screen.findByRole('button', { name: /Checkout/ }));
+
+    await waitFor(() => {
+      const t1Card = screen.getAllByText('T1')[0].closest('button').parentElement;
+      expect(within(t1Card).getByText('free')).toBeInTheDocument();
+    });
   });
 });

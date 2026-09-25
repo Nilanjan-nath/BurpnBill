@@ -57,4 +57,7 @@ export const staffApi = {
     request('PATCH', `/items/${itemId}/availability`, { token, body: { is_available: isAvailable } }),
   listTables: (token) => request('GET', '/tables', { token }),
   createTable: (token, body) => request('POST', '/tables', { token, body }),
+  getFloor: (token) => request('GET', '/floor', { token }),
+  placeStaffOrder: (token, body) => request('POST', '/staff/orders', { token, body }),
+  checkoutTable: (token, tableId) => request('POST', `/tables/${tableId}/checkout`, { token, body: {} }),
 };

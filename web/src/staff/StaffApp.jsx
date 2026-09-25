@@ -6,6 +6,7 @@ import { staffApi, StaffApiError } from './staffApi.js';
 import { SignInScreen } from './SignInScreen.jsx';
 import { Board } from './Board.jsx';
 import './staff.css';
+import './tailwind.css';
 
 // The real Supabase Auth client is only ever constructed once this component
 // actually mounts — not at module load time — so a missing/misconfigured

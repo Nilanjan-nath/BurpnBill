@@ -1,0 +1,4 @@
+/* Only ever imported from staff/StaffApp.jsx, so it ships in the lazy
+   /staff chunk only — same scoping as staff.css. Default Tailwind, no
+   config file: no custom theme, no custom colors, per the design brief. */
+@import "tailwindcss";

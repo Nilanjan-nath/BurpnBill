@@ -101,6 +101,21 @@ export const createTableBody = z.strictObject({
   seats: z.number().int().min(1).max(100).nullable().optional(),
 });
 
+// POST /staff/orders (step 7, POS) — a staff member placing an order for a
+// walk-in, dine-in only. Same item shape as the customer cart's add-item
+// body; special_instructions defaults to null the same way.
+export const staffOrderItem = z.strictObject({
+  menu_item_id: id,
+  quantity,
+  special_instructions: note.optional().default(null),
+});
+export const createStaffOrderBody = z.strictObject({
+  table_id: id,
+  items: z.array(staffOrderItem).min(1, 'Add at least one item'),
+});
+
+export const tableIdParams = z.strictObject({ tableId: id });
+
 // Throws a 400 listing every problem, or returns the parsed (cleaned) value.
 export function parse(schema, data) {
   const result = schema.safeParse(data ?? {});

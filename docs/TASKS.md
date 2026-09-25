@@ -297,9 +297,169 @@ an existing table stays deferred (already on the "after v1" list below).
       tab rendered for real still needs your actual password — same limit as every other
       staff-side slice; not tested here
 
-## Step 6 — Landing page
+## Step 6 — Owner operations dashboard
+
+**Decided:** still 2 roles (owner/staff) — no 5-role expansion this round. That means POS,
+Dashboard and Staff management are **owner only**; there's no cashier/waiter role to hand
+day-to-day POS use to yet, only the owner can ring up a walk-in. Kitchen staff keep exactly
+today's experience (Board/Recent/Menu-toggle) and never see the new tabs. No new restaurant
+signup this round — still the one demo café (Chai Point Cafe); a real "create your
+restaurant" flow becomes its own step later, alongside the landing page. POS orders are
+dine-in only for now (pick an existing table) — no take-away/no-table orders yet, that's a
+real gap but a separate piece of work. Dashboard shows today's snapshot only (revenue,
+active orders, table status) — no historical reports yet, that's its own later step too.
+
+**Design pivot, mid-step-7 (slice 3):** the plain-CSS dark neutral theme from slice 1 was
+replaced by a Tailwind CSS ("premium SaaS" reference brief: white/off-white base, one indigo
+accent, soft pastel status badges) sidebar + header + POS, per direct owner feedback that the
+dark theme "didn't look premium." **Tailwind v4** (`@tailwindcss/vite`, no `tailwind.config.js`
+— v4's zero-config default, which also happens to match the brief's "default utility classes
+only" constraint) plus `lucide-react` for icons, both scoped to the `/staff` lazy chunk only
+(imported from `staff/tailwind.css`, itself only imported by `StaffApp.jsx` — same trick
+`staff.css` already used). Verified with a production build: the main customer bundle's CSS/JS
+have zero occurrences of `indigo`, `lucide`, or `.staff-app` — customers still never download
+any of this. **Known, temporary visual seam**: Board/Recent/Menu/Tables/the Dashboard and Staff
+placeholders still use the old dark theme (now scoped to `.staff-legacy` instead of `.staff-app`,
+since `.staff-app` itself is now a plain Tailwind flex container) — light chrome, dark legacy
+pages, until those are migrated too. Not solved today; flagged to the owner rather than
+silently left inconsistent.
+
+**Slice 1 — Shell: sidebar nav + three new owner-only tabs** — done (sidebar later rebuilt
+in Tailwind during slice 3 — see the design pivot note above; this slice's tab state/ids/
+content-routing decisions are what survived)
+- [x] Kept the same tab state/ids/content-routing in `Board.jsx` (`OWNER_TABS`) that added
+      the Tables tab in step 5 — nearly every existing test signs in as the `owner`-role
+      fixture to exercise the board, so changing *what* renders per tab risked rewriting most
+      of the suite. What changed is purely the chrome around it: the tab buttons moved from a
+      horizontal top bar into a sidebar (brand mark, vertical nav, identity footer at the
+      bottom), matching the reference layout the owner asked for. Same buttons, same
+      accessible names, same content per tab — just relaid out — so every existing test kept
+      passing with zero changes needed to the tests themselves. (The original version of this
+      sidebar was plain CSS, dark-themed, matching slice 1's own now-superseded design
+      decision — see the pivot note above for what replaced it)
+- [x] `DashboardHome.jsx`, `POS.jsx`, `StaffTab.jsx` — placeholder components ("Coming
+      soon"), owner-only tabs, real content lands in slices 4, 2-3, and 5 respectively
+- [x] Tests: owner sees all three new tabs, staff see none of them, each placeholder renders
+      its own distinct content. Mutation-checked (owner-only gating, tab-to-content routing),
+      both caught
+- [x] Live-checked: a throwaway static HTML page against the real `staff.css` (deleted after
+      each check, never committed) — first confirmed all 7 tabs fit the tablet/desktop
+      sidebar without wrapping, then again after the sidebar layout to confirm the mobile
+      fallback genuinely collapses to a horizontal bar (caught one build issue: the scratch
+      page itself was missing a viewport meta tag, made the mobile emulation render at a
+      desktop-width 980px instead of 375px — the real app's `index.html` already has this
+      tag, so this only ever affected the scratch page, not the app)
+
+**Slice 2 — Floor map** — done
+- [x] `GET /floor` — owner only: every table plus whether it's occupied, derived from active
+      orders (`status in ('placed','preparing','ready')`) via a `left join lateral` against
+      `orders` — no new schema. `server/src/services/floor.js`
+- [x] Floor map view inside `POS.jsx`: tables as cards, green "free" / red "occupied" soft
+      badges, selected table gets a teal ring
+- [x] Tests: every table's occupancy reflects its real active order (or lack of one), a
+      cancelled order frees the table again, café-scoped. Mutation-checked (the free/occupied
+      derivation itself), caught
+
+**Slice 3 — POS order entry** — done
+- [x] Tap a table on the floor map → search/filter the live menu → build a cart → "Send to
+      kitchen". Switching tables discards the in-progress cart on purpose (never sent
+      anywhere until confirmed, and carrying table A's half-built order onto table B by
+      accident would be a real mistake on a busy floor)
+- [x] `POST /staff/orders` `{ table_id, items: [...] }` — owner only; same guarantees as the
+      customer checkout path: items locked `for share` so an availability toggle mid-request
+      waits, prices copied from the menu not the client, total summed in SQL not JS. Writes
+      straight to `orders`/`order_items` — no customer cart involved, but `orders.
+      guest_session_id` is `not null` with a real FK, so each POS order gets its own
+      throwaway `guest_session` scoped to the table (never returned to any client, no
+      customer ever sees it) purely so it fits the same shape every other order already has.
+      Publishes the same `order_created` SSE event as a QR order — the kitchen board doesn't
+      know or care which path an order came from
+- [x] `orders.source` column (`qr` | `pos`) — **not added**; deferred until an actual later
+      step (Reports) needs to break sales down by source, rather than speculatively
+- [x] Tests (server): validates the body, a made-up/inactive/other-café's table is 404,
+      another café's menu items can't be ordered onto your table, an 86'd item is rejected
+      with nothing written (the whole request rolls back), the timeline records which owner
+      placed it (unlike a customer QR order, which has no staff actor). Mutation-checked
+      (the availability check, restaurant-scoping on the table lookup), both caught
+- [x] Tests (web): floor map reflects real occupancy, selecting a table + adding items +
+      sending to kitchen creates a real order that appears on the live kitchen board exactly
+      like a QR order would, switching tables clears the cart, the send button's disabled
+      state, search/category filtering. Mutation-checked (cart-reset-on-switch, the
+      send-button's disabled condition), both caught. One real test bug found and fixed along
+      the way: an `await screen.findByText(...)).not.toBeInTheDocument()` construction is
+      backwards — `findByText` itself throws if the text never appears, so a negative
+      assertion needs `queryByText` instead; same class of vacuous-negative-assertion bug
+      flagged in step 5's own retrospective, still worth watching for
+- [x] Live-checked: a throwaway static HTML page against the real, compiled Tailwind output
+      (deleted after) to confirm the floor/menu/cart layout actually renders as intended —
+      full sign-in still needs the owner's real password, same limit as every other
+      staff-side check in this project
+
+**Slice 3 follow-up — owner feedback after first look** — done
+- [x] `docs/design.md` — a design system doc so every future tab follows the same rules
+      (color, type, shape, layout) instead of each slice inventing its own. Also states the
+      "structure, not screenshots" rule explicitly: take inspiration from a reference's
+      *pattern* (sidebar + cards + a contextual panel), never its literal colors or layout
+- [x] Primary accent switched from indigo to **teal** — indigo/blue is what most POS
+      references (including the one we looked at) already use as their primary; teal reads as
+      premium the same way without being the same choice
+- [x] Floor map cards: a soft red/green tint + border now, not just the small badge — "make it
+      red when busy, green when available" was about the whole card reading at a glance, not
+      just a small pill
+- [x] **Occupied now means "unpaid", not "the kitchen has work to do"**: `getFloor` no longer
+      restricts to `placed/preparing/ready` — a table stays occupied through `served` too
+      (the group is very likely still sitting there), and only frees up on checkout or if every
+      order on it is cancelled
+- [x] `POST /tables/:tableId/checkout` — owner only; a manual stand-in since there's no
+      payments feature yet (see ARCHITECTURE.md §2): marks the table's `served`, unpaid
+      orders as paid (`orders.paid_at`, the same column a real payment will eventually set).
+      Deliberately restricted to `served` orders — marking a still-cooking order "paid" out
+      from under the kitchen would be a footgun, not a shortcut. Surfaced as a "Checkout"
+      button on a table's floor card, shown only when it would actually do something. A fuller
+      itemised bill/checkout screen (in the Orders/Recent area) is still deferred, per the
+      owner's own framing — this is the smallest thing that makes "occupied until checkout"
+      true today, not the final feature
+- [x] "Tables" heading in POS renamed to "Floor" — the sidebar's own "Tables" tab (QR code
+      management) is a different feature and keeps its name; only POS's internal floor-map
+      section changed
+- [x] Veg/non-veg dot added to POS item cards (`VegMark`, reused from the customer app) —
+      food-safety information, not decoration; considered and declined general decorative
+      coloring of item cards, which would cut against the brief's own "clarity beats
+      decoration" principle for a grid of 20-30 cards — see design.md
+- [x] Tests: served-but-unpaid still shows occupied, checkout frees the table and marks the
+      order paid, checkout leaves a still-cooking order untouched (stays occupied), the
+      Checkout button only appears once the order is actually served, the veg mark renders.
+      Mutation-checked (checkout's `status = 'served'` restriction, the Checkout button's
+      visibility condition, the veg mark itself), all three caught
+- [x] Live-checked: same throwaway-static-page technique against the real compiled Tailwind
+      output, confirming the teal accent, stronger red/green cards, Floor heading, Checkout
+      button and veg dots all render as intended
+
+**Slice 4 — Dashboard home** — not started
+- [ ] `GET /dashboard/summary`: today's revenue (sum of non-cancelled orders' totals),
+      active order count, table free/occupied counts — reuses the floor endpoint's data
+- [ ] Replaces the `DashboardHome.jsx` placeholder
+
+**Slice 5 — Staff management** — not started
+- [ ] `POST /staff/invite` `{ email, display_name, role }` — owner only; calls Supabase
+      Admin's `inviteUserByEmail` (service-role key, server-side only) to create the auth
+      user and send the invite email, then creates the `staff_members` row immediately with
+      the chosen role (matches the reference screenshot's inline role picker on the invite
+      form itself, rather than waiting for the invitee to complete signup)
+- [ ] **Known risk to flag before relying on this**: Supabase's default email sending is
+      low-volume/rate-limited without custom SMTP configured — invite emails may not land
+      reliably until that's set up
+- [ ] `PATCH /staff/:id` (change role), `DELETE /staff/:id` (removes the `staff_members` row
+      only — unlinks them from this café, does not delete their Supabase Auth account, since
+      that identity might be used elsewhere)
+- [ ] Replaces the `StaffTab.jsx` placeholder: invite form + active staff list with an
+      inline role dropdown and a remove action
+
+## Step 7 — Landing page
 
 - [ ] Built last, with real screenshots of the working flow
+- [ ] Real "create your restaurant" signup (name, owner name, email) likely belongs here too,
+      alongside the landing page, rather than as part of step 6 (see step 6's "Decided" note)
 
 ## Before first real cafe
 

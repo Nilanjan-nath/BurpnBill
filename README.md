@@ -5,8 +5,10 @@
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.
 
-Status: **step 5 of 6 done** — owners can manage the menu (add, edit, delete, 86 an item) and
-tables (add a table, print a QR sheet) from the dashboard. The landing page is next.
+Status: **step 6 of 7 in progress** — owners can manage the menu and tables, and now run a
+POS: pick a table off a live floor map, build a walk-in's order from the real menu, send it
+to the kitchen exactly like a QR order would. A today's-snapshot dashboard and staff
+invite/role management are what's left before the landing page.
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · what's left: [docs/TASKS.md](docs/TASKS.md)
 
 ## v1 scope
@@ -153,7 +155,9 @@ Supabase login linked in `staff_members` (see **Setting up Supabase**, step 4, b
 4. ~~SSE stream + live staff dashboard~~ — done: orders API, live push, sign-in, the board
    going live, an order-detail view and a Recent tab (see `docs/TASKS.md`)
 5. ~~Owner admin panel: menu CRUD + availability toggle, tables + printable QR codes~~ — done
-6. Landing page — next
+6. Owner operations dashboard: floor map + staff-placed POS orders done; today's-snapshot
+   dashboard and staff invite/role management still to come (see `docs/TASKS.md` step 6)
+7. Landing page — last
 
 Deferred past v1: payments (`POST /payments` against the existing model), invoices,
 RLS policies, Redis pub/sub for multi-instance SSE, customer-facing order status.

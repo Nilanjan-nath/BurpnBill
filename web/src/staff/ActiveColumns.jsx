@@ -17,7 +17,7 @@ export function ActiveColumns({ board, onOpenDetail }) {
       {COLUMNS.map((col) => {
         const inColumn = (board.orders ?? []).filter((o) => o.status === col.status);
         return (
-          <section key={col.status} className="staff-column" aria-label={col.title}>
+          <section key={col.status} className={`staff-column staff-column-${col.status}`} aria-label={col.title}>
             <h2>
               {col.title} <span className="staff-count">{inColumn.length}</span>
             </h2>

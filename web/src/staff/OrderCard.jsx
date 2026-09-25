@@ -61,7 +61,7 @@ export function OrderCard({ order, busy, skewMs, onMove, onOpenDetail }) {
             </button>
           )}
           {next && (
-            <button type="button" className="staff-forward" disabled={busy} onClick={() => onMove(order, next)}>
+            <button type="button" className={`staff-forward staff-forward-${order.status}`} disabled={busy} onClick={() => onMove(order, next)}>
               {busy ? '…' : nextStatusLabel(order.status)}
             </button>
           )}

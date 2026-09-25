@@ -1,4 +1,4 @@
-import { HttpError } from '../errors.js';
+import { HttpError, notFound } from '../errors.js';
 
 // The kitchen's view of orders. Every function takes the restaurant id from the
 // signed-in staff member (req.staff.restaurantId), never from the request, so
@@ -273,4 +273,78 @@ export async function updateOrderStatus(db, restaurantId, orderId, targetStatus,
   }
 
   return getOrderDetail(db, restaurantId, orderId);
+}
+
+// POST /staff/orders (step 7 slice 3, POS) — a staff member placing an order
+// for a walk-in on an existing table, no customer QR scan involved. Owner
+// only (see TASKS.md step 7's "Decided" note — no cashier/waiter role yet).
+//
+// Reuses the same guarantees the customer checkout path has: items are
+// locked `for share` so an availability toggle mid-request waits for this to
+// finish, prices are copied from the menu (never trusted from the client),
+// and the total is summed in SQL, not JS, same as everywhere else in this
+// codebase that touches money.
+//
+// A POS order has no guest QR scan behind it, but `orders.guest_session_id`
+// is `not null` with a real FK — rather than migrate that (a customer-facing
+// concept, "which phone can see this on its bill"), a POS order gets its own
+// throwaway guest_session scoped to the table. It's never returned to any
+// client and no customer ever sees it; it exists purely so this order fits
+// the same shape every other order already has.
+export function placeStaffOrder(db, restaurantId, actorId, { table_id, items }) {
+  return db.withTransaction(async (tx) => {
+    const { rows: tables } = await tx.query(
+      `select id from public.restaurant_tables where id = $1 and restaurant_id = $2 and is_active`,
+      [table_id, restaurantId],
+    );
+    if (!tables.length) throw notFound('Table not found');
+
+    const itemIds = [...new Set(items.map((i) => i.menu_item_id))];
+    const { rows: menuRows } = await tx.query(
+      `select id, name, price, (is_available and deleted_at is null) as orderable
+         from public.menu_items
+        where id = any($1::uuid[]) and restaurant_id = $2
+        for share`,
+      [itemIds, restaurantId],
+    );
+    const byId = new Map(menuRows.map((r) => [r.id, r]));
+    if (itemIds.some((itemId) => !byId.has(itemId))) throw notFound('One or more items are not on this menu');
+
+    const unavailable = items.filter((i) => !byId.get(i.menu_item_id).orderable);
+    if (unavailable.length) {
+      throw new HttpError(409, 'items_unavailable', 'Some items are no longer available', {
+        unavailable_items: unavailable.map((i) => ({ menu_item_id: i.menu_item_id, name: byId.get(i.menu_item_id).name })),
+      });
+    }
+
+    const { rows: sessions } = await tx.query(
+      `insert into public.guest_sessions (restaurant_id, table_id) values ($1, $2) returning id`,
+      [restaurantId, table_id],
+    );
+
+    const { rows: orders } = await tx.query(
+      `insert into public.orders (restaurant_id, table_id, guest_session_id) values ($1, $2, $3) returning id`,
+      [restaurantId, table_id, sessions[0].id],
+    );
+    const orderId = orders[0].id;
+
+    for (const i of items) {
+      const item = byId.get(i.menu_item_id);
+      await tx.query(
+        `insert into public.order_items
+           (order_id, menu_item_id, name_at_order, price_at_order, quantity, special_instructions)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [orderId, item.id, item.name, item.price, i.quantity, i.special_instructions],
+      );
+    }
+
+    await tx.query(
+      `update public.orders o set subtotal = s.total, total_amount = s.total
+         from (select coalesce(sum(line_total), 0) as total from public.order_items where order_id = $1) s
+        where o.id = $1`,
+      [orderId],
+    );
+
+    return orderId;
+  }, { actorId });
 }

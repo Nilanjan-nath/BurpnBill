@@ -1,3 +1,5 @@
+import { notFound } from '../errors.js';
+
 // Tables and their QR tokens. Scoped by restaurantId from the signed-in
 // staff member, the same rule as everywhere else in this codebase.
 
@@ -27,4 +29,29 @@ export async function createTable(db, restaurantId, { label, seats }) {
     [restaurantId, label, seats ?? null],
   );
   return rows[0];
+}
+
+// POST /tables/:tableId/checkout (step 7) — owner only. There's no payments
+// feature yet (see ARCHITECTURE.md §2), so this is a manual stand-in: mark
+// every SERVED, unpaid order at this table as paid, freeing it on the floor
+// map. Deliberately restricted to 'served' — an order still placed/preparing/
+// ready is not done yet, and silently marking it "paid" out from under the
+// kitchen would be a real footgun, not a shortcut. `paid_at` is the same
+// column a real payment will eventually set (see the
+// payments_sync_order_paid_at trigger) — this sets it directly instead of
+// through a payments row, so the two never conflict. A fuller itemised
+// bill/checkout screen is deferred; this is deliberately the smallest thing
+// that makes "occupied until checkout" true today.
+export async function checkoutTable(db, restaurantId, tableId) {
+  const { rows: tables } = await db.query(
+    `select id from public.restaurant_tables where id = $1 and restaurant_id = $2`,
+    [tableId, restaurantId],
+  );
+  if (!tables.length) throw notFound('Table not found');
+
+  await db.query(
+    `update public.orders set paid_at = now()
+      where table_id = $1 and restaurant_id = $2 and paid_at is null and status = 'served'`,
+    [tableId, restaurantId],
+  );
 }

@@ -5,8 +5,10 @@ import {
   getRecentOrders,
   getOrderDetail,
   updateOrderStatus,
+  placeStaffOrder,
   publishBoardCard,
 } from '../services/staffOrders.js';
+import { getFloor } from '../services/floor.js';
 import {
   listMenuItemsAdmin,
   createMenuItem,
@@ -14,7 +16,7 @@ import {
   deleteMenuItem,
   setItemAvailability,
 } from '../services/menuAdmin.js';
-import { listTables, createTable } from '../services/tables.js';
+import { listTables, createTable, checkoutTable } from '../services/tables.js';
 import { notFound } from '../errors.js';
 import {
   parse,
@@ -27,6 +29,8 @@ import {
   updateMenuItemBody,
   setAvailabilityBody,
   createTableBody,
+  createStaffOrderBody,
+  tableIdParams,
 } from '../validate.js';
 
 // Staff/owner routes. Every one requires a signed-in staff member, and every
@@ -122,6 +126,26 @@ export function staffRoutes({ db, requireStaff, hub }) {
   router.post('/tables', owner, async (req, res) => {
     const body = parse(createTableBody, req.body);
     res.status(201).json({ table: await createTable(db, req.staff.restaurantId, body) });
+  });
+  // No payments feature yet — a manual stand-in that marks the table's
+  // outstanding orders paid, freeing it on the floor map. See tables.js.
+  router.post('/tables/:tableId/checkout', owner, async (req, res) => {
+    const { tableId } = parse(tableIdParams, req.params);
+    await checkoutTable(db, req.staff.restaurantId, tableId);
+    res.status(204).end();
+  });
+
+  // Floor map + POS (step 7). Owner only — see TASKS.md step 7's "Decided"
+  // note: no cashier/waiter role yet, so there's no one else to gate this to.
+  router.get('/floor', owner, async (req, res) => {
+    res.json(await getFloor(db, req.staff.restaurantId));
+  });
+  router.post('/staff/orders', owner, async (req, res) => {
+    const body = parse(createStaffOrderBody, req.body);
+    const orderId = await placeStaffOrder(db, req.staff.restaurantId, req.staff.userId, body);
+    const order = await getOrderDetail(db, req.staff.restaurantId, orderId);
+    res.status(201).json({ order });
+    publishBoardCard(hub, db, req.staff.restaurantId, orderId, 'order_created');
   });
 
   return router;

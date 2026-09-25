@@ -1,20 +1,37 @@
 import { useState } from 'react';
+import { Bell } from 'lucide-react';
 import { useNewOrderAlerts } from './useNewOrderAlerts.js';
 import { ActiveColumns } from './ActiveColumns.jsx';
 import { RecentOrders } from './RecentOrders.jsx';
 import { OrderDetailDrawer } from './OrderDetailDrawer.jsx';
 import { MenuTab } from './MenuTab.jsx';
 import { TablesTab } from './TablesTab.jsx';
+import { DashboardHome } from './DashboardHome.jsx';
+import { POS } from './POS.jsx';
+import { StaffTab } from './StaffTab.jsx';
+import { Sidebar } from './Sidebar.jsx';
 
+const TITLES = { board: 'Order board', recent: 'Recent orders', menu: 'Menu', tables: 'Tables', dashboard: 'Dashboard', pos: 'POS', staff: 'Staff' };
 const LIVE_LABEL = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' };
+const LIVE_DOT = { live: 'bg-emerald-500', connecting: 'bg-gray-300', reconnecting: 'bg-amber-500 animate-pulse' };
+const LIVE_TEXT = { live: 'text-emerald-600', connecting: 'text-gray-500', reconnecting: 'text-amber-600' };
+
 const TABS = [
   { id: 'board', label: 'Board' },
   { id: 'recent', label: 'Recent' },
   { id: 'menu', label: 'Menu' },
 ];
-// Tables is owner only — unlike Menu, staff have no reduced view here (no
-// reason for the kitchen to be adding tables or printing QR sheets).
-const OWNER_TABS = [...TABS, { id: 'tables', label: 'Tables' }];
+// Owner only — kitchen staff have no reduced view for any of these (no
+// reason for the kitchen to be adding tables, running the POS, managing
+// staff or looking at revenue). Dashboard/Staff are step 7's shell — each
+// is a placeholder until its own slice fills it in.
+const OWNER_TABS = [
+  ...TABS,
+  { id: 'tables', label: 'Tables' },
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'pos', label: 'POS' },
+  { id: 'staff', label: 'Staff' },
+];
 
 export function Board({ identity, board, token, onSignOut }) {
   const alerts = useNewOrderAlerts(board.newOrderCount, board.acknowledgeNewOrders);
@@ -24,66 +41,70 @@ export function Board({ identity, board, token, onSignOut }) {
   const [detailOrderId, setDetailOrderId] = useState(null);
 
   return (
-    <div className="staff-app">
-      <header className="staff-header">
-        <div className="staff-header-left">
-          <h1>Order board</h1>
-          <span className={`staff-live staff-live-${board.liveStatus}`}>
-            <span className="staff-live-dot" aria-hidden="true" />
-            {LIVE_LABEL[board.liveStatus]}
-          </span>
-        </div>
-        <div className="staff-header-right">
-          {!alerts.soundEnabled && (
-            <button type="button" className="staff-link" onClick={alerts.enableSound}>
-              🔔 Turn on sound
+    <div className="flex min-h-dvh bg-gray-50">
+      <Sidebar tabs={tabs} tab={tab} onSelect={setTab} identity={identity} />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4 print:hidden">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold text-gray-900">{TITLES[tab]}</h1>
+            <span className={`flex items-center gap-1.5 text-xs font-medium ${LIVE_TEXT[board.liveStatus]}`}>
+              <span className={`h-2 w-2 rounded-full ${LIVE_DOT[board.liveStatus]}`} aria-hidden="true" />
+              {LIVE_LABEL[board.liveStatus]}
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            {!alerts.soundEnabled && (
+              <button
+                type="button"
+                onClick={alerts.enableSound}
+                className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900"
+              >
+                <Bell className="h-4 w-4" aria-hidden="true" /> Turn on sound
+              </button>
+            )}
+            <button type="button" onClick={onSignOut} className="text-sm font-medium text-gray-500 underline hover:text-gray-900">
+              Sign out
             </button>
-          )}
-          <span className="staff-who">{identity.displayName ?? identity.role}</span>
-          <button type="button" className="staff-link" onClick={onSignOut}>
-            Sign out
-          </button>
-        </div>
-      </header>
+          </div>
+        </header>
 
-      <nav className="staff-tabs" aria-label="View">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`staff-tab${tab === t.id ? ' staff-tab-active' : ''}`}
-            aria-current={tab === t.id}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+        {board.conflict && (
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800" role="alert">
+            <span>{board.conflict}</span>
+            <button type="button" onClick={board.dismissConflict} aria-label="Dismiss" className="text-lg leading-none">
+              ×
+            </button>
+          </div>
+        )}
+        {board.error && (
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700" role="alert">
+            <span>{board.error}</span>
+            <button type="button" onClick={board.refresh} className="font-semibold">
+              Retry
+            </button>
+          </div>
+        )}
 
-      {board.conflict && (
-        <div className="staff-banner" role="alert">
-          <span>{board.conflict}</span>
-          <button type="button" className="staff-dismiss" onClick={board.dismissConflict} aria-label="Dismiss">
-            ×
-          </button>
+        {/* POS is the new Tailwind design; everything else here is still the
+            old dark theme (see staff.css's header note) — only the latter
+            gets .staff-legacy, so POS's own light panels aren't nested
+            inside a dark-background ancestor. */}
+        <div className={tab === 'pos' ? 'flex min-h-0 flex-1 flex-col' : 'staff-legacy flex min-h-0 flex-1 flex-col'}>
+          {tab === 'board' && <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />}
+          {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
+          {tab === 'menu' && <MenuTab isOwner={isOwner} token={token} />}
+          {tab === 'tables' && isOwner && <TablesTab token={token} />}
+          {tab === 'dashboard' && isOwner && <DashboardHome />}
+          {tab === 'pos' && isOwner && <POS token={token} />}
+          {tab === 'staff' && isOwner && <StaffTab />}
         </div>
-      )}
-      {board.error && (
-        <div className="staff-banner staff-banner-error" role="alert">
-          <span>{board.error}</span>
-          <button type="button" onClick={board.refresh}>
-            Retry
-          </button>
-        </div>
-      )}
-
-      {tab === 'board' && <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />}
-      {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
-      {tab === 'menu' && <MenuTab isOwner={isOwner} token={token} />}
-      {tab === 'tables' && isOwner && <TablesTab token={token} />}
+      </div>
 
       {detailOrderId && (
-        <OrderDetailDrawer token={token} orderId={detailOrderId} onClose={() => setDetailOrderId(null)} />
+        <div className="staff-legacy">
+          <OrderDetailDrawer token={token} orderId={detailOrderId} onClose={() => setDetailOrderId(null)} />
+        </div>
       )}
     </div>
   );

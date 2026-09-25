@@ -150,6 +150,16 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `GET /tables` — owner and staff; `POST /tables` — owner only. The Tables *tab* in the dashboard
   is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
   wider allowance is unused by the UI, not a mismatch
+- `GET /floor` — owner only. Every table plus whether it's occupied, derived from active orders,
+  no new schema **(added, step 7)**
+- `POST /staff/orders` — owner only; a staff-placed order for a walk-in, dine-in only. Reuses the
+  customer checkout path's guarantees (locked availability check, server-computed total) but
+  skips the guest-session/cart concept entirely except for the one throwaway `guest_session` row
+  each order needs to satisfy `orders.guest_session_id`'s FK **(added, step 7)**
+- `POST /tables/:tableId/checkout` — owner only; manual stand-in for a real payments feature —
+  marks a table's `served` orders paid (`orders.paid_at`), which is what frees it on the floor
+  map. A table stays occupied through `served`, not just while the kitchen has work to do
+  **(added, step 7)**
 
 ### Realtime (SSE)
 
@@ -185,6 +195,17 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   dashboard (`/staff`) is lazy-loaded, so customers never download it. It signs in with its own
   Supabase Auth client, built from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in a separate
   `web/.env` — never the service-role key, which stays in the server's own `.env` **(decided)**
+- **Styling**: the customer app is plain CSS (`styles.css`). The staff dashboard's sidebar,
+  header and POS page are Tailwind CSS v4 (`@tailwindcss/vite`, no config file) plus
+  `lucide-react` for icons **(added, step 7)** — a deliberate "premium SaaS" look distinct from
+  the customer app's warm palette, per direct owner design feedback. Rules and palette (teal
+  accent, chosen specifically to not match reference screenshots' blue — see the doc for why)
+  are written up in `docs/design.md`, meant to apply to every tab over time, not just POS. Both
+  Tailwind and lucide-react are scoped to the `/staff` lazy chunk only (imported from
+  `staff/tailwind.css`, itself only reachable via `StaffApp.jsx`), verified with a production
+  build to never reach the customer bundle. The rest of the staff
+  dashboard (Board/Recent/Menu/Tables) still uses the older plain-CSS dark theme, scoped to
+  `.staff-legacy` — a known, temporary visual seam until those pages are migrated too
 - **Package manager**: npm
 - **Hosting (later)**: Render/Railway (backend), Vercel/Netlify (frontend), Supabase
 
@@ -197,6 +218,12 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
    API and the customer web app (`web/`)
 4. ~~**SSE + staff dashboard**~~ — done: live order board, status updates, order timeline
 5. ~~**Owner admin panel**~~ — done: menu CRUD, availability toggle, tables and printable QR codes
-6. **Landing page** — last, once there's a real flow to show
+6. **Owner operations dashboard** — in progress: floor map, staff-placed POS orders (dine-in
+   only), a today's-snapshot dashboard, staff invite/role management. Still 2 roles
+   (owner/staff), so these are all owner-only surfaces — see `TASKS.md` step 7 for the
+   decisions and slice breakdown
+7. **Landing page** — last, once there's a real flow to show. Real multi-restaurant signup
+   (name/owner/email) likely belongs here too, not step 6
 
-After v1: payments, invoices (see §2).
+After v1: payments, invoices, a richer role set (cashier/waiter, so POS isn't owner-only),
+multi-restaurant self-serve signup (see §2).

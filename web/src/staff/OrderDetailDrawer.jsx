@@ -32,7 +32,7 @@ export function OrderDetailDrawer({ token, orderId, onClose }) {
         {order && (
           <>
             <h2>
-              Order #{order.order_number} <span className="staff-status-pill">{order.status}</span>
+              Order #{order.order_number} <span className={`staff-status-pill staff-status-${order.status}`}>{order.status}</span>
             </h2>
             <p className="staff-table">Table {order.table.label}</p>
 
