@@ -1,4 +1,4 @@
-import { notFound } from '../errors.js';
+import { badRequest, notFound } from '../errors.js';
 
 // Tables and their QR tokens. Scoped by restaurantId from the signed-in
 // staff member, the same rule as everywhere else in this codebase.
@@ -31,27 +31,113 @@ export async function createTable(db, restaurantId, { label, seats }) {
   return rows[0];
 }
 
-// POST /tables/:tableId/checkout (step 7) — owner only. There's no payments
-// feature yet (see ARCHITECTURE.md §2), so this is a manual stand-in: mark
-// every SERVED, unpaid order at this table as paid, freeing it on the floor
-// map. Deliberately restricted to 'served' — an order still placed/preparing/
-// ready is not done yet, and silently marking it "paid" out from under the
-// kitchen would be a real footgun, not a shortcut. `paid_at` is the same
-// column a real payment will eventually set (see the
-// payments_sync_order_paid_at trigger) — this sets it directly instead of
-// through a payments row, so the two never conflict. A fuller itemised
-// bill/checkout screen is deferred; this is deliberately the smallest thing
-// that makes "occupied until checkout" true today.
-export async function checkoutTable(db, restaurantId, tableId) {
+// GET /tables/:tableId/bill (step 6) — owner only. The staff-side table bill:
+// every unpaid, non-cancelled order on this table with its lines, so the
+// counter can see exactly what's being settled before taking money. Scoped by
+// table, unlike the customer's GET /bill, which is scoped to one guest session
+// — at the counter you're settling the whole table, not one person's phone.
+export async function getTableBill(db, restaurantId, tableId) {
+  const { rows: tables } = await db.query(
+    `select t.id, t.label, r.currency_code
+       from public.restaurant_tables t
+       join public.restaurants r on r.id = t.restaurant_id
+      where t.id = $1 and t.restaurant_id = $2`,
+    [tableId, restaurantId],
+  );
+  if (!tables.length) throw notFound('Table not found');
+
+  const [{ rows: orders }, { rows: items }] = await Promise.all([
+    db.query(
+      `select id, order_number, status, subtotal, tax_amount, total_amount, placed_at
+         from public.orders
+        where table_id = $1 and restaurant_id = $2 and paid_at is null and status != 'cancelled'
+        order by placed_at, order_number`,
+      [tableId, restaurantId],
+    ),
+    db.query(
+      `select oi.order_id, oi.name_at_order as name, oi.price_at_order as price,
+              oi.quantity, oi.special_instructions, oi.line_total
+         from public.order_items oi
+         join public.orders o on o.id = oi.order_id
+        where o.table_id = $1 and o.restaurant_id = $2
+          and o.paid_at is null and o.status != 'cancelled'
+        order by oi.name_at_order, oi.id`,
+      [tableId, restaurantId],
+    ),
+  ]);
+
+  const sum = (field) => orders.reduce((acc, o) => acc + Number(o[field]), 0).toFixed(2);
+
+  return {
+    table: { id: tables[0].id, label: tables[0].label },
+    currency_code: tables[0].currency_code,
+    generated_at: new Date().toISOString(),
+    orders: orders.map((order) => ({
+      ...order,
+      items: items
+        .filter((item) => item.order_id === order.id)
+        .map(({ order_id: _orderId, ...item }) => item),
+    })),
+    totals: { subtotal: sum('subtotal'), tax: sum('tax_amount'), total: sum('total_amount') },
+  };
+}
+
+// POST /tables/:tableId/checkout (step 6) — owner only. Settles the table:
+// records how the money was taken at the counter and marks its orders paid,
+// which is what frees it on the floor map.
+//
+// This does NOT move money. Per ARCHITECTURE.md §2 the customer pays at the
+// counter — cash, the cafe's own card machine, or a UPI QR — and this records
+// which of those happened. That's why there's no gateway here and why
+// `payments.provider_ref` stays null: it's reserved for the day a real
+// gateway does move money.
+//
+// One payments row per order rather than one per table, because that's what
+// the schema models (payments.order_id, and the payments_sync_order_paid_at
+// trigger sets orders.paid_at off it — this never writes paid_at directly, so
+// the two can't disagree). The caller's idempotency_key is suffixed per order
+// so one checkout of a three-order table still satisfies the unique index;
+// replaying the same key is then a no-op rather than a double-settle, which is
+// what makes a double-tapped Confirm safe.
+//
+// Unlike the earlier stand-in this replaces, it settles orders in ANY live
+// status, not just 'served'. Paying before the food lands is normal, and the
+// old restriction existed only because checkout was then a blind one-tap
+// button; the caller now confirms against an itemised bill (GET .../bill), so
+// refusing to take money for a round still in the kitchen is the wrong
+// default. An order's status lifecycle is independent of paid_at — the kitchen
+// still cooks and serves it exactly as before.
+export async function checkoutTable(db, restaurantId, tableId, { method, idempotencyKey }) {
   const { rows: tables } = await db.query(
     `select id from public.restaurant_tables where id = $1 and restaurant_id = $2`,
     [tableId, restaurantId],
   );
   if (!tables.length) throw notFound('Table not found');
 
-  await db.query(
-    `update public.orders set paid_at = now()
-      where table_id = $1 and restaurant_id = $2 and paid_at is null and status = 'served'`,
+  // for update: two people settling one table at once serialise here rather
+  // than both inserting, the same lock-first pattern as PATCH /orders/:id/status.
+  const { rows: orders } = await db.query(
+    `select id, total_amount from public.orders
+      where table_id = $1 and restaurant_id = $2 and paid_at is null and status != 'cancelled'
+      order by placed_at
+      for update`,
     [tableId, restaurantId],
   );
+  if (!orders.length) throw badRequest('Nothing to settle on this table');
+
+  const { rows: paid } = await db.query(
+    `insert into public.payments (restaurant_id, order_id, idempotency_key, method, status, amount)
+     select $1, ord.id, $2 || ':' || ord.id::text, $3::public.payment_method, 'succeeded', ord.total_amount
+       from unnest($4::uuid[]) as o(id)
+       join public.orders ord on ord.id = o.id
+     on conflict (idempotency_key) do nothing
+     returning order_id, amount`,
+    [restaurantId, idempotencyKey, method, orders.map((o) => o.id)],
+  );
+
+  return {
+    settled_order_count: orders.length,
+    amount: orders.reduce((acc, o) => acc + Number(o.total_amount), 0).toFixed(2),
+    already_settled: paid.length === 0,
+  };
 }

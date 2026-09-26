@@ -486,6 +486,81 @@ content-routing decisions are what survived)
       still the old dark theme, so the contrast fix and this whole visual language stop at the
       chrome. Migrating them is the obvious next design task
 
+**Slice 3 follow-up 3 — table bill & checkout** — done
+*Owner brought a second POS reference ("DineFlow") showing a busy table carrying its bill, a
+Cart/Ongoing split, and a checkout screen. Taken as structure, not feature-for-feature — see
+design.md's worked example for what was deliberately left out.*
+- [x] **No payment gateway, and that's the point.** The counter takes cash/card/UPI exactly as
+      it does today; checkout *records which* and marks the orders paid. `payments.method` was
+      already a `cash|card|upi` enum and `payments_sync_order_paid_at` already set
+      `orders.paid_at` — this uses the schema as designed rather than inventing a parallel one.
+      `provider_ref` stays null, reserved for a real gateway later
+- [x] `GET /floor` now carries `unpaid_total` / `unpaid_count` (summed over **every** unpaid
+      order, not just the newest) and `qr_token`, so a floor card shows what the table owes and
+      the QR tab needs no second request
+- [x] `GET /tables/:tableId/bill` — the staff-side table bill: every unpaid non-cancelled order
+      with its lines and totals. This is the "Table-level bill on the staff side" item from the
+      After-v1 list, brought forward because checkout needs something to confirm against
+- [x] `POST /tables/:tableId/checkout` now takes `{ method, idempotency_key }` and writes a real
+      payments row per order. The key is suffixed per order so one checkout of a multi-order
+      table still satisfies the unique index, and a replayed key is a no-op — a double-tapped
+      Confirm settles once. Orders are locked `for update` first, same pattern as
+      `PATCH /orders/:id/status`
+- [x] **Deliberate behaviour change, flagged:** checkout no longer refuses orders that aren't
+      `served` yet. Paying before the food lands is normal; the old restriction existed because
+      checkout was then a blind one-tap button, and the cashier now confirms against an itemised
+      bill. An order's kitchen status is untouched by payment — a test asserts a `preparing`
+      order stays `preparing` after being paid
+- [x] POS UI: floor cards show the running bill + age + order count; Floor/QR tabs (QR reuses
+      the Tables tab's generator, extracted to `staff/qr.js`); Cart/Ongoing tabs on the order
+      panel; an amber "N unpaid orders · running total" notice; a "Bill & checkout · ₹X" CTA;
+      and `CheckoutDialog.jsx` — itemised bill, Cash/Card/UPI, amount tendered with change due
+      for cash, Confirm
+- [x] Tests: 114 server (was 107) + 54 web. New server coverage for the running bill, the
+      payment row's method/amount/null provider_ref, idempotent replay, settling every unpaid
+      round, a still-cooking order being settled without moving its status, rejecting a method
+      that isn't on offer and a table with nothing outstanding, and the bill's contents/scoping.
+      New web coverage for the full checkout flow through to asserting the recorded method.
+      Mutation-checked: per-order idempotency suffix, the served-only restriction, the
+      running-bill aggregate, the dialog's method choice, and the dialog's line items — all caught
+- [x] **Found a real bug during the dark-mode visual check**: `<dialog>` with no background of
+      its own falls back to the UA's `canvas` colour, which is dark under
+      `prefers-color-scheme: dark`, so the checkout panel's gray text sat on near-black. Same
+      family as the cascade bug above. Fixed by making the dialog declare `bg-white text-gray-900`
+- [ ] **Not built, deliberately** (each its own piece of work, no schema today): discount, tip /
+      service charge, split bill, partial payment, tax. Waitlist likewise — it's a whole feature,
+      not a tab
+
+**Slice 3 follow-up 4 — checkout polish** — done
+*Owner's screenshots of the same reference's checkout / full-screen / payment-complete screens.*
+- [x] **Bug: the checkout panel opened against the top-left edge, not centred.** Tailwind's
+      preflight sets `margin: 0` on every element, which overrides the `margin: auto` the browser
+      uses to centre a `showModal()` dialog. Fixed with `m-auto`; written up in design.md next to
+      the dark-`<dialog>` trap, since both are the same "the reset took something the UA gave us
+      for free" shape
+- [x] Items are grouped by round (`Round 1 · #1041`) with a "N orders merged" badge on the
+      header, instead of one flat list — a table that ordered twice can see which round a line
+      came from. The data was already there; `GET /tables/:id/bill` returns per-order items
+- [x] Subtotal / Total shown above the CTA. **Tax is rendered only when non-zero** — it's always
+      0 today (no tax engine) and a permanent `₹0.00` row would imply one exists
+- [x] Full-screen toggle: the same dialog re-laid out as two columns across the whole viewport,
+      for a counter screen rather than a laptop
+- [x] Payment-complete state replaces "close the dialog on success": amount, method, table and
+      time, with Print receipt and Done. Closing on success flashed the amount away exactly when
+      someone wants to read it back to the customer, so `usePOS.checkoutTable` now returns a
+      receipt and the cashier dismisses it
+- [x] Print receipt renders through a portal to `<body>`, not from inside the dialog — a modal
+      lives in the browser's top layer, which browsers print inconsistently. `@media print`
+      hides `#root` and shows only the receipt
+- [x] No Wallet button (the schema's `payment_method` enum has no such value — a method that
+      can't be recorded is a lie), no customer name/phone (no customers table)
+- [x] Tests: 55 web (was 54). New coverage for two rounds merging into one grouped bill, and for
+      the receipt screen showing the amount and method before Done closes it. Mutation-checked
+      (round grouping, receipt-instead-of-close) — both caught
+- [ ] **Unverified:** the printed output itself. `window.print()` can't be driven or inspected
+      through the tooling here, so the print stylesheet is reasoned-about, not seen — worth one
+      manual Print receipt before relying on it
+
 **Slice 4 — Dashboard home** — not started
 - [ ] `GET /dashboard/summary`: today's revenue (sum of non-cancelled orders' totals),
       active order count, table free/occupied counts — reuses the floor endpoint's data

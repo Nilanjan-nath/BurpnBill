@@ -593,7 +593,7 @@ describe('the owner dashboard shell (step 7 slice 1)', () => {
     expect(await screen.findByText(/Staff —/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'POS' }));
-    expect(await screen.findByRole('heading', { name: 'Floor' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Floor' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Search items' })).toBeInTheDocument();
   });
 });
@@ -602,7 +602,7 @@ describe('the POS tab (step 7 slices 2-3)', () => {
   const openPOS = async (user) => {
     await signIn(user, STAFF_USER);
     await user.click(await screen.findByRole('button', { name: 'POS' }));
-    await screen.findByRole('heading', { name: 'Floor' });
+    await screen.findByRole('button', { name: 'Floor' });
   };
 
   test('a table with no active order shows free on the floor map', async () => {
@@ -702,7 +702,10 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     expect(within(chaiCard).getByRole('img', { name: 'Vegetarian' })).toBeInTheDocument();
   });
 
-  test('a table stays occupied, with no Checkout offered, while its order is still with the kitchen', async () => {
+  // Checkout is deliberately NOT gated on 'served' any more: paying before the
+  // food lands is normal, and the cashier now confirms against an itemised
+  // bill rather than tapping blind. See server/src/services/tables.js.
+  test('an occupied table shows what it owes and offers checkout even while the kitchen is still working', async () => {
     const user = userEvent.setup();
     await openPOS(user);
 
@@ -713,44 +716,94 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     await waitFor(() => {
       const t2Card = screen.getAllByText('T2')[0].closest('button').parentElement;
       expect(within(t2Card).getByText('occupied')).toBeInTheDocument();
-      expect(within(t2Card).queryByRole('button', { name: /Checkout/ })).not.toBeInTheDocument();
     });
+    expect(await screen.findByText(/unpaid orders? on this table/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Bill & checkout/ })).toBeInTheDocument();
   });
 
-  test('checking out a served order frees the table', async () => {
+  test('a table that ordered twice checks out as one merged bill, grouped by round', async () => {
     const user = userEvent.setup();
+    await sql(
+      `update orders set status = 'cancelled'
+        where table_id = (select id from restaurant_tables where label = 'T3')
+          and paid_at is null and status <> 'cancelled'`,
+    );
     await openPOS(user);
 
-    await user.click((await screen.findByText('T1')).closest('button'));
-    await user.click((await screen.findByText('Masala Chai')).closest('button'));
+    // Two separate trips to the kitchen, as a real second round would be.
+    await user.click((await screen.findByText('T3')).closest('button'));
+    await user.click((await screen.findByText('Masala Chai')).closest('button')); // 30.00
     await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
-    await waitFor(() => {
-      const t1Card = screen.getAllByText('T1')[0].closest('button').parentElement;
-      expect(within(t1Card).getByText('occupied')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send to kitchen' })).toBeDisabled());
 
-    // Walked to served out-of-band — this test is about checkout, not about
-    // re-proving the board's own status-move UI (covered elsewhere).
-    const [{ id: orderId }] = await sql(
-      `select id from orders where table_id = (select id from restaurant_tables where label = 'T1') order by placed_at desc limit 1`,
+    await user.click((await screen.findByText('Filter Coffee')).closest('button')); // 40.00
+    await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+
+    // The running total comes from a floor refetch, so wait for the second
+    // round to land rather than reading the button the first one left behind.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Bill & checkout/ })).toHaveTextContent('70.00'),
     );
-    for (const status of ['preparing', 'ready', 'served']) {
-      await sql(`update orders set status = $2 where id = $1`, [orderId, status]);
-    }
+    await user.click(screen.getByRole('button', { name: /Bill & checkout/ }));
 
-    // The floor has no live push — it refetches on mount, not on a poll.
-    // Leaving POS and coming back is the same real user action that would
-    // pick this up: the kitchen served it while this staff member was on
-    // another tab.
-    await user.click(screen.getByRole('button', { name: 'Board' }));
-    await user.click(screen.getByRole('button', { name: 'POS' }));
-    await screen.findByRole('heading', { name: 'Floor' });
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('2 orders merged')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Round 1/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Round 2/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/1× Masala Chai/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/1× Filter Coffee/)).toBeInTheDocument();
+  });
 
-    await user.click(await screen.findByRole('button', { name: /Checkout/ }));
+  test('Bill & checkout settles the table: itemised bill, a payment method, and the table frees up', async () => {
+    const user = userEvent.setup();
+    // Earlier tests in this shared-DB file leave unpaid orders around — this
+    // one asserts an exact bill total, so T4 starts clear.
+    await sql(
+      `update orders set status = 'cancelled'
+        where table_id = (select id from restaurant_tables where label = 'T4')
+          and paid_at is null and status <> 'cancelled'`,
+    );
+    await openPOS(user);
+
+    await user.click((await screen.findByText('T4')).closest('button'));
+    await user.click((await screen.findByText('Masala Chai')).closest('button')); // 30.00
+    await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+
+    const billButton = await screen.findByRole('button', { name: /Bill & checkout/ });
+    expect(billButton).toHaveTextContent('30.00');
+    await user.click(billButton);
+
+    // The dialog shows what is actually owed, line by line — Confirm is always
+    // agreeing to a bill, never just to a number on a button.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/1× Masala Chai/)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'UPI' }));
+    await user.click(within(dialog).getByRole('button', { name: /Confirm payment/ }));
+
+    // The dialog stays open on a receipt rather than vanishing — the cashier
+    // reads the amount back before dismissing it.
+    expect(await screen.findByText('Payment received')).toBeInTheDocument();
+    const receipt = screen.getByRole('dialog');
+    expect(within(receipt).getByText('₹30.00')).toBeInTheDocument();
+    expect(within(receipt).getByText(/upi/i)).toBeInTheDocument();
+
+    await user.click(within(receipt).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByText('Payment received')).not.toBeInTheDocument());
 
     await waitFor(() => {
-      const t1Card = screen.getAllByText('T1')[0].closest('button').parentElement;
-      expect(within(t1Card).getByText('free')).toBeInTheDocument();
+      const t4Card = screen.getAllByText('T4')[0].closest('button').parentElement;
+      expect(within(t4Card).getByText('free')).toBeInTheDocument();
     });
+
+    // It recorded HOW the money was taken, not merely that the table cleared.
+    const [payment] = await sql(
+      `select p.method, p.status from payments p
+         join orders o on o.id = p.order_id
+        where o.table_id = (select id from restaurant_tables where label = 'T4')
+        order by p.created_at desc limit 1`,
+    );
+    expect(payment.method).toBe('upi');
+    expect(payment.status).toBe('succeeded');
   });
 });

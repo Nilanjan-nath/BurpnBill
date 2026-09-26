@@ -13,3 +13,20 @@
 .staff-app :is(h1, h2, h3) {
   font-family: inherit;
 }
+
+/* The checkout receipt. It renders into <body> via a portal rather than from
+   inside the checkout <dialog>, because a modal dialog sits in the browser's
+   top layer and browsers print that inconsistently. Hidden on screen; on paper
+   it is the only thing left. */
+.petuk-print-receipt {
+  display: none;
+}
+@media print {
+  body > #root {
+    display: none !important;
+  }
+  .petuk-print-receipt {
+    display: block !important;
+    font-size: 12pt;
+  }
+}

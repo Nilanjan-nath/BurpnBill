@@ -27,8 +27,14 @@ and place an order directly — which appears instantly on a live kitchen/recept
 
 ### Out of scope for v1
 
-- **Payments** — in-app or mocked. The schema already models them (see §4) so adding them
-  later is new code, not a migration **(decided)**
+- **Taking payment in-app** — no gateway, no card processing, nothing that moves money. The
+  counter takes cash/card/UPI as it always has. What step 6 added is a *record* of that: POS's
+  checkout writes a real `payments` row saying which method was used, which is what marks the
+  orders paid and frees the table (see §7's `POST /tables/:tableId/checkout`). Wiring an actual
+  gateway later is new code against the same schema, not a migration **(decided)**
+- **Discounts, tips, split bills, partial payments, tax** — none of these have any schema, and
+  `orders.tax_amount` is always 0 (no tax engine). Each is its own piece of work; the checkout
+  screen deliberately stops at "what's owed, and how was it paid" **(decided, step 6)**
 - **Invoices** (email/SMS) — planned for after v1 **(decided)**
 - Customer-facing live order-status tracking, including polling an order's status **(decided)**.
   The bill lists what was ordered; it does not show whether the kitchen has started on it.
@@ -151,15 +157,26 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
   wider allowance is unused by the UI, not a mismatch
 - `GET /floor` — owner only. Every table plus whether it's occupied, derived from active orders,
-  no new schema **(added, step 7)**
+  no new schema. Also carries the table's running bill (`unpaid_total`, `unpaid_count`, summed
+  over every unpaid order, not just the newest) and its `qr_token`, so POS can show what a table
+  owes and its QR code without a second request **(added, step 7; extended, step 6)**
 - `POST /staff/orders` — owner only; a staff-placed order for a walk-in, dine-in only. Reuses the
   customer checkout path's guarantees (locked availability check, server-computed total) but
   skips the guest-session/cart concept entirely except for the one throwaway `guest_session` row
   each order needs to satisfy `orders.guest_session_id`'s FK **(added, step 7)**
-- `POST /tables/:tableId/checkout` — owner only; manual stand-in for a real payments feature —
-  marks a table's `served` orders paid (`orders.paid_at`), which is what frees it on the floor
-  map. A table stays occupied through `served`, not just while the kitchen has work to do
-  **(added, step 7)**
+- `GET /tables/:tableId/bill` — owner only; the staff-side table bill: every unpaid,
+  non-cancelled order on the table with its lines and totals. Scoped by table, unlike the
+  customer's `GET /bill`, which is scoped to one guest session — at the counter you settle the
+  whole table, not one person's phone **(added, step 6)**
+- `POST /tables/:tableId/checkout` — owner only; `{ method, idempotency_key }`. Records **how**
+  the money was taken at the counter (`cash` | `card` | `upi`) as a real `payments` row per
+  order, and the existing `payments_sync_order_paid_at` trigger sets `orders.paid_at`, which is
+  what frees the table on the floor map. **No money moves here and there is no payment gateway**
+  — per §2 the customer pays at the counter and this records which way; `payments.provider_ref`
+  stays null, reserved for the day a gateway does move money. The caller's idempotency key is
+  suffixed per order, so a double-tapped Confirm is one settlement, not two. Settles orders in
+  any live status, not just `served` — paying before the food lands is normal, and the caller
+  now confirms against the itemised bill above **(changed, step 6)**
 
 ### Realtime (SSE)
 

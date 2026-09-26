@@ -15,6 +15,7 @@ export function usePOS(token) {
   const [error, setError] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [checkingOut, setCheckingOut] = useState(null); // table id currently being checked out
+  const [bill, setBill] = useState(null); // the open checkout's bill, null = closed
 
   const loadFloor = useCallback(async () => {
     if (!token) return;
@@ -96,19 +97,41 @@ export function usePOS(token) {
     }
   };
 
-  // A table stays occupied through "served" — see floor.js — so this is the
-  // only way to free one today. No payments feature yet: it just marks that
-  // table's served orders paid. A fuller bill/checkout screen is a follow-up.
-  const checkoutTable = async (tableId) => {
-    setCheckingOut(tableId);
+  // Open the checkout: fetch what the table actually owes, so Confirm is
+  // always agreeing to an itemised bill rather than a number on a button.
+  const openBill = async (tableId) => {
     setError(null);
     try {
-      await staffApi.checkoutTable(token, tableId);
-      await loadFloor();
-      if (selectedTableId === tableId) setSelectedTableId(null);
+      setBill(await staffApi.getTableBill(token, tableId));
     } catch (err) {
       if (!(err instanceof StaffApiError)) throw err;
       setError(err.message);
+    }
+  };
+  const closeBill = () => setBill(null);
+
+  // Settling a table records HOW it was paid (cash/card/UPI at the counter) and
+  // marks its orders paid, which frees it on the floor. No money moves here —
+  // see ARCHITECTURE.md §2 and server/src/services/tables.js.
+  //
+  // The idempotency key is generated once per opened bill, not per tap, so a
+  // double-tapped Confirm is the same request twice rather than two payments.
+  // Returns a receipt on success, rather than closing the bill itself: the
+  // dialog stays open to confirm what was taken, and the cashier dismisses it.
+  // Closing on success would flash the amount away exactly when someone wants
+  // to read it back to the customer.
+  const checkoutTable = async (tableId, { method, idempotencyKey }) => {
+    setCheckingOut(tableId);
+    setError(null);
+    try {
+      const result = await staffApi.checkoutTable(token, tableId, { method, idempotencyKey });
+      await loadFloor();
+      if (selectedTableId === tableId) setSelectedTableId(null);
+      return { ...result, method, paid_at: new Date().toISOString() };
+    } catch (err) {
+      if (!(err instanceof StaffApiError)) throw err;
+      setError(err.message);
+      return null;
     } finally {
       setCheckingOut(null);
     }
@@ -125,6 +148,9 @@ export function usePOS(token) {
     subtotal,
     placing,
     checkingOut,
+    bill,
+    openBill,
+    closeBill,
     checkoutTable,
     error,
     dismissError: () => setError(null),

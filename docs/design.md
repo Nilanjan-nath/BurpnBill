@@ -40,9 +40,27 @@ much heavier type and stronger contrast throughout.
 
 **Not taken**: its blue (we keep teal, for the reason above); its per-category pastel item-card
 tints (see "what color is *not* for"); and every feature Petuk doesn't have — Waitlist, Merge
-Tables, Clock In, Dine-in/Take-away, order priority, VIP flags, an itemised bill screen,
+Tables, Clock In, Dine-in/Take-away, order priority, VIP flags,
 Inventory/Customers/Reports nav. Drawing UI for features that don't exist would be faking
 capability, which is worse than looking plainer.
+
+**Taken in a second pass** (the same reference's bill/checkout screens): a busy table carrying
+its running total, a Cart/Ongoing split on the order panel, an "N unpaid orders · running total"
+notice, and an itemised checkout dialog with a payment method. These were built because the data
+and schema were genuinely there — `payments.method` is already a `cash|card|upi` enum. Still not
+taken, for exactly the "don't fake capability" reason: discount, tip, split bill, partial
+payment and tax, none of which have any schema behind them.
+
+**A surface always declares its own background and text color.** Found the hard way: the
+checkout `<dialog>` had neither, so it fell back to the UA's `canvas` color — dark under
+`prefers-color-scheme: dark` — and its gray text became unreadable on near-black. Whenever you
+add a panel, dialog, popover or sheet, set `bg-*` and a text color on it explicitly rather than
+inheriting whatever is underneath.
+
+**A modal `<dialog>` also needs `m-auto`.** Tailwind's preflight sets `margin: 0` on every
+element, which overrides the `margin: auto` the browser uses to centre a `showModal()` dialog —
+without it the panel sticks to the top-left corner of the viewport. Same root cause as the
+background above: the reset takes something the UA was providing for free.
 
 ## Color
 

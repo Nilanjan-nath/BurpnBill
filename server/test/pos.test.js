@@ -121,6 +121,24 @@ test('a table stays occupied through "served" — the group is still there until
   assert.equal(row.active_order.status, 'served');
 });
 
+test('an occupied table carries its running bill — every unpaid round, not just the latest', async () => {
+  const table = await freshTable();
+  const chai = await itemId('Masala Chai'); // 30.00
+  const coffee = await itemId('Filter Coffee'); // 40.00
+
+  const before2 = (await floor(OWNER)).body.tables.find((t) => t.id === table);
+  assert.equal(before2.unpaid_count, 0);
+  assert.equal(before2.unpaid_total, '0.00');
+
+  await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 2 }] });
+  await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: coffee, quantity: 1 }] });
+
+  const row = (await floor(OWNER)).body.tables.find((t) => t.id === table);
+  assert.equal(row.status, 'occupied');
+  assert.equal(row.unpaid_count, 2, 'a second round is still owed for');
+  assert.equal(row.unpaid_total, '100.00'); // 2 x 30 + 40
+});
+
 test('a café only ever sees its own floor', async () => {
   const res = await floor(OWNER);
   assert.ok(!res.body.tables.some((t) => t.label === 'X1'));
@@ -248,11 +266,26 @@ test('an 86\'d or deleted item is rejected, and nothing is written', async () =>
 
 // --- POST /tables/:tableId/checkout --------------------------------------------
 
-const checkout = (as, tableId) => call('POST', `/api/tables/${tableId}/checkout`, { as });
+let keySeq = 0;
+const nextKey = () => `test-idem-key-${Date.now()}-${keySeq++}`;
+
+// Every test in this file shares one database, and several leave unpaid orders
+// behind on the seeded tables — so anything asserting on exact bill totals or
+// on "this table is clear" gets its own table instead of reusing T1-T4.
+let freshSeq = 0;
+async function freshTable() {
+  const { rows } = await db.query(
+    `insert into restaurant_tables (restaurant_id, label, seats) values ($1, $2, 4) returning id`,
+    [RESTAURANT_ID, `CK${freshSeq++}`],
+  );
+  return rows[0].id;
+}
+const checkout = (as, tableId, body = { method: 'cash', idempotency_key: nextKey() }) =>
+  call('POST', `/api/tables/${tableId}/checkout`, { as, body });
 
 test('checkout needs a signed-in staff member; owner only, staff gets 403', async () => {
   const t1 = await tableId('T1');
-  assert.equal((await call('POST', `/api/tables/${t1}/checkout`)).status, 401);
+  assert.equal((await call('POST', `/api/tables/${t1}/checkout`, { body: { method: 'cash', idempotency_key: nextKey() } })).status, 401);
   assert.equal((await checkout(STAFF, t1)).status, 403);
 });
 
@@ -266,7 +299,8 @@ test('checkout frees the table even after the order was served, not just while i
   assert.equal((await floor(OWNER)).body.tables.find((t) => t.label === 'T4').status, 'occupied');
 
   const res = await checkout(OWNER, t4);
-  assert.equal(res.status, 204);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.settled_order_count, 1);
 
   const row = (await floor(OWNER)).body.tables.find((t) => t.label === 'T4');
   assert.equal(row.status, 'free');
@@ -276,21 +310,129 @@ test('checkout frees the table even after the order was served, not just while i
   assert.ok(rows[0].paid_at, 'the order itself is marked paid, not just hidden from the floor');
 });
 
-test('checkout leaves a still-active (non-served, non-cancelled) order alone — it stays occupied', async () => {
-  const t1 = await tableId('T1');
+// Deliberate change from the original stand-in, which refused anything that
+// wasn't already 'served'. Paying before the food lands is normal, and the
+// caller now confirms against an itemised bill instead of tapping blind.
+test('checkout settles an order the kitchen is still working on, and does not disturb its status', async () => {
+  const table = await freshTable();
   const chai = await itemId('Masala Chai');
-  const created = await placeStaffOrder(OWNER, { table_id: t1, items: [{ menu_item_id: chai, quantity: 1 }] });
+  const created = await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 1 }] });
+  await db.query(`update orders set status = 'preparing' where id = $1`, [created.body.order.id]);
 
-  await checkout(OWNER, t1);
+  assert.equal((await checkout(OWNER, table)).status, 200);
 
-  const row = (await floor(OWNER)).body.tables.find((t) => t.label === 'T1');
-  assert.equal(row.status, 'occupied', 'checkout should not silently mark an in-progress order paid');
-  assert.equal(row.active_order.id, created.body.order.id);
+  const row = (await floor(OWNER)).body.tables.find((t) => t.id === table);
+  assert.equal(row.status, 'free', 'a paid table is free even while the kitchen finishes the food');
 
-  await db.query(`update orders set status = 'cancelled' where id = $1`, [created.body.order.id]);
+  const { rows } = await db.query('select status, paid_at from orders where id = $1', [created.body.order.id]);
+  assert.ok(rows[0].paid_at);
+  assert.equal(rows[0].status, 'preparing', 'paying must not move the order through the kitchen state machine');
+});
+
+test('checkout records a real payment row — the method chosen, the order total, and no gateway reference', async () => {
+  const table = await freshTable();
+  const chai = await itemId('Masala Chai'); // 30.00
+  const created = await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 2 }] });
+
+  const res = await checkout(OWNER, table, { method: 'upi', idempotency_key: nextKey() });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.amount, '60.00');
+
+  const { rows } = await db.query('select method, status, amount, provider_ref from payments where order_id = $1', [
+    created.body.order.id,
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].method, 'upi');
+  assert.equal(rows[0].status, 'succeeded');
+  assert.equal(Number(rows[0].amount), 60);
+  assert.equal(rows[0].provider_ref, null, 'nothing moved money — provider_ref is for a real gateway later');
+});
+
+test('replaying one idempotency key settles the table once, however many times Confirm is tapped', async () => {
+  const table = await freshTable();
+  const chai = await itemId('Masala Chai');
+  const created = await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 1 }] });
+  const key = nextKey();
+
+  const first = await checkout(OWNER, table, { method: 'card', idempotency_key: key });
+  const replay = await checkout(OWNER, table, { method: 'card', idempotency_key: key });
+
+  assert.equal(first.status, 200);
+  assert.equal(first.body.already_settled, false);
+  assert.equal(replay.status, 400, 'the table has nothing left to settle on a replay');
+
+  const { rows } = await db.query('select count(*)::int as n from payments where order_id = $1', [
+    created.body.order.id,
+  ]);
+  assert.equal(rows[0].n, 1, 'a retried Confirm must never record a second payment');
+});
+
+test('checkout settles every unpaid order on the table, not just the newest round', async () => {
+  const table = await freshTable();
+  const chai = await itemId('Masala Chai'); // 30.00
+  const first = await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 1 }] });
+  const second = await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 2 }] });
+
+  const res = await checkout(OWNER, table);
+  assert.equal(res.body.settled_order_count, 2);
+  assert.equal(res.body.amount, '90.00');
+
+  const { rows } = await db.query('select count(*)::int as n from orders where id = any($1) and paid_at is not null', [
+    [first.body.order.id, second.body.order.id],
+  ]);
+  assert.equal(rows[0].n, 2);
+});
+
+test('checkout rejects a table with nothing outstanding, and a payment method that is not on offer', async () => {
+  const table = await freshTable();
+  assert.equal((await checkout(OWNER, table)).status, 400, 'a free table has nothing to settle');
+  // 'mock' is in the database enum for tests, but must never be a cashier's choice.
+  assert.equal((await checkout(OWNER, table, { method: 'mock', idempotency_key: nextKey() })).status, 400);
 });
 
 test('a made-up or another café\'s table is 404', async () => {
   assert.equal((await checkout(OWNER, '99999999-9999-4999-8999-999999999999')).status, 404);
   assert.equal((await checkout(OWNER, otherTableId)).status, 404);
+});
+
+// --- GET /tables/:tableId/bill -------------------------------------------------
+
+const tableBill = (as, id) => call('GET', `/api/tables/${id}/bill`, { as });
+
+test('the table bill lists every unpaid order with its lines and totals, and is owner only', async () => {
+  const table = await freshTable();
+  const chai = await itemId('Masala Chai'); // 30.00
+  const coffee = await itemId('Filter Coffee'); // 40.00
+  await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 2 }] });
+  await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: coffee, quantity: 1 }] });
+
+  assert.equal((await tableBill(STAFF, table)).status, 403);
+
+  const res = await tableBill(OWNER, table);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.orders.length, 2);
+  assert.equal(res.body.totals.total, '100.00');
+
+  const lines = res.body.orders.flatMap((o) => o.items);
+  assert.deepEqual(
+    lines.map((l) => [l.name, l.quantity]).sort(),
+    [['Filter Coffee', 1], ['Masala Chai', 2]],
+  );
+
+  // Settling it empties the bill rather than leaving it payable twice.
+  await checkout(OWNER, table);
+  assert.equal((await tableBill(OWNER, table)).body.orders.length, 0);
+});
+
+test('the table bill leaves out cancelled orders and another café\'s tables', async () => {
+  const table = await freshTable();
+  const chai = await itemId('Masala Chai');
+  const created = await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 1 }] });
+  await db.query(`update orders set status = 'cancelled' where id = $1`, [created.body.order.id]);
+
+  const res = await tableBill(OWNER, table);
+  assert.equal(res.body.orders.length, 0, 'a cancelled order is not owed for');
+  assert.equal(res.body.totals.total, '0.00');
+
+  assert.equal((await tableBill(OWNER, otherTableId)).status, 404);
 });

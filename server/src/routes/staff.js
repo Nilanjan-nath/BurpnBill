@@ -16,7 +16,7 @@ import {
   deleteMenuItem,
   setItemAvailability,
 } from '../services/menuAdmin.js';
-import { listTables, createTable, checkoutTable } from '../services/tables.js';
+import { listTables, createTable, getTableBill, checkoutTable } from '../services/tables.js';
 import { notFound } from '../errors.js';
 import {
   parse,
@@ -29,6 +29,7 @@ import {
   updateMenuItemBody,
   setAvailabilityBody,
   createTableBody,
+  checkoutTableBody,
   createStaffOrderBody,
   tableIdParams,
 } from '../validate.js';
@@ -127,12 +128,17 @@ export function staffRoutes({ db, requireStaff, hub }) {
     const body = parse(createTableBody, req.body);
     res.status(201).json({ table: await createTable(db, req.staff.restaurantId, body) });
   });
-  // No payments feature yet — a manual stand-in that marks the table's
-  // outstanding orders paid, freeing it on the floor map. See tables.js.
+  // The staff-side table bill, and settling it. The money itself is taken at
+  // the counter — this records which method was used and frees the table. See
+  // tables.js for why there's no gateway involved.
+  router.get('/tables/:tableId/bill', owner, async (req, res) => {
+    const { tableId } = parse(tableIdParams, req.params);
+    res.json(await getTableBill(db, req.staff.restaurantId, tableId));
+  });
   router.post('/tables/:tableId/checkout', owner, async (req, res) => {
     const { tableId } = parse(tableIdParams, req.params);
-    await checkoutTable(db, req.staff.restaurantId, tableId);
-    res.status(204).end();
+    const { method, idempotency_key: idempotencyKey } = parse(checkoutTableBody, req.body);
+    res.json(await checkoutTable(db, req.staff.restaurantId, tableId, { method, idempotencyKey }));
   });
 
   // Floor map + POS (step 7). Owner only — see TASKS.md step 7's "Decided"

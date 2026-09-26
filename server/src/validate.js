@@ -116,6 +116,15 @@ export const createStaffOrderBody = z.strictObject({
 
 export const tableIdParams = z.strictObject({ tableId: id });
 
+// POST /tables/:tableId/checkout. `method` mirrors the schema's own
+// payment_method enum minus 'mock', which exists for tests, not for a cashier
+// to pick. idempotency_key is the client's — a retried Confirm must not settle
+// the table twice (see checkoutTable).
+export const checkoutTableBody = z.strictObject({
+  method: z.enum(['cash', 'card', 'upi']),
+  idempotency_key: z.string().trim().min(8).max(128),
+});
+
 // Throws a 400 listing every problem, or returns the parsed (cleaned) value.
 export function parse(schema, data) {
   const result = schema.safeParse(data ?? {});
