@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireOwner } from '../middleware/auth.js';
+import { requireOwner, requireFrontOfHouse } from '../middleware/auth.js';
 import {
   listActiveOrders,
   getRecentOrders,
@@ -20,6 +20,7 @@ import {
   setItemAvailability,
 } from '../services/menuAdmin.js';
 import { listTables, createTable, getTableBill, checkoutTable } from '../services/tables.js';
+import { listStaff, inviteStaff, revokeInvite, updateStaffRole, removeStaff } from '../services/staffAdmin.js';
 import { notFound, HttpError } from '../errors.js';
 import {
   parse,
@@ -35,6 +36,10 @@ import {
   checkoutTableBody,
   createStaffOrderBody,
   tableIdParams,
+  inviteStaffBody,
+  updateStaffRoleBody,
+  staffUserParams,
+  inviteIdParams,
 } from '../validate.js';
 
 // Staff/owner routes. Every one requires a signed-in staff member, and every
@@ -45,6 +50,9 @@ export function staffRoutes({ db, requireStaff, hub }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
+  // POS, the floor and settling a table: owner or front-of-house staff, not
+  // the kitchen. See middleware/auth.js for why this isn't owner-only.
+  const till = [requireStaff, requireFrontOfHouse];
 
   // Who am I, and which cafe — the dashboard calls this after sign-in.
   router.get('/me', staff, (req, res) => {
@@ -172,11 +180,11 @@ export function staffRoutes({ db, requireStaff, hub }) {
   // The staff-side table bill, and settling it. The money itself is taken at
   // the counter — this records which method was used and frees the table. See
   // tables.js for why there's no gateway involved.
-  router.get('/tables/:tableId/bill', owner, async (req, res) => {
+  router.get('/tables/:tableId/bill', till, async (req, res) => {
     const { tableId } = parse(tableIdParams, req.params);
     res.json(await getTableBill(db, req.staff.restaurantId, tableId));
   });
-  router.post('/tables/:tableId/checkout', owner, async (req, res) => {
+  router.post('/tables/:tableId/checkout', till, async (req, res) => {
     const { tableId } = parse(tableIdParams, req.params);
     const { method, idempotency_key: idempotencyKey } = parse(checkoutTableBody, req.body);
     res.json(await checkoutTable(db, req.staff.restaurantId, tableId, { method, idempotencyKey }));
@@ -184,15 +192,41 @@ export function staffRoutes({ db, requireStaff, hub }) {
 
   // Floor map + POS (step 7). Owner only — see TASKS.md step 7's "Decided"
   // note: no cashier/waiter role yet, so there's no one else to gate this to.
-  router.get('/floor', owner, async (req, res) => {
+  router.get('/floor', till, async (req, res) => {
     res.json(await getFloor(db, req.staff.restaurantId));
   });
-  router.post('/staff/orders', owner, async (req, res) => {
+  router.post('/staff/orders', till, async (req, res) => {
     const body = parse(createStaffOrderBody, req.body);
     const orderId = await placeStaffOrder(db, req.staff.restaurantId, req.staff.userId, body);
     const order = await getOrderDetail(db, req.staff.restaurantId, orderId);
     res.status(201).json({ order });
     publishBoardCard(hub, db, req.staff.restaurantId, orderId, 'order_created');
+  });
+
+  // Staff management (step 6 slice 5) — owner only. An invite is a
+  // pre-authorised email, not an account: nothing is sent, and the person is
+  // linked on their first authenticated request (see middleware/auth.js).
+  router.get('/staff', owner, async (req, res) => {
+    res.json(await listStaff(db, req.staff.restaurantId));
+  });
+  router.post('/staff/invites', owner, async (req, res) => {
+    const body = parse(inviteStaffBody, req.body);
+    res.status(201).json({ invite: await inviteStaff(db, req.staff.restaurantId, req.staff.userId, body) });
+  });
+  router.delete('/staff/invites/:inviteId', owner, async (req, res) => {
+    const { inviteId } = parse(inviteIdParams, req.params);
+    await revokeInvite(db, req.staff.restaurantId, inviteId);
+    res.status(204).end();
+  });
+  router.patch('/staff/:userId', owner, async (req, res) => {
+    const { userId } = parse(staffUserParams, req.params);
+    const { role } = parse(updateStaffRoleBody, req.body);
+    res.json({ member: await updateStaffRole(db, req.staff.restaurantId, userId, role) });
+  });
+  router.delete('/staff/:userId', owner, async (req, res) => {
+    const { userId } = parse(staffUserParams, req.params);
+    await removeStaff(db, req.staff.restaurantId, userId);
+    res.status(204).end();
   });
 
   return router;

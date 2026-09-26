@@ -25,10 +25,9 @@ const TABS = [
   { id: 'recent', label: 'Recent' },
   { id: 'menu', label: 'Menu' },
 ];
-// Owner only — kitchen staff have no reduced view for any of these (no
-// reason for the kitchen to be adding tables, running the POS, managing
-// staff or looking at revenue). Dashboard/Staff are step 7's shell — each
-// is a placeholder until its own slice fills it in.
+// Three roles (step 6 slice 5). Everyone works the board; POS is front of
+// house, so 'staff' gets it but 'kitchen' doesn't; the rest is the owner's.
+const FRONT_OF_HOUSE_TABS = [...TABS, { id: 'pos', label: 'POS' }];
 const OWNER_TABS = [
   ...TABS,
   { id: 'tables', label: 'Tables' },
@@ -36,11 +35,12 @@ const OWNER_TABS = [
   { id: 'pos', label: 'POS' },
   { id: 'staff', label: 'Staff' },
 ];
+const tabsFor = (role) => (role === 'owner' ? OWNER_TABS : role === 'staff' ? FRONT_OF_HOUSE_TABS : TABS);
 
 export function Board({ identity, board, token, onSignOut }) {
   const alerts = useNewOrderAlerts(board.newOrderCount, board.acknowledgeNewOrders);
   const isOwner = identity.role === 'owner';
-  const tabs = isOwner ? OWNER_TABS : TABS;
+  const tabs = tabsFor(identity.role);
   const [tab, setTab] = useState('board');
   const [detailOrderId, setDetailOrderId] = useState(null);
 
@@ -94,18 +94,24 @@ export function Board({ identity, board, token, onSignOut }) {
           </div>
         )}
 
-        {/* POS is the new Tailwind design; everything else here is still the
-            old dark theme (see staff.css's header note) — only the latter
-            gets .staff-legacy, so POS's own light panels aren't nested
+        {/* POS and Staff are the new Tailwind design; everything else here is
+            still the old dark theme (see staff.css's header note) — only the
+            latter gets .staff-legacy, so the light panels aren't nested
             inside a dark-background ancestor. */}
-        <div className={tab === 'pos' ? 'flex min-h-0 flex-1 flex-col' : 'staff-legacy flex min-h-0 flex-1 flex-col'}>
+        <div
+          className={
+            tab === 'pos' || tab === 'staff'
+              ? 'flex min-h-0 flex-1 flex-col'
+              : 'staff-legacy flex min-h-0 flex-1 flex-col'
+          }
+        >
           {tab === 'board' && <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />}
           {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
           {tab === 'menu' && <MenuTab isOwner={isOwner} token={token} />}
           {tab === 'tables' && isOwner && <TablesTab token={token} />}
           {tab === 'dashboard' && isOwner && <DashboardHome />}
-          {tab === 'pos' && isOwner && <POS token={token} />}
-          {tab === 'staff' && isOwner && <StaffTab />}
+          {tab === 'pos' && identity.role !== 'kitchen' && <POS token={token} />}
+          {tab === 'staff' && isOwner && <StaffTab token={token} />}
         </div>
       </div>
 

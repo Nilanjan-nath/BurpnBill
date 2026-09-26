@@ -13,6 +13,9 @@ import { createTestDb, RESTAURANT_ID } from '../../../server/test/helpers/testDb
 
 const STAFF_USER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const SECOND_STAFF_USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+// Three roles since step 6 slice 5: 'staff' is front of house (and reaches
+// POS), 'kitchen' is the board and 86'ing only.
+const KITCHEN_USER_ID = 'a9a9a9a9-a9a9-4a9a-8a9a-a9a9a9a9a9a9';
 
 export default async function setup({ provide }) {
   const db = await createTestDb();
@@ -24,10 +27,13 @@ export default async function setup({ provide }) {
   // Supabase; the one thing tying the two fakes together is this format.
   const supabase = {
     auth: {
+      // "valid-<id>" as before, optionally "valid-<id>|<email>" — claiming a
+      // staff invite matches on the email Supabase reports for the signed-in
+      // user, so a test covering that path needs a way to supply one.
       async getUser(token) {
-        return token.startsWith('valid-')
-          ? { data: { user: { id: token.slice(6) } }, error: null }
-          : { data: null, error: new Error('bad token') };
+        if (!token.startsWith('valid-')) return { data: null, error: new Error('bad token') };
+        const [id, email] = token.slice(6).split('|');
+        return { data: { user: { id, ...(email && { email }) } }, error: null };
       },
     },
   };
@@ -43,8 +49,8 @@ export default async function setup({ provide }) {
   // move made by a DIFFERENT staff member (e.g. the order-detail timeline).
   await db.query(
     `insert into staff_members (user_id, restaurant_id, role, display_name) values
-       ($1, $3, 'owner', 'Mita'), ($2, $3, 'staff', 'Ravi')`,
-    [STAFF_USER_ID, SECOND_STAFF_USER_ID, RESTAURANT_ID],
+       ($1, $3, 'owner', 'Mita'), ($2, $3, 'staff', 'Ravi'), ($4, $3, 'kitchen', 'Bikash')`,
+    [STAFF_USER_ID, SECOND_STAFF_USER_ID, RESTAURANT_ID, KITCHEN_USER_ID],
   );
 
   const server = createServer(async (req, res) => {
@@ -67,6 +73,7 @@ export default async function setup({ provide }) {
   provide('apiBase', `http://localhost:${server.address().port}`);
   provide('staffUserId', STAFF_USER_ID);
   provide('secondStaffUserId', SECOND_STAFF_USER_ID);
+  provide('kitchenUserId', KITCHEN_USER_ID);
 
   return async () => {
     server.close();

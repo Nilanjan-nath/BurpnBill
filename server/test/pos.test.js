@@ -9,6 +9,8 @@ import { createTestDb, RESTAURANT_ID } from './helpers/testDb.js';
 const OWNER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const STAFF = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_CAFE_OWNER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+// The kitchen sees the board and can 86 an item, but never the till.
+const KITCHEN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 let db;
 let server;
@@ -42,8 +44,9 @@ before(async () => {
 
   await db.query(
     `insert into staff_members (user_id, restaurant_id, role, display_name) values
-       ($1, $3, 'owner', 'Mita'), ($2, $3, 'staff', 'Ravi'), ($4, $5, 'owner', 'Rival')`,
-    [OWNER, STAFF, RESTAURANT_ID, OTHER_CAFE_OWNER, otherRestaurantId],
+       ($1, $3, 'owner', 'Mita'), ($2, $3, 'staff', 'Ravi'), ($4, $5, 'owner', 'Rival'),
+       ($6, $3, 'kitchen', 'Bikash')`,
+    [OWNER, STAFF, RESTAURANT_ID, OTHER_CAFE_OWNER, otherRestaurantId, KITCHEN],
   );
 });
 
@@ -76,9 +79,10 @@ const placeStaffOrder = (as, body) => call('POST', '/api/staff/orders', { as, bo
 
 // --- GET /floor --------------------------------------------------------------
 
-test('needs a signed-in staff member; owner only, staff gets 403', async () => {
+test('the floor is front of house: owner and staff yes, kitchen no', async () => {
   assert.equal((await call('GET', '/api/floor')).status, 401);
-  assert.equal((await floor(STAFF)).status, 403);
+  assert.equal((await floor(KITCHEN)).status, 403);
+  assert.equal((await floor(STAFF)).status, 200, 'front of house runs the till');
   assert.equal((await floor(OWNER)).status, 200);
 });
 
@@ -149,13 +153,14 @@ test('a café only ever sees its own floor', async () => {
 
 // --- POST /staff/orders --------------------------------------------------------
 
-test('needs a signed-in staff member; owner only, staff gets 403', async () => {
-  const t3 = await tableId('T3');
+test('placing a POS order is front of house: the kitchen cannot, staff can', async () => {
+  const table = await freshTable();
   const chai = await itemId('Masala Chai');
-  const body = { table_id: t3, items: [{ menu_item_id: chai, quantity: 1 }] };
+  const body = { table_id: table, items: [{ menu_item_id: chai, quantity: 1 }] };
 
   assert.equal((await call('POST', '/api/staff/orders', { body })).status, 401);
-  assert.equal((await placeStaffOrder(STAFF, body)).status, 403);
+  assert.equal((await placeStaffOrder(KITCHEN, body)).status, 403);
+  assert.equal((await placeStaffOrder(STAFF, body)).status, 201);
 });
 
 test('validates the body: a real table, at least one item, sane quantities', async () => {
@@ -283,10 +288,10 @@ async function freshTable() {
 const checkout = (as, tableId, body = { method: 'cash', idempotency_key: nextKey() }) =>
   call('POST', `/api/tables/${tableId}/checkout`, { as, body });
 
-test('checkout needs a signed-in staff member; owner only, staff gets 403', async () => {
+test('checkout is front of house: the kitchen cannot settle a table', async () => {
   const t1 = await tableId('T1');
   assert.equal((await call('POST', `/api/tables/${t1}/checkout`, { body: { method: 'cash', idempotency_key: nextKey() } })).status, 401);
-  assert.equal((await checkout(STAFF, t1)).status, 403);
+  assert.equal((await checkout(KITCHEN, t1)).status, 403);
 });
 
 test('checkout frees the table even after the order was served, not just while it was active', async () => {
@@ -399,14 +404,14 @@ test('a made-up or another café\'s table is 404', async () => {
 
 const tableBill = (as, id) => call('GET', `/api/tables/${id}/bill`, { as });
 
-test('the table bill lists every unpaid order with its lines and totals, and is owner only', async () => {
+test('the table bill lists every unpaid order with its lines and totals, and is front of house only', async () => {
   const table = await freshTable();
   const chai = await itemId('Masala Chai'); // 30.00
   const coffee = await itemId('Filter Coffee'); // 40.00
   await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: chai, quantity: 2 }] });
   await placeStaffOrder(OWNER, { table_id: table, items: [{ menu_item_id: coffee, quantity: 1 }] });
 
-  assert.equal((await tableBill(STAFF, table)).status, 403);
+  assert.equal((await tableBill(KITCHEN, table)).status, 403, 'the kitchen has no business with the bill');
 
   const res = await tableBill(OWNER, table);
   assert.equal(res.status, 200);

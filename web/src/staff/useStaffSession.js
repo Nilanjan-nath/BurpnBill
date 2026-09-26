@@ -12,6 +12,7 @@ export function useStaffSession(authClient) {
   const [token, setToken] = useState(undefined);
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState(null);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +43,44 @@ export function useStaffSession(authClient) {
     [authClient],
   );
 
+  // Creating the account for someone the owner has invited. The invite itself
+  // is just a pre-authorised email (see server/src/middleware/auth.js) — it
+  // doesn't create a login, so without this there is no way in.
+  //
+  // Whether this signs them straight in depends on Supabase's "Confirm email"
+  // setting: with it on, signUp returns a user but NO session until they click
+  // the link Supabase emails them, so the caller has to say so rather than
+  // look like it hung. With it off, a session comes back and
+  // onAuthStateChange takes over exactly as it does for sign-in.
+  const signUp = useCallback(
+    async (email, password) => {
+      setSigningIn(true);
+      setSignInError(null);
+      setAwaitingConfirmation(false);
+      const { data, error } = await authClient.auth.signUp({ email, password });
+      setSigningIn(false);
+      if (error) {
+        setSignInError(error.message);
+        return;
+      }
+      if (!data?.session) setAwaitingConfirmation(true);
+    },
+    [authClient],
+  );
+
   const signOut = useCallback(() => authClient.auth.signOut(), [authClient]);
 
-  return { token, signingIn, signInError, signIn, signOut };
+  return {
+    token,
+    signingIn,
+    signInError,
+    awaitingConfirmation,
+    clearNotices: () => {
+      setSignInError(null);
+      setAwaitingConfirmation(false);
+    },
+    signIn,
+    signUp,
+    signOut,
+  };
 }

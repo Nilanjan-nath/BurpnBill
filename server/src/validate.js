@@ -116,6 +116,18 @@ export const createStaffOrderBody = z.strictObject({
 
 export const tableIdParams = z.strictObject({ tableId: id });
 
+// Staff management (step 6 slice 5). 'kitchen' is the old catch-all 'staff'
+// minus POS; 'staff' is front of house.
+const staffRole = z.enum(['owner', 'staff', 'kitchen']);
+export const inviteStaffBody = z.strictObject({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254),
+  role: staffRole,
+  display_name: z.string().trim().min(1).max(80).optional(),
+});
+export const updateStaffRoleBody = z.strictObject({ role: staffRole });
+export const staffUserParams = z.strictObject({ userId: id });
+export const inviteIdParams = z.strictObject({ inviteId: id });
+
 // POST /tables/:tableId/checkout. `method` mirrors the schema's own
 // payment_method enum minus 'mock', which exists for tests, not for a cashier
 // to pick. idempotency_key is the client's — a retried Confirm must not settle

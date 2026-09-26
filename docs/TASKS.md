@@ -605,7 +605,59 @@ accept it, per the owner's reference POS.*
       active order count, table free/occupied counts — reuses the floor endpoint's data
 - [ ] Replaces the `DashboardHome.jsx` placeholder
 
-**Slice 5 — Staff management** — not started
+**Slice 5 — Staff management** — done
+- [x] **Migration `20260926130000_staff_roles_and_invites.sql` — applied to Supabase.** Adds
+      `kitchen` to the `staff_role` enum and a `staff_invites` table. Existing rows need no
+      backfill: `staff` keeps what it had plus POS, which is the intended widening
+- [x] **Three roles.** `owner` everything · `staff` = front of house (board, 86'ing, and the
+      till: POS, accepting QR orders, checkout) · `kitchen` = board and 86'ing only. This is
+      what closes the gap flagged in the previous slice, where a QR order could only be
+      accepted by the owner. `requireFrontOfHouse` in `middleware/auth.js`; POS's routes moved
+      off owner-only
+- [x] **Invites are pre-authorised emails, not accounts, and no email is sent.**
+      `staff_members.user_id` is the PK and (on Supabase) an FK to `auth.users`, so a person
+      must exist as an auth user before being linked — a pending invite therefore can't live in
+      `staff_members`. The owner adds an address + role; the invitee signs up themselves; their
+      first authenticated request claims it (`claimInvite`, one statement so two simultaneous
+      first-requests can't both link). Chosen over Supabase's `inviteUserByEmail` because that
+      depends on SMTP the project hasn't configured — the risk this slice's original plan
+      already flagged
+- [x] **The trust boundary, written down because it's easy to get wrong:** the email is read
+      off the *verified Supabase user*, never from the request — but it's only as strong as
+      Supabase's own "Confirm email" setting, which is what proves the person owns the inbox.
+      If that's off, Supabase auto-confirms and `email_confirmed_at` is set regardless, so the
+      column alone is not a safeguard. Invites expire after 7 days and can be revoked
+- [x] `GET /staff`, `POST /staff/invites` (re-inviting replaces the open invite), `DELETE
+      /staff/invites/:id`, `PATCH /staff/:userId`, `DELETE /staff/:userId`. Removing unlinks
+      only — the Supabase Auth account is left alone, since that identity may be used elsewhere
+- [x] **Last-owner guard**: neither demotion nor removal can leave a cafe with no owner, because
+      there would then be nobody able to put one back — a door that locks from the outside
+- [x] `StaffTab.jsx` replaces the placeholder, in POS's visual language: the team with an inline
+      role picker, inline remove confirmation (not `window.confirm`, same as the board's
+      Cancel), an invite form whose role options carry their own descriptions, and a "waiting to
+      sign up" list with expiry and revoke
+- [x] Tests: 130 server (was 121) + 62 web (was 57), including a new `staff-admin.test.js`.
+      Mutation-checked seven ways — invite expiry, the till gate, the last-owner guard,
+      case-insensitive email matching, the role picker persisting, "Keep" not removing, and the
+      kitchen not getting POS — all caught
+- [x] Found while wiring the fixtures: the new kitchen test user reused the UUID of the
+      deliberately-unlinked fixture, which silently made the "not linked" test pass for the
+      wrong reason. Given its own id
+- [x] **Gap found the moment it was used for real: there was no way to sign up.** The invite
+      deliberately creates no login, but `/staff` only had `signInWithPassword` — so an invited
+      person hit "Invalid login credentials" and had no route in. `SignInScreen.jsx` now has a
+      sign-up mode ("Been invited? Create your account"), `useStaffSession` gained `signUp`, and
+      the screen reports the confirmation-pending case explicitly instead of looking stuck.
+      Anyone may create an account; that grants nothing on its own — access still comes only
+      from claiming an invite. Tests cover the whole journey: invite → sign up → linked with the
+      invited role, an uninvited sign-up being refused, the confirmation notice, and a sign-up
+      error clearing when you switch back. Mutation-checked three ways, all caught
+- [ ] **No invite email is sent, by design** (see ARCHITECTURE §6) — but note what the invitee
+      *does* get: with "Confirm email" on, Supabase emails them a confirmation link when they
+      sign up. If a genuine "you've been invited" email is wanted later, that needs custom SMTP
+      configured in Supabase first; the pieces compose, nothing here has to change
+- [ ] **Worth doing before real staff use it:** confirm "Confirm email" is enabled in Supabase
+      Auth settings (Authentication → Providers → Email). Everything above assumes it
 - [ ] `POST /staff/invite` `{ email, display_name, role }` — owner only; calls Supabase
       Admin's `inviteUserByEmail` (service-role key, server-side only) to create the auth
       user and send the invite email, then creates the `staff_members` row immediately with

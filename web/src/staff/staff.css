@@ -96,6 +96,21 @@
   color: var(--staff-primary-text);
   font-weight: 700;
 }
+/* The sign-in/sign-up mode switch. `.staff-signin button` above styles every
+   button in the form as the primary action, which would make this look like a
+   second Sign in — it is a quiet link, not a call to action. (`.link` itself
+   is scoped to .staff-legacy, and this screen is .staff-centered.) */
+.staff-signin .link {
+  min-height: 0;
+  background: none;
+  border: 0;
+  color: var(--staff-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+.staff-signin .link:hover { color: var(--staff-text); }
+
 .staff-error { color: var(--staff-red); font-size: 0.9rem; margin: 0; }
 
 .staff-link {

@@ -11,6 +11,7 @@ import StaffApp from './StaffApp.jsx';
 
 const base = inject('apiBase');
 const STAFF_USER = inject('staffUserId'); // 'Mita', owner
+const KITCHEN_USER = inject('kitchenUserId'); // 'Bikash', kitchen
 const SECOND_STAFF = inject('secondStaffUserId'); // 'Ravi', staff
 const NOT_LINKED_USER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const realFetch = globalThis.fetch;
@@ -73,11 +74,24 @@ async function placeUnapproved(table, itemName, note) {
 // A fake Supabase Auth client: same shape as the real supabase-js client
 // (see useStaffSession.js), no network. On success it produces a token the
 // server's fake verifier (../test/globalSetup.js) will accept.
-function createFakeAuth(userId) {
+// `signUpAs` mirrors the real client closely enough to matter: Supabase
+// returns a session from signUp only when "Confirm email" is OFF. Pass
+// { requiresConfirmation: true } to get the other case, where the account
+// exists but there is no session until they click the emailed link.
+function createFakeAuth(userId, { signUpAs, requiresConfirmation = false } = {}) {
   let session = null;
   const listeners = new Set();
   return {
     auth: {
+      async signUp({ email }) {
+        if (email === 'taken@example.com') {
+          return { data: {}, error: { message: 'User already registered' } };
+        }
+        if (requiresConfirmation) return { data: { user: { id: signUpAs }, session: null }, error: null };
+        session = { access_token: `valid-${signUpAs}|${email}` };
+        listeners.forEach((fn) => fn('SIGNED_IN', session));
+        return { data: { session }, error: null };
+      },
       getSession: async () => ({ data: { session } }),
       onAuthStateChange(cb) {
         listeners.add(cb);
@@ -597,16 +611,29 @@ describe('the owner dashboard shell (step 7 slice 1)', () => {
     expect(screen.getByRole('button', { name: 'Staff' })).toBeInTheDocument();
   });
 
-  test('staff do not see Dashboard, POS or Staff tabs', async () => {
-    const staff = userEvent.setup();
-    await signIn(staff, SECOND_STAFF);
+  test('the kitchen sees only the board, Recent and Menu', async () => {
+    const kitchen = userEvent.setup();
+    await signIn(kitchen, KITCHEN_USER);
     await screen.findByRole('heading', { name: 'Order board' });
     expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'POS' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Staff' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tables' })).not.toBeInTheDocument();
   });
 
-  test('Dashboard and Staff are still placeholders; POS is the real thing', async () => {
+  // Front of house reaches the till — this is what stops QR orders waiting for
+  // the owner to be standing at it.
+  test('front-of-house staff get POS, but not Tables, Dashboard or Staff', async () => {
+    const staff = userEvent.setup();
+    await signIn(staff, SECOND_STAFF);
+    await screen.findByRole('heading', { name: 'Order board' });
+    expect(await screen.findByRole('button', { name: 'POS' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Staff' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tables' })).not.toBeInTheDocument();
+  });
+
+  test('Dashboard is still a placeholder; POS and Staff are the real thing', async () => {
     const user = userEvent.setup();
     await signIn(user, STAFF_USER);
 
@@ -614,7 +641,7 @@ describe('the owner dashboard shell (step 7 slice 1)', () => {
     expect(await screen.findByText(/Dashboard —/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Staff' }));
-    expect(await screen.findByText(/Staff —/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Your team' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'POS' }));
     expect(await screen.findByRole('button', { name: 'Floor' })).toBeInTheDocument();
@@ -875,5 +902,160 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     );
     expect(payment.method).toBe('upi');
     expect(payment.status).toBe('succeeded');
+  });
+});
+
+describe('staff management (step 6 slice 5)', () => {
+  const openStaff = async (user) => {
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Staff' }));
+    await screen.findByRole('heading', { name: 'Your team' });
+  };
+
+  test('the team lists everyone with their role, and a role can be changed', async () => {
+    const user = userEvent.setup();
+    await openStaff(user);
+
+    // Scoped by each row's own role picker: "Mita" also appears in the
+    // sidebar's identity card, so a bare text query is ambiguous.
+    const picker = screen.getByLabelText('Role for Bikash');
+    expect(screen.getByLabelText('Role for Mita')).toHaveValue('owner');
+    expect(picker).toHaveValue('kitchen');
+
+    await user.selectOptions(picker, 'staff');
+
+    // Persisted, not just held in the picker.
+    await waitFor(async () => {
+      const [row] = await sql('select role from staff_members where display_name = $1', ['Bikash']);
+      expect(row.role).toBe('staff');
+    });
+
+    await sql(`update staff_members set role = 'kitchen' where display_name = 'Bikash'`); // leave the fixture as found
+  });
+
+  test('inviting pre-authorises an email — no account is created, and it shows as waiting', async () => {
+    const user = userEvent.setup();
+    await openStaff(user);
+
+    await user.click(screen.getByRole('button', { name: /Invite someone/ }));
+    await user.type(screen.getByLabelText(/Email address/), 'Newbie@Example.com');
+    await user.type(screen.getByLabelText(/Name/), 'Newbie');
+    await user.click(screen.getByRole('radio', { name: /Kitchen/ }));
+    await user.click(screen.getByRole('button', { name: 'Add to team' }));
+
+    expect(await screen.findByText('newbie@example.com')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Waiting to sign up' })).toBeInTheDocument();
+
+    // It's an invite, not a member: nothing was added to the team itself.
+    const [{ n }] = await sql("select count(*)::int as n from staff_members where display_name = 'Newbie'");
+    expect(n).toBe(0);
+    const [invite] = await sql('select email, role from staff_invites where accepted_at is null');
+    expect(invite).toMatchObject({ email: 'newbie@example.com', role: 'kitchen' });
+
+    // And it can be withdrawn again.
+    await user.click(screen.getByRole('button', { name: /Revoke invite for newbie@example.com/ }));
+    await waitFor(() => expect(screen.queryByText('newbie@example.com')).not.toBeInTheDocument());
+    const [{ n: left }] = await sql('select count(*)::int as n from staff_invites where accepted_at is null');
+    expect(left).toBe(0);
+  });
+
+  test('the last owner cannot be demoted — the API refuses and the screen says why', async () => {
+    const user = userEvent.setup();
+    await openStaff(user);
+
+    await user.selectOptions(screen.getByLabelText('Role for Mita'), 'staff');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/only owner/i);
+    const [row] = await sql('select role from staff_members where display_name = $1', ['Mita']);
+    expect(row.role).toBe('owner', 'still the owner');
+  });
+
+  test('removing someone asks first, and "Keep" leaves them alone', async () => {
+    const user = userEvent.setup();
+    await openStaff(user);
+
+    await user.click(screen.getByRole('button', { name: /Remove Bikash/ }));
+    await user.click(await screen.findByRole('button', { name: 'Keep' }));
+
+    const [{ n }] = await sql("select count(*)::int as n from staff_members where display_name = 'Bikash'");
+    expect(n).toBe(1, 'Keep means keep');
+  });
+});
+
+describe('joining a café from an invite', () => {
+  const NEWCOMER = '7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b';
+
+  test('an invited person signs up and lands in the café with the role they were given', async () => {
+    const user = userEvent.setup();
+    await sql(
+      `insert into staff_invites (restaurant_id, email, role, display_name)
+       values ($1, 'newhire@example.com', 'kitchen', 'New Hire')`,
+      ['11111111-1111-1111-1111-111111111111'],
+    );
+
+    render(<StaffApp auth={createFakeAuth(null, { signUpAs: NEWCOMER })} />);
+    await screen.findByRole('heading', { name: 'Staff sign in' });
+
+    // The invite created no login, so there has to be a way to make one.
+    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await screen.findByRole('heading', { name: 'Create your account' });
+    await user.type(screen.getByLabelText('Email'), 'newhire@example.com');
+    await user.type(screen.getByLabelText('Password'), 'hunter22');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+    // Joining happens by itself, on their very first authenticated request.
+    expect(await screen.findByRole('heading', { name: 'Order board' })).toBeInTheDocument();
+    expect(screen.getByText('New Hire')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'POS' })).not.toBeInTheDocument(); // kitchen, not front of house
+
+    const [row] = await sql('select role from staff_members where user_id = $1', [NEWCOMER]);
+    expect(row.role).toBe('kitchen');
+    const [{ n }] = await sql('select count(*)::int as n from staff_invites where accepted_at is null');
+    expect(n).toBe(0, 'the invite is spent');
+  });
+
+  test('signing up without an invite is refused, not silently let in', async () => {
+    const user = userEvent.setup();
+    const stranger = '8c8c8c8c-8c8c-4c8c-8c8c-8c8c8c8c8c8c';
+
+    render(<StaffApp auth={createFakeAuth(null, { signUpAs: stranger })} />);
+    await screen.findByRole('heading', { name: 'Staff sign in' });
+    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.type(screen.getByLabelText('Email'), 'nobody@example.com');
+    await user.type(screen.getByLabelText('Password'), 'hunter22');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByText(/isn't linked to a café/)).toBeInTheDocument();
+    const [{ n }] = await sql('select count(*)::int as n from staff_members where user_id = $1', [stranger]);
+    expect(n).toBe(0);
+  });
+
+  test('when Supabase requires email confirmation, the screen says so instead of hanging', async () => {
+    const user = userEvent.setup();
+    render(<StaffApp auth={createFakeAuth(null, { signUpAs: NEWCOMER, requiresConfirmation: true })} />);
+    await screen.findByRole('heading', { name: 'Staff sign in' });
+
+    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.type(screen.getByLabelText('Email'), 'later@example.com');
+    await user.type(screen.getByLabelText('Password'), 'hunter22');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/confirmation link/i);
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+  });
+
+  test('a sign-up error surfaces, and switching back to sign in clears it', async () => {
+    const user = userEvent.setup();
+    render(<StaffApp auth={createFakeAuth(null, { signUpAs: NEWCOMER })} />);
+    await screen.findByRole('heading', { name: 'Staff sign in' });
+
+    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.type(screen.getByLabelText('Email'), 'taken@example.com');
+    await user.type(screen.getByLabelText('Password'), 'hunter22');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('User already registered');
+
+    await user.click(screen.getByRole('button', { name: /Already have an account/ }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -116,8 +116,25 @@ trigger enforces the same table as a backstop, in case the two ever drift apart.
 - **Staff/owner routes** require a Supabase Auth access token (`Authorization: Bearer`).
   The server looks up the user's restaurant in `staff_members` and scopes every query by
   it — never by an id taken from the request.
-- **Roles (decided)**: owners can do everything; staff can work the order board and toggle
-  item availability, but not edit the menu or tables.
+- **Roles (decided, three since step 6)**: `owner` does everything, including the menu, tables
+  and staff management. `staff` is **front of house**: the order board, 86'ing items, and the
+  till — POS, accepting QR orders, and settling a table. `kitchen` is the order board and
+  86'ing only. The split exists because a QR order only the owner could accept is an order that
+  waits for the owner to be standing at the till.
+- **Invites (decided)**: `staff_members.user_id` is the primary key and, on Supabase, a foreign
+  key to `auth.users` — so a person must already exist as an auth user before they can be
+  linked. An invite is therefore a **pre-authorised email** in `staff_invites`, not an account:
+  the owner adds an address and role, the person signs up themselves, and their first
+  authenticated request claims the invite (`middleware/auth.js`). **No email is sent** —
+  Supabase's built-in invite mail is rate-limited and unreliable without custom SMTP, and
+  nothing here should depend on deliverability. The address is only as trustworthy as
+  Supabase's own "Confirm email" setting, which is what proves the person owns the inbox;
+  invites expire after 7 days and can be revoked, to keep that window small.
+- **Sign-up (added):** because an invite creates no login, `/staff` has a sign-up mode beside
+  sign-in — otherwise an invited person has no way in at all. Anyone may create an account;
+  that alone grants nothing, since access comes from claiming an invite. With Supabase's
+  "Confirm email" on, `signUp` returns no session until they click Supabase's own confirmation
+  mail, so the screen says so rather than appearing to hang.
 - **RLS** is enabled on every table with no policies, so the public anon key can read or
   write nothing directly. The API uses the service-role key and a direct Postgres
   connection, which bypass RLS. Writing real policies is deferred.
@@ -163,19 +180,23 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `GET /tables` — owner and staff; `POST /tables` — owner only. The Tables *tab* in the dashboard
   is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
   wider allowance is unused by the UI, not a mismatch
-- `GET /floor` — owner only. Every table plus whether it's occupied, derived from active orders,
+- `GET /staff` — owner only; the team plus the invites still waiting to be claimed **(added, step 6)**
+- `POST /staff/invites` — owner only; pre-authorise `{ email, role, display_name? }`. Re-inviting an address replaces the open invite rather than erroring **(added, step 6)**
+- `DELETE /staff/invites/:inviteId` — withdraw one that hasn't been claimed **(added, step 6)**
+- `PATCH /staff/:userId` `{ role }` and `DELETE /staff/:userId` — change a role, or unlink someone. Removing leaves their Supabase Auth account alone: that identity may be used elsewhere. Both refuse to remove the **last owner** — a cafe with no owner has nobody who can put one back **(added, step 6)**
+- `GET /floor` — front of house (owner or staff), not the kitchen. Every table plus whether it's occupied, derived from active orders,
   no new schema. Also carries the table's running bill (`unpaid_total`, `unpaid_count`, summed
   over every unpaid order, not just the newest) and its `qr_token`, so POS can show what a table
   owes and its QR code without a second request **(added, step 7; extended, step 6)**
-- `POST /staff/orders` — owner only; a staff-placed order for a walk-in, dine-in only. Reuses the
+- `POST /staff/orders` — front of house; a staff-placed order for a walk-in, dine-in only. Reuses the
   customer checkout path's guarantees (locked availability check, server-computed total) but
   skips the guest-session/cart concept entirely except for the one throwaway `guest_session` row
   each order needs to satisfy `orders.guest_session_id`'s FK **(added, step 7)**
-- `GET /tables/:tableId/bill` — owner only; the staff-side table bill: every unpaid,
+- `GET /tables/:tableId/bill` — front of house; the staff-side table bill: every unpaid,
   non-cancelled order on the table with its lines and totals. Scoped by table, unlike the
   customer's `GET /bill`, which is scoped to one guest session — at the counter you settle the
   whole table, not one person's phone **(added, step 6)**
-- `POST /tables/:tableId/checkout` — owner only; `{ method, idempotency_key }`. Records **how**
+- `POST /tables/:tableId/checkout` — front of house; `{ method, idempotency_key }`. Records **how**
   the money was taken at the counter (`cash` | `card` | `upi`) as a real `payments` row per
   order, and the existing `payments_sync_order_paid_at` trigger sets `orders.paid_at`, which is
   what frees the table on the floor map. **No money moves here and there is no payment gateway**
