@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { staffApi, StaffApiError } from './staffApi.js';
+import { useOrderStream } from './useOrderStream.js';
 
 // POS (step 7 slices 2-3): the floor map, the menu to build a walk-in's
 // order from, and the cart for whichever table is currently selected.
@@ -16,6 +17,8 @@ export function usePOS(token) {
   const [placing, setPlacing] = useState(false);
   const [checkingOut, setCheckingOut] = useState(null); // table id currently being checked out
   const [bill, setBill] = useState(null); // the open checkout's bill, null = closed
+  const [pending, setPending] = useState(null); // QR orders waiting for approval
+  const [deciding, setDeciding] = useState(null); // order id currently being approved/rejected
 
   const loadFloor = useCallback(async () => {
     if (!token) return;
@@ -28,9 +31,35 @@ export function usePOS(token) {
     }
   }, [token]);
 
+  const loadPending = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await staffApi.getPendingOrders(token);
+      setPending(data.orders);
+    } catch (err) {
+      if (!(err instanceof StaffApiError)) throw err;
+      setError(err.message);
+    }
+  }, [token]);
+
   useEffect(() => {
     loadFloor();
-  }, [loadFloor]);
+    loadPending();
+  }, [loadFloor, loadPending]);
+
+  // POS opens its own stream rather than sharing the board's. An order sitting
+  // unnoticed in the approval queue is the one failure this feature must not
+  // have — it used to go straight to the kitchen — so the queue is worth a
+  // connection of its own, unlike Recent (see ARCHITECTURE §7).
+  useOrderStream(token, {
+    onEvent: (name) => {
+      if (name === 'qr_order_pending') loadPending();
+    },
+    onReconnect: () => {
+      loadPending();
+      loadFloor();
+    },
+  });
 
   useEffect(() => {
     if (!token) return;
@@ -137,6 +166,25 @@ export function usePOS(token) {
     }
   };
 
+  // Approve hands the order to the kitchen; reject cancels it. Both then
+  // refresh the queue and the floor, since either changes what a table owes.
+  const decide = async (orderId, apiCall) => {
+    setDeciding(orderId);
+    setError(null);
+    try {
+      await apiCall(token, orderId);
+      await Promise.all([loadPending(), loadFloor()]);
+      return true;
+    } catch (err) {
+      if (!(err instanceof StaffApiError)) throw err;
+      setError(err.message);
+      await loadPending(); // a 409 means someone else got there first — resync
+      return false;
+    } finally {
+      setDeciding(null);
+    }
+  };
+
   return {
     tables,
     items,
@@ -148,6 +196,10 @@ export function usePOS(token) {
     subtotal,
     placing,
     checkingOut,
+    pending,
+    deciding,
+    approveOrder: (orderId) => decide(orderId, staffApi.approveOrder),
+    rejectOrder: (orderId) => decide(orderId, staffApi.rejectOrder),
     bill,
     openBill,
     closeBill,

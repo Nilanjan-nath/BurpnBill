@@ -158,15 +158,19 @@ test('opens with an immediate frame, then heartbeats keep it alive', async () =>
   stream.close();
 });
 
-test('placing a real order pushes order_created to that café\'s open stream', async () => {
+test('a QR order pushes qr_order_pending — the approval queue, not the kitchen', async () => {
   const stream = openStream(STAFF);
   await stream.opened;
   await waitFor(() => stream.comments.length >= 1); // don't act until the stream is actually open
 
   const order = await place('T1', [{ name: 'Masala Chai', quantity: 2, note: 'less sugar' }]);
 
-  await waitFor(() => stream.frames.some((f) => f.event === 'order_created'));
-  const frame = stream.frames.find((f) => f.event === 'order_created');
+  await waitFor(() => stream.frames.some((f) => f.event === 'qr_order_pending'));
+  const frame = stream.frames.find((f) => f.event === 'qr_order_pending');
+  assert.ok(
+    !stream.frames.some((f) => f.event === 'order_created'),
+    'the kitchen must not hear about a QR order until staff accept it',
+  );
   assert.equal(frame.data.id, order.id);
   assert.equal(frame.data.order_number, order.order_number);
   assert.equal(frame.data.status, 'placed');
@@ -176,7 +180,7 @@ test('placing a real order pushes order_created to that café\'s open stream', a
   stream.close();
 });
 
-test('a retried order (same cart, already converted) never pushes a second order_created', async () => {
+test('a retried order (same cart, already converted) never pushes a second event', async () => {
   const stream = openStream(STAFF);
   await stream.opened;
   await waitFor(() => stream.comments.length >= 1);
@@ -189,13 +193,32 @@ test('a retried order (same cart, already converted) never pushes a second order
 
   const first = await api('POST', '/api/orders', { session, body: { cart_id: cart.cart_id } });
   assert.equal(first.status, 201);
-  await waitFor(() => stream.frames.filter((f) => f.event === 'order_created').length === 1);
+  await waitFor(() => stream.frames.filter((f) => f.event === 'qr_order_pending').length === 1);
 
   const retry = await api('POST', '/api/orders', { session, body: { cart_id: cart.cart_id } });
   assert.equal(retry.status, 200); // the idempotent "already exists" path, not a new order
 
   await new Promise((resolve) => setTimeout(resolve, 150)); // give a wrongly-duplicated event time to arrive
-  assert.equal(stream.frames.filter((f) => f.event === 'order_created').length, 1, 'still exactly one order_created');
+  assert.equal(stream.frames.filter((f) => f.event === 'qr_order_pending').length, 1, 'still exactly one event');
+
+  stream.close();
+});
+
+test('approving a queued order is what finally pushes order_created to the kitchen', async () => {
+  const stream = openStream(STAFF);
+  await stream.opened;
+  await waitFor(() => stream.comments.length >= 1);
+
+  const order = await place('T3', [{ name: 'Masala Chai', quantity: 1 }]);
+  await waitFor(() => stream.frames.some((f) => f.event === 'qr_order_pending'));
+
+  const res = await api('POST', `/api/orders/${order.id}/approve`, { as: STAFF });
+  assert.equal(res.status, 200);
+
+  await waitFor(() => stream.frames.some((f) => f.event === 'order_created'));
+  const frame = stream.frames.find((f) => f.event === 'order_created');
+  assert.equal(frame.data.id, order.id);
+  assert.equal(frame.data.status, 'placed');
 
   stream.close();
 });

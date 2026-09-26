@@ -14,6 +14,10 @@ and place an order directly — which appears instantly on a live kitchen/recept
 ## 2. Functional requirements (v1)
 
 - Customer scans a QR code at a table and sees that cafe's live menu
+- A QR order is **accepted or turned away by staff before the kitchen sees it**. It waits in a
+  POS queue rather than going straight to the board — the counter is the check on a QR code
+  anyone at the table (or anyone who kept the link) can use. Staff-placed POS orders skip the
+  queue: the person placing it is the person who would approve it **(decided, step 6)**
 - Customer adds items to a cart, with free-text special instructions per item
 - Customer places an order directly from the app (no login required)
 - Customer pays at the counter; payment happens outside the app **(decided)**
@@ -137,7 +141,7 @@ All routes are under `/api`. Errors are always `{ "error": { "code", "message", 
 - `GET /bill` — read-only summary of this session's orders: items, notes, per-order and grand
   totals. Cancelled orders are listed but not charged. Scoped to the guest session, never the
   table, so other guests' orders stay private **(added)**
-- `POST /orders` — `{ cart_id }` converts that cart into an order. 201 the first time, 200 with the same order on a retry; 409 `items_unavailable` (with the lines) if anything was 86d since it was added
+- `POST /orders` — `{ cart_id }` converts that cart into an order. 201 the first time, 200 with the same order on a retry; 409 `items_unavailable` (with the lines) if anything was 86d since it was added. The order lands **unapproved** and waits in the staff approval queue below; the kitchen does not see it yet **(changed, step 6)**
 
 Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 `POST /invoices`.
@@ -145,7 +149,10 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 ### Private (staff/owner, authenticated + restaurant-scoped)
 
 - `GET /me` — the signed-in staff member and their restaurant **(added)**
-- `GET /orders?status=&table_id=` — order board initial load (active orders + server time)
+- `GET /orders?status=&table_id=` — order board initial load (active orders + server time). Only approved orders: a QR order the counter hasn't accepted is not the kitchen's problem
+- `GET /orders/pending` — the QR approval queue, oldest first, with lines and totals **(added, step 6)**
+- `POST /orders/:orderId/approve` — hand a queued order to the kitchen. Locks the row first, so two people accepting at once can't both win; the loser gets a 409 like any lost race. Publishes `order_created` — this is the moment the kitchen hears about it **(added, step 6)**
+- `POST /orders/:orderId/reject` — turn one away. Cancels it through the same path as any other cancellation (timeline, actor), and refuses anything that has already left the queue **(added, step 6)**
 - `GET /orders/recent` — served/cancelled orders, newest-finished first; default 4h, `?hours=` up to a week **(added)**
 - `GET /orders/:orderId` — lines, notes, totals and status timeline (who changed it, when) **(added)**
 - `PATCH /orders/:orderId/status` — validated against §5; 409 on an illegal or lost-race move
@@ -183,8 +190,10 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - Custom Server-Sent Events from Express — not Supabase Realtime, not websockets. Data flows
   one way (server → dashboard), and the server already knows about every change because it
   makes them.
-- Events in v1: `order_created`, `order_status_changed`. (`order_payment_updated` arrives
-  with payments.)
+- Events in v1: `qr_order_pending`, `order_created`, `order_status_changed`.
+  (`order_payment_updated` arrives with payments.) A QR order publishes `qr_order_pending` —
+  the POS approval queue, not the kitchen. `order_created` fires when staff approve it, or
+  immediately for a staff-placed POS order, and that is what the board listens for.
 - Broadcast via an in-memory connection map keyed by `restaurant_id`, inside the single
   Express instance. Multiple instances would need shared pub/sub (e.g. Redis) — a known
   limitation, not solved now.

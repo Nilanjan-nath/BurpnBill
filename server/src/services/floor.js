@@ -25,6 +25,9 @@ export async function getFloor(db, restaurantId) {
                 coalesce(sum(total_amount), 0)::numeric(12, 2) as unpaid_total
            from public.orders
           where table_id = t.id and paid_at is null and status != 'cancelled'
+            -- Not yet accepted, so not yet owed for. Occupancy above still
+            -- counts it: the guests are at the table either way.
+            and approved_at is not null
        ) b on true
       where t.restaurant_id = $1
       order by t.created_at`,

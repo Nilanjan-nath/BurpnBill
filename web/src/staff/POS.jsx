@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Search, Plus, Minus, X, ShoppingCart, Users, Clock, LayoutGrid, QrCode, ReceiptText } from 'lucide-react';
+import { Search, Plus, Minus, X, ShoppingCart, Users, Clock, LayoutGrid, QrCode, ReceiptText, Check, XCircle } from 'lucide-react';
 import { usePOS } from './usePOS.js';
 import { ageMinutes } from './age.js';
 import { formatMoney } from '../format.js';
 import { VegMark } from '../components/VegMark.jsx';
 import { CheckoutDialog } from './CheckoutDialog.jsx';
-import { tableUrl, useQrDataUrls } from './qr.js';
 
 // Free/occupied only communicate table status — see docs/design.md. A third
 // "pending" (amber) state is reserved there for later (e.g. bill requested)
@@ -61,6 +60,7 @@ export function POS({ token }) {
   const occupiedCount = pos.tables?.filter((t) => t.status === 'occupied').length ?? 0;
   const freeCount = pos.tables?.filter((t) => t.status === 'free').length ?? 0;
   const outstanding = Number(selectedTable?.unpaid_total ?? 0);
+  const pendingCount = pos.pending?.length ?? 0;
 
   if (pos.tables === null && pos.items === null) {
     return <p className="p-10 text-center text-sm font-semibold text-gray-700">Loading the floor…</p>;
@@ -84,9 +84,9 @@ export function POS({ token }) {
       <div className="flex w-80 flex-none flex-col overflow-hidden border-r border-gray-200 bg-white">
         <div className="flex flex-none gap-1 p-3">
           {[
-            { id: 'floor', label: 'Floor', Icon: LayoutGrid },
-            { id: 'qr', label: 'QR', Icon: QrCode },
-          ].map(({ id, label, Icon }) => (
+            { id: 'floor', label: 'Floor', Icon: LayoutGrid, count: 0 },
+            { id: 'qr', label: 'QR', Icon: QrCode, count: pendingCount },
+          ].map(({ id, label, Icon, count }) => (
             <button
               key={id}
               type="button"
@@ -98,6 +98,15 @@ export function POS({ token }) {
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
               {label}
+              {count > 0 && (
+                <span
+                  className={`rounded-full px-1.5 text-xs font-bold ${
+                    floorTab === id ? 'bg-white/25 text-white' : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -158,7 +167,7 @@ export function POS({ token }) {
             </div>
           </div>
         ) : (
-          <QrPanel tables={pos.tables ?? []} />
+          <PendingQueue pos={pos} />
         )}
       </div>
 
@@ -377,26 +386,82 @@ function OngoingOrders({ table }) {
   );
 }
 
-// The same QR codes the Tables tab prints, reachable without leaving the till
-// — for a table whose printed code has gone missing mid-service.
-function QrPanel({ tables }) {
-  const qrDataUrls = useQrDataUrls(tables);
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-      <div className="space-y-3">
-        {tables.map((t) => (
-          <div key={t.id} className="rounded-2xl border border-gray-200 p-3 text-center">
-            <div className="text-sm font-bold text-gray-900">{t.label}</div>
-            {qrDataUrls[t.id] ? (
-              <img src={qrDataUrls[t.id]} alt={`QR code for ${t.label}`} className="mx-auto mt-2 h-32 w-32" />
-            ) : (
-              <div className="mx-auto mt-2 h-32 w-32 animate-pulse rounded-lg bg-gray-100" />
-            )}
-            <p className="mt-2 break-all text-[11px] font-semibold text-gray-600">{tableUrl(t.qr_token)}</p>
-          </div>
-        ))}
-        {tables.length === 0 && <p className="text-sm font-semibold text-gray-700">No tables yet.</p>}
+// QR orders wait here for someone at the counter to accept them before the
+// kitchen ever sees them. Approve sends it through exactly as a staff-placed
+// order would go; Reject cancels it, recorded like any other cancellation.
+//
+// (The Tables tab still owns the printable QR *codes* — this tab is the queue
+// those codes feed, which is what the reference POS uses the slot for.)
+function PendingQueue({ pos }) {
+  if (pos.pending === null) {
+    return <p className="px-4 text-sm font-semibold text-gray-700">Loading…</p>;
+  }
+  if (pos.pending.length === 0) {
+    return (
+      <div className="px-4 pt-6 text-center">
+        <QrCode className="mx-auto h-10 w-10 text-gray-400" aria-hidden="true" />
+        <p className="mt-3 text-sm font-bold text-gray-800">No QR orders waiting</p>
+        <p className="mt-1 text-sm font-semibold text-gray-600">
+          Orders scanned at a table land here for approval before the kitchen sees them.
+        </p>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4">
+      {pos.pending.map((order) => (
+        <article key={order.id} className="rounded-2xl border-2 border-amber-300 bg-amber-50/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-sm font-bold text-gray-900">
+              {order.table.label}
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                QR order
+              </span>
+            </span>
+            <span className="flex flex-none items-center gap-1 text-[11px] font-semibold text-gray-600">
+              <Clock className="h-3 w-3" aria-hidden="true" /> {occupiedFor(order.placed_at)}
+            </span>
+          </div>
+
+          <ul className="mt-2 divide-y divide-amber-200 rounded-xl bg-white px-2.5">
+            {order.items.map((line, i) => (
+              <li key={`${order.id}-${i}`} className="flex items-baseline justify-between gap-2 py-1.5">
+                <span className="text-sm font-bold text-gray-900">
+                  {line.quantity}× {line.name}
+                  {line.special_instructions && (
+                    <span className="block text-xs font-semibold text-gray-600">{line.special_instructions}</span>
+                  )}
+                </span>
+                <span className="flex-none text-sm font-bold text-teal-700">{formatMoney(line.line_total)}</span>
+              </li>
+            ))}
+            <li className="flex items-baseline justify-between gap-2 py-1.5">
+              <span className="text-sm font-bold text-gray-900">Total</span>
+              <span className="text-sm font-bold text-gray-900">{formatMoney(order.total_amount)}</span>
+            </li>
+          </ul>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={pos.deciding === order.id}
+              onClick={() => pos.rejectOrder(order.id)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4" aria-hidden="true" /> Reject
+            </button>
+            <button
+              type="button"
+              disabled={pos.deciding === order.id}
+              onClick={() => pos.approveOrder(order.id)}
+              className="flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" aria-hidden="true" /> Approve &amp; send to kitchen
+            </button>
+          </div>
+        </article>
+      ))}
     </div>
   );
 }

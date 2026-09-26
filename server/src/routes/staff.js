@@ -7,6 +7,9 @@ import {
   updateOrderStatus,
   placeStaffOrder,
   publishBoardCard,
+  listPendingOrders,
+  approveOrder,
+  isPendingApproval,
 } from '../services/staffOrders.js';
 import { getFloor } from '../services/floor.js';
 import {
@@ -17,7 +20,7 @@ import {
   setItemAvailability,
 } from '../services/menuAdmin.js';
 import { listTables, createTable, getTableBill, checkoutTable } from '../services/tables.js';
-import { notFound } from '../errors.js';
+import { notFound, HttpError } from '../errors.js';
 import {
   parse,
   listOrdersQuery,
@@ -75,6 +78,44 @@ export function staffRoutes({ db, requireStaff, hub }) {
     res.write(': connected\n\n'); // an immediate frame, so the client can tell the stream is actually open
     hub.subscribe(req.staff.restaurantId, res);
   });
+  // QR order approval (step 6). Registered before /orders/:orderId, same reason
+  // as /recent and /stream — otherwise "pending" reads as an order id.
+  //
+  // staff AND owner on purpose: POS is owner-only today, but an order stuck
+  // waiting because the owner isn't at the till would be worse than the
+  // straight-to-kitchen behaviour this replaces. See TASKS.md.
+  router.get('/orders/pending', staff, async (req, res) => {
+    res.json(await listPendingOrders(db, req.staff.restaurantId));
+  });
+  router.post('/orders/:orderId/approve', staff, async (req, res) => {
+    const { orderId } = parse(orderIdParams, req.params);
+    const result = await approveOrder(db, req.staff.restaurantId, orderId, req.staff.userId);
+    if (result.outcome === 'not_found') throw notFound('Order not found');
+    if (result.outcome === 'already_approved') {
+      throw new HttpError(409, 'already_approved', 'That order was already sent to the kitchen — refresh to see the queue.');
+    }
+    if (result.outcome === 'not_pending') {
+      throw new HttpError(409, 'not_pending', `That order is already "${result.currentStatus}" — refresh to see the queue.`);
+    }
+    const order = await getOrderDetail(db, req.staff.restaurantId, orderId);
+    res.json({ order });
+    // Only now does the kitchen hear about it.
+    publishBoardCard(hub, db, req.staff.restaurantId, orderId, 'order_created');
+  });
+  // Turning an order away is a cancel, recorded like any other so Recent and the
+  // timeline show who did it. Guarded to orders still in the queue: cancelling
+  // something the kitchen has already started goes through the board's Cancel.
+  router.post('/orders/:orderId/reject', staff, async (req, res) => {
+    const { orderId } = parse(orderIdParams, req.params);
+    if (!(await isPendingApproval(db, req.staff.restaurantId, orderId))) {
+      throw notFound('Order not found');
+    }
+    const order = await updateOrderStatus(db, req.staff.restaurantId, orderId, 'cancelled', req.staff.userId);
+    if (!order) throw notFound('Order not found');
+    res.json({ order });
+    publishBoardCard(hub, db, req.staff.restaurantId, orderId, 'qr_order_pending');
+  });
+
   router.get('/orders/:orderId', staff, async (req, res) => {
     const { orderId } = parse(orderIdParams, req.params);
     const order = await getOrderDetail(db, req.staff.restaurantId, orderId);

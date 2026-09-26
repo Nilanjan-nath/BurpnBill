@@ -56,6 +56,9 @@ export async function listActiveOrders(db, restaurantId, { status, tableId } = {
         -- IN (not a CASE) lets the index on (restaurant_id, status, placed_at) use BOTH
         -- columns even with a reusable generic plan, so old served orders are never scanned.
         and o.status in ('placed', 'preparing', 'ready')
+        -- A QR order the counter hasn't accepted yet is not the kitchen's
+        -- problem: it waits in the POS approval queue (GET /orders/pending).
+        and o.approved_at is not null
         and ($2::text is null or o.status::text = $2::text)
         and ($3::uuid is null or o.table_id = $3::uuid)
       order by o.placed_at, o.order_number`,
@@ -323,7 +326,8 @@ export function placeStaffOrder(db, restaurantId, actorId, { table_id, items }) 
     );
 
     const { rows: orders } = await tx.query(
-      `insert into public.orders (restaurant_id, table_id, guest_session_id) values ($1, $2, $3) returning id`,
+      `insert into public.orders (restaurant_id, table_id, guest_session_id, approved_at)
+       values ($1, $2, $3, now()) returning id`,
       [restaurantId, table_id, sessions[0].id],
     );
     const orderId = orders[0].id;
@@ -347,4 +351,87 @@ export function placeStaffOrder(db, restaurantId, actorId, { table_id, items }) 
 
     return orderId;
   }, { actorId });
+}
+
+// --- QR order approval (step 6) ------------------------------------------------
+//
+// A QR order lands unapproved and waits here instead of going straight to the
+// kitchen, so the counter can accept it (a real table, a real order) or turn it
+// away. Staff-placed POS orders skip the queue entirely — see placeStaffOrder.
+
+// GET /orders/pending — the approval queue, oldest first. Same card shape the
+// board uses, plus the money, since accepting an order is partly a "is this
+// real?" decision and the total is the useful signal there.
+export async function listPendingOrders(db, restaurantId) {
+  const { rows } = await db.query(
+    `select o.id, o.order_number, o.status, o.total_amount, o.placed_at,
+            t.id as table_id, t.label as table_label,
+            coalesce(
+              (select json_agg(
+                        json_build_object(
+                          'name', oi.name_at_order,
+                          'quantity', oi.quantity,
+                          -- ::text so money matches the string form every
+                          -- other endpoint returns, not a JSON float.
+                          'price', oi.price_at_order::text,
+                          'line_total', oi.line_total::text,
+                          'special_instructions', oi.special_instructions
+                        )
+                        order by oi.name_at_order, oi.id)
+                 from public.order_items oi
+                where oi.order_id = o.id),
+              '[]'::json
+            ) as items
+       from public.orders o
+       join public.restaurant_tables t on t.id = o.table_id
+      where o.restaurant_id = $1
+        and o.approved_at is null
+        and o.status = 'placed'
+      order by o.placed_at, o.order_number`,
+    [restaurantId],
+  );
+
+  return {
+    server_time: new Date().toISOString(),
+    orders: rows.map(({ table_id, table_label, ...order }) => ({
+      ...order,
+      table: { id: table_id, label: table_label },
+    })),
+  };
+}
+
+// POST /orders/:id/approve — hand it to the kitchen. Locks the row first so two
+// people accepting at once can't both "win"; the loser gets the same 409 shape a
+// lost status race gets, because it means the same thing: your view is stale.
+// Approving does not touch `status` — the order was always 'placed', it just
+// wasn't visible yet — so the state machine and its trigger are untouched.
+export async function approveOrder(db, restaurantId, orderId, actorId) {
+  return db.withTransaction(
+    async (tx) => {
+      const { rows } = await tx.query(
+        `select approved_at, status from public.orders
+          where id = $1 and restaurant_id = $2 for update`,
+        [orderId, restaurantId],
+      );
+      if (!rows.length) return { outcome: 'not_found' };
+      if (rows[0].approved_at) return { outcome: 'already_approved' };
+      if (rows[0].status !== 'placed') return { outcome: 'not_pending', currentStatus: rows[0].status };
+
+      await tx.query(`update public.orders set approved_at = now() where id = $1`, [orderId]);
+      return { outcome: 'approved' };
+    },
+    { actorId },
+  );
+}
+
+// Whether an order is still waiting, so rejecting can't be used as a back door
+// to cancel something the kitchen has already started — that goes through the
+// normal Cancel on the board, which the state machine governs.
+export async function isPendingApproval(db, restaurantId, orderId) {
+  const { rows } = await db.query(
+    `select 1 from public.orders
+      where id = $1 and restaurant_id = $2 and approved_at is null and status = 'placed'`,
+    [orderId, restaurantId],
+  );
+  return rows.length > 0;
 }

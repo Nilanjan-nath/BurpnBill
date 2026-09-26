@@ -561,6 +561,45 @@ design.md's worked example for what was deliberately left out.*
       through the tooling here, so the print stylesheet is reasoned-about, not seen — worth one
       manual Print receipt before relying on it
 
+**Slice 3 follow-up 5 — QR order approval queue** — done
+*A QR order used to go straight to the kitchen board. It now waits at the counter until staff
+accept it, per the owner's reference POS.*
+- [x] **Migration `20260926120000_qr_order_approval.sql` — needs applying to Supabase.** Adds
+      `orders.approved_at` (nullable) and a partial index for the queue, and backfills every
+      existing order from its `placed_at` (they're all already cooking or paid for)
+- [x] **Modelled as a column, not a new `order_status` value.** A new enum member would mean
+      rewriting the status state-machine trigger everything depends on, on a live database, and
+      revisiting every `status in (...)` query. A nullable timestamp composes with that machine
+      instead of changing it: an order's status lifecycle is exactly what it was, it simply
+      isn't shown to the kitchen until accepted
+- [x] `GET /orders` (the board) filters on `approved_at is not null`; `POST /staff/orders`
+      (POS) sets it at creation — the person placing it is the person who'd approve it
+- [x] `GET /orders/pending`, `POST /orders/:id/approve`, `POST /orders/:id/reject`. Approve locks
+      the row first so two people accepting at once can't both win (409 to the loser, same shape
+      as a lost status race) and does **not** touch `status`. Reject cancels through the normal
+      `updateOrderStatus` path, so the timeline records who, and refuses anything that has
+      already left the queue — cancelling a cooking order still goes through the board
+- [x] SSE: a QR order now publishes `qr_order_pending` (the queue), and `order_created` fires on
+      approval — so the kitchen board hears about an order at the moment it becomes the
+      kitchen's problem, not before
+- [x] Money: an unapproved order is excluded from the table bill, the floor's running total, and
+      checkout — nobody owes for an order the counter hasn't accepted. Occupancy still counts it:
+      the guests are sitting there either way
+- [x] POS's **QR tab is now the queue** (with the waiting count on the tab), matching the
+      reference. The printable QR *codes* stay in the Tables tab where they already lived; the
+      short-lived QR-codes panel added in the previous slice is gone, and `staff/qr.js` remains
+      because TablesTab still uses it
+- [x] POS opens its own SSE connection for this, unlike Recent. An order sitting unnoticed in the
+      queue is the one failure this feature must not have, given it replaces straight-to-kitchen
+- [x] Tests: 121 server (was 115) + 57 web (was 55). Both suites' order helpers now approve
+      out-of-band so board tests stay about the board, with the queue covered by its own tests.
+      Mutation-checked five ways — board approval filter, reject's still-queued guard, POS orders
+      skipping the queue, the Approve button, and Reject calling the right endpoint — all caught
+- [ ] **Known gap, and the reason to look at roles soon:** the queue lives in POS, which is
+      owner-only, so today only the owner can accept a QR order — if they're not at the till,
+      orders wait. The API deliberately allows **staff** too, so surfacing the queue on the Board
+      (which staff can see) is a small follow-up and probably the next thing to do
+
 **Slice 4 — Dashboard home** — not started
 - [ ] `GET /dashboard/summary`: today's revenue (sum of non-cancelled orders' totals),
       active order count, table free/occupied counts — reuses the floor endpoint's data

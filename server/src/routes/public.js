@@ -55,7 +55,9 @@ export function publicRoutes({ db, config, requireGuestSession, hub }) {
     res.status(created ? 201 : 200).json({ order });
     // Only on a genuine creation — a retry/double-tap resolving to the SAME
     // already-existing order must never make it flash onto the board twice.
-    if (created) publishBoardCard(hub, db, req.guest.restaurantId, order.id, 'order_created');
+    // Not 'order_created': the kitchen board must not show this until staff
+    // accept it. Approving publishes order_created — see approveOrder.
+    if (created) publishBoardCard(hub, db, req.guest.restaurantId, order.id, 'qr_order_pending');
   });
 
   // Read-only summary of this guest session's orders, to show at the counter.

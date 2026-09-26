@@ -51,6 +51,8 @@ export async function getTableBill(db, restaurantId, tableId) {
       `select id, order_number, status, subtotal, tax_amount, total_amount, placed_at
          from public.orders
         where table_id = $1 and restaurant_id = $2 and paid_at is null and status != 'cancelled'
+          -- Nobody owes for an order the counter hasn't accepted yet.
+          and approved_at is not null
         order by placed_at, order_number`,
       [tableId, restaurantId],
     ),
@@ -60,7 +62,7 @@ export async function getTableBill(db, restaurantId, tableId) {
          from public.order_items oi
          join public.orders o on o.id = oi.order_id
         where o.table_id = $1 and o.restaurant_id = $2
-          and o.paid_at is null and o.status != 'cancelled'
+          and o.paid_at is null and o.status != 'cancelled' and o.approved_at is not null
         order by oi.name_at_order, oi.id`,
       [tableId, restaurantId],
     ),
@@ -119,6 +121,7 @@ export async function checkoutTable(db, restaurantId, tableId, { method, idempot
   const { rows: orders } = await db.query(
     `select id, total_amount from public.orders
       where table_id = $1 and restaurant_id = $2 and paid_at is null and status != 'cancelled'
+        and approved_at is not null
       order by placed_at
       for update`,
     [tableId, restaurantId],

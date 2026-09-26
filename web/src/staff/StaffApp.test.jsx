@@ -55,7 +55,19 @@ async function place(table, itemName, note) {
   await api('POST', '/api/cart/items', { session, body: { menu_item_id: item.id, quantity: 1, special_instructions: note } });
   const cart = (await api('GET', '/api/cart', { session })).body;
   const res = await api('POST', '/api/orders', { session, body: { cart_id: cart.cart_id } });
+  // A QR order now waits in POS's approval queue before the kitchen sees it.
+  // Board/Recent tests are about the board, so approve out-of-band and keep
+  // this helper meaning "an order the kitchen can see". The queue's own
+  // behaviour has its own tests below.
+  await sql('update orders set approved_at = now() where id = $1', [res.body.order.id]);
   return res.body.order;
+}
+
+// The same order, left waiting in the approval queue.
+async function placeUnapproved(table, itemName, note) {
+  const order = await place(table, itemName, note);
+  await sql('update orders set approved_at = null where id = $1', [order.id]);
+  return order;
 }
 
 // A fake Supabase Auth client: same shape as the real supabase-js client
@@ -238,7 +250,11 @@ describe('going live', () => {
     await screen.findByText('Live');
     document.title = 'Petuk staff — Order board';
 
-    const order = await place('T3', 'Masala Chai'); // arrives as a live order_created push, not the initial load
+    // A QR order reaches the kitchen only when staff accept it, so THAT is what
+    // pushes order_created live — place it in the queue, then approve through
+    // the real API so the server publishes exactly as it would in service.
+    const order = await placeUnapproved('T3', 'Masala Chai');
+    await approveViaApi(order.id);
     await screen.findByText(`#${order.order_number}`);
 
     await waitFor(() => expect(document.title).toMatch(/^\(1\) New order/));
@@ -304,6 +320,14 @@ describe('going live', () => {
     await waitFor(() => expect(screen.getByText(`#${order.order_number}`)).toBeInTheDocument());
   });
 });
+
+async function approveViaApi(orderId, as = STAFF_USER) {
+  const res = await realFetch(`${base}/api/orders/${orderId}/approve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer valid-${as}` },
+  });
+  expect(res.status).toBe(200);
+}
 
 async function moveViaApi(orderId, status, as = STAFF_USER) {
   const res = await realFetch(`${base}/api/orders/${orderId}/status`, {
@@ -719,6 +743,52 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     });
     expect(await screen.findByText(/unpaid orders? on this table/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Bill & checkout/ })).toBeInTheDocument();
+  });
+
+  test('a QR order waits in the QR tab and only reaches the kitchen once approved', async () => {
+    const user = userEvent.setup();
+    const order = await placeUnapproved('T2', 'Masala Chai', 'less sugar');
+    await openPOS(user);
+
+    // The waiting count is on the tab itself, so it's visible from the floor.
+    const qrTab = await screen.findByRole('button', { name: /QR/ });
+    await waitFor(() => expect(qrTab).toHaveTextContent('1'));
+
+    await user.click(qrTab);
+    const card = (await screen.findByText('QR order')).closest('article');
+    expect(within(card).getByText('T2')).toBeInTheDocument();
+    expect(within(card).getByText(/1× Masala Chai/)).toBeInTheDocument();
+    expect(within(card).getByText('less sugar')).toBeInTheDocument();
+
+    // Not on the kitchen board yet.
+    await user.click(screen.getByRole('button', { name: 'Board' }));
+    expect(screen.queryByText(`#${order.order_number}`)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'POS' }));
+    await user.click(await screen.findByRole('button', { name: /QR/ }));
+    await user.click(await screen.findByRole('button', { name: /Approve & send to kitchen/ }));
+
+    // It leaves the queue and turns up on the board like any other order.
+    await waitFor(() => expect(screen.queryByText('QR order')).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Board' }));
+    expect(await screen.findByText(`#${order.order_number}`)).toBeInTheDocument();
+  });
+
+  test('rejecting a QR order cancels it instead of sending it to the kitchen', async () => {
+    const user = userEvent.setup();
+    const order = await placeUnapproved('T3', 'Filter Coffee');
+    await openPOS(user);
+
+    await user.click(await screen.findByRole('button', { name: /QR/ }));
+    await user.click(await screen.findByRole('button', { name: /Reject/ }));
+
+    await waitFor(() => expect(screen.queryByText('QR order')).not.toBeInTheDocument());
+
+    const [row] = await sql('select status from orders where id = $1', [order.id]);
+    expect(row.status).toBe('cancelled');
+
+    await user.click(screen.getByRole('button', { name: 'Board' }));
+    expect(screen.queryByText(`#${order.order_number}`)).not.toBeInTheDocument();
   });
 
   test('a table that ordered twice checks out as one merged bill, grouped by round', async () => {

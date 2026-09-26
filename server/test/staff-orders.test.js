@@ -87,6 +87,12 @@ async function place(table, items, restaurantId = RESTAURANT_ID) {
   const cart = (await call('GET', '/api/cart', { session })).body;
   const res = await call('POST', '/api/orders', { session, body: { cart_id: cart.cart_id } });
   assert.equal(res.status, 201);
+  // A QR order now waits for staff to accept it before the kitchen sees it.
+  // These tests are about the board itself, so approve out-of-band and keep
+  // the helper meaning "an order the kitchen can see". The queue's own
+  // behaviour is covered by its own tests, including that an unapproved order
+  // stays off the board (below).
+  await db.query('update orders set approved_at = now() where id = $1', [res.body.order.id]);
   return res.body.order;
 }
 
@@ -486,4 +492,95 @@ test('a made-up id, another café\'s order, and a malformed id', async () => {
   assert.equal((await moveStatus(STAFF, 'not-a-uuid', 'preparing')).status, 400);
   assert.equal((await moveStatus(OWNER, theirs.id, 'preparing')).status, 404, "another café's order is 404, not 403 or 409");
   assert.equal((await moveStatus(OTHER_CAFE_STAFF, mine.id, 'preparing')).status, 404);
+});
+
+// --- QR order approval queue (step 6) -----------------------------------------
+//
+// A QR order waits at the counter before the kitchen ever sees it. `place()`
+// above approves out-of-band precisely so these are the only tests that
+// exercise the queue itself.
+
+const placeUnapproved = async (table, items) => {
+  const order = await place(table, items);
+  await db.query('update orders set approved_at = null where id = $1', [order.id]);
+  return order;
+};
+const pending = (as) => call('GET', '/api/orders/pending', { as });
+const approve = (as, id) => call('POST', `/api/orders/${id}/approve`, { as });
+const reject = (as, id) => call('POST', `/api/orders/${id}/reject`, { as });
+
+test('a QR order waits in the queue and stays off the kitchen board until approved', async () => {
+  const order = await placeUnapproved('T1', [{ name: 'Masala Chai', quantity: 2, note: 'less sugar' }]);
+
+  assert.ok(!numbers(await list(OWNER)).includes(order.order_number), 'the kitchen must not see it yet');
+
+  const queue = await pending(OWNER);
+  assert.equal(queue.status, 200);
+  const queued = queue.body.orders.find((o) => o.id === order.id);
+  assert.ok(queued, 'it is waiting in the approval queue');
+  assert.equal(queued.table.label, 'T1');
+  assert.equal(queued.total_amount, '60.00');
+  assert.deepEqual(queued.items, [
+    { name: 'Masala Chai', quantity: 2, price: '30.00', line_total: '60.00', special_instructions: 'less sugar' },
+  ]);
+
+  assert.equal((await approve(OWNER, order.id)).status, 200);
+  assert.ok(numbers(await list(OWNER)).includes(order.order_number), 'approving hands it to the kitchen');
+  assert.ok(!(await pending(OWNER)).body.orders.some((o) => o.id === order.id), 'and it leaves the queue');
+});
+
+test('a staff-placed POS order never enters the queue — the person placing it is the approver', async () => {
+  const { rows } = await db.query('select id from restaurant_tables where label = $1 and restaurant_id = $2', ['T2', RESTAURANT_ID]);
+  const { rows: item } = await db.query('select id from menu_items where name = $1 and restaurant_id = $2', ['Masala Chai', RESTAURANT_ID]);
+  const res = await call('POST', '/api/staff/orders', {
+    as: OWNER,
+    body: { table_id: rows[0].id, items: [{ menu_item_id: item[0].id, quantity: 1 }] },
+  });
+  assert.equal(res.status, 201);
+
+  assert.ok(!(await pending(OWNER)).body.orders.some((o) => o.id === res.body.order.id));
+  assert.ok(numbers(await list(OWNER)).includes(res.body.order.order_number), 'it goes straight to the kitchen');
+});
+
+test('rejecting a queued order cancels it, records who, and keeps it off the board', async () => {
+  const order = await placeUnapproved('T3', [{ name: 'Masala Chai' }]);
+
+  assert.equal((await reject(STAFF, order.id)).status, 200);
+
+  assert.ok(!(await pending(OWNER)).body.orders.some((o) => o.id === order.id), 'it leaves the queue');
+  assert.ok(!numbers(await list(OWNER)).includes(order.order_number), 'and never reaches the kitchen');
+
+  const { rows } = await db.query('select status from orders where id = $1', [order.id]);
+  assert.equal(rows[0].status, 'cancelled');
+
+  const detail = await call('GET', `/api/orders/${order.id}`, { as: OWNER });
+  const last = detail.body.order.timeline.at(-1);
+  assert.equal(last.to_status, 'cancelled');
+  assert.equal(last.changed_by, 'Ravi', 'the timeline records who turned it away');
+});
+
+test('approving twice is a 409, not a silent no-op; a made-up id is 404', async () => {
+  const order = await placeUnapproved('T4', [{ name: 'Masala Chai' }]);
+
+  assert.equal((await approve(OWNER, order.id)).status, 200);
+  assert.equal((await approve(OWNER, order.id)).status, 409, 'the second person to tap Approve is told their view is stale');
+  assert.equal((await approve(OWNER, '99999999-9999-4999-8999-999999999999')).status, 404);
+});
+
+test('reject is only for the queue — an order the kitchen has already started is not rejectable', async () => {
+  const order = await place('T1', [{ name: 'Masala Chai' }]); // approved by the helper
+  await setStatus(order.id, 'preparing');
+
+  assert.equal((await reject(OWNER, order.id)).status, 404, 'cancelling that goes through the board, not the queue');
+
+  const { rows } = await db.query('select status from orders where id = $1', [order.id]);
+  assert.equal(rows[0].status, 'preparing', 'and nothing was changed');
+});
+
+test('the queue is café-scoped, and needs a signed-in staff member', async () => {
+  assert.equal((await call('GET', '/api/orders/pending')).status, 401);
+  const order = await placeUnapproved('T1', [{ name: 'Masala Chai' }]);
+  const theirs = await pending(OTHER_CAFE_STAFF);
+  assert.ok(!theirs.body.orders.some((o) => o.id === order.id));
+  assert.equal((await approve(OTHER_CAFE_STAFF, order.id)).status, 404);
 });
