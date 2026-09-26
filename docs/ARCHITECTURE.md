@@ -203,7 +203,11 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   are written up in `docs/design.md`, meant to apply to every tab over time, not just POS. Both
   Tailwind and lucide-react are scoped to the `/staff` lazy chunk only (imported from
   `staff/tailwind.css`, itself only reachable via `StaffApp.jsx`), verified with a production
-  build to never reach the customer bundle. The rest of the staff
+  build to never reach the customer bundle. The reverse direction is **not** automatic, and bit
+  us: `styles.css` loads on every route (it's imported by `main.jsx`), so its global element
+  rules also apply to `/staff`. They live in `@layer petuk-customer` for that reason — unlayered
+  CSS outranks anything in a cascade layer, and Tailwind v4 puts all its utilities in one, so
+  left unlayered the customer reset silently won over every dashboard utility **(added, step 6)** The rest of the staff
   dashboard (Board/Recent/Menu/Tables) still uses the older plain-CSS dark theme, scoped to
   `.staff-legacy` — a known, temporary visual seam until those pages are migrated too
 - **Package manager**: npm

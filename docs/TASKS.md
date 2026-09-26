@@ -435,6 +435,57 @@ content-routing decisions are what survived)
       output, confirming the teal accent, stronger red/green cards, Floor heading, Checkout
       button and veg dots all render as intended
 
+**Slice 3 follow-up 2 — readability fix + reference pass** — done
+- [x] **A real bug, found by the owner on a Mac: most of the dashboard's text was invisible.**
+      Same build — fine on Windows, unreadable in both Safari and Brave on macOS. Took three
+      diagnoses; the first two were wrong and are recorded here so nobody re-runs them:
+      (1) Tailwind v4's oklch palette rendering differently on macOS — disproved by pinning
+      every colour to explicit sRGB hex and seeing zero change; reverted rather than left in as
+      a cargo-culted no-op. (2) macOS grayscale antialiasing rendering text thinner than
+      Windows' ClearType — plausible, but it doesn't explain faint *icons* or serif headings.
+      **Real cause: a cascade-layer conflict.** `web/src/styles.css` is the customer app's
+      stylesheet but `main.jsx` loads it on every route including `/staff`, and its global
+      element resets were unlayered. Unlayered CSS outranks anything in a cascade layer
+      regardless of specificity, and Tailwind v4 puts every utility in one — so
+      `button { color: inherit }` beat every `text-*` class on the dashboard and each button
+      inherited the *customer* palette's body colour, which is near-white under
+      `prefers-color-scheme: dark`. The owner's Mac is in dark mode; the Windows machine was
+      in light mode. That's the entire OS difference. `h1, h2 { font: … Fraunces }` beat the
+      heading utilities the same way, which is why page titles rendered serif
+- [x] Fix: those element rules now live in `@layer petuk-customer` — a no-op for the customer
+      app (nothing there is layered) that lets the dashboard's utilities win. Class rules in
+      that file stay unlayered deliberately, since `.veg-mark` is shared with the dashboard.
+      Plus `.staff-app :is(h1,h2,h3) { font-family: inherit }` in `tailwind.css`, because
+      Tailwind has no font-family utility on headings to override Fraunces with
+- [x] Reproduced the bug first and verified the fix after, both in the browser with
+      `prefers-color-scheme: dark` emulated and both real compiled stylesheets loaded in the
+      app's own order — invisible nav + serif headings before, correct after, and the customer
+      app confirmed unchanged in light and dark
+- [x] design.md updated: `text-gray-500` is now the lightest text allowed (and only on a tinted
+      background), `font-semibold` is the floor weight for small or gray text, and the cascade
+      trap is written up with the rule "global element styles in styles.css go in that layer"
+- [x] Sidebar/header/POS rebuilt against a second owner reference ("DineFlow"), per design.md's
+      "structure, not screenshots" rule — solid-filled active nav, brand monogram, floor count
+      strip, table cards showing the live order number + how long it's been occupied, item-card
+      monograms, filled cart header, boxed total. Deliberately **not** taken: its blue, its
+      per-category card tints, and its features Petuk doesn't have (Waitlist, Merge Tables,
+      Clock In, take-away, priority, VIP, itemised bill, Inventory/Customers/Reports) — drawing
+      UI for features that don't exist would fake capability. The full take/don't-take record is
+      in design.md
+- [x] Tests: all 54 web tests pass. Two needed updating, both for the same deliberate copy
+      change (the cart's empty state became a bold line + a supporting line instead of one
+      sentence); the assertion still discriminates the same state. Mutation-checked that the
+      updated assertion isn't vacuous — broke `selectTable`'s cart reset in `usePOS.js`, confirmed
+      "switching tables discards the in-progress cart" fails, reverted
+- [x] Live-checked with the usual throwaway static page against the real compiled Tailwind
+      output (deleted after, never committed) — full sign-in still needs the owner's password
+- [ ] **Still to do**: the floor cards show order number + age but not the table's running
+      total (the reference does). `GET /floor` doesn't select `orders.total` yet — a one-line
+      SQL change plus a test, deliberately not bundled into a UI-only change
+- [ ] **Still open, and now more visible**: Board/Recent/Menu/Tables and the two placeholders are
+      still the old dark theme, so the contrast fix and this whole visual language stop at the
+      chrome. Migrating them is the obvious next design task
+
 **Slice 4 — Dashboard home** — not started
 - [ ] `GET /dashboard/summary`: today's revenue (sum of non-cancelled orders' totals),
       active order count, table free/occupied counts — reuses the floor endpoint's data

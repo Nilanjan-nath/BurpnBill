@@ -54,24 +54,40 @@
   }
 }
 
-* { box-sizing: border-box; }
+/* These bare-element rules sit in a cascade layer on purpose. main.jsx imports
+   this file for every route, including /staff — which is styled with Tailwind
+   instead (see ARCHITECTURE.md §8). Unlayered CSS outranks anything inside a
+   layer no matter the specificity, and Tailwind v4 puts every utility in one,
+   so while these were unlayered they quietly beat the dashboard's own
+   `text-*`/`font-*` classes: `button { color: inherit }` made every button
+   there inherit THIS palette's body colour — near-white under
+   `prefers-color-scheme: dark` — so the sidebar was unreadable on a Mac in
+   dark mode while looking correct on a light-mode machine, and `h1, h2`'s
+   font shorthand overrode the dashboard's heading sizes with Fraunces.
+   Nothing in the customer app is layered, so this changes nothing here; it
+   only stops these leaking into a design system that isn't theirs. The
+   class-based rules below stay unlayered deliberately — `.veg-mark` is shared
+   with the dashboard on purpose. */
+@layer petuk-customer {
+  * { box-sizing: border-box; }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.5 var(--font-body);
-  -webkit-text-size-adjust: 100%;
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 var(--font-body);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  h1, h2, p { margin: 0; }
+  h1 { font: 600 1.6rem/1.18 var(--font-display); letter-spacing: -0.01em; }
+  h2 { font: 600 1.1rem/1.3 var(--font-display); }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease, opacity 0.12s ease; }
+  button:disabled { cursor: not-allowed; opacity: 0.55; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 }
-
-h1, h2, p { margin: 0; }
-h1 { font: 600 1.6rem/1.18 var(--font-display); letter-spacing: -0.01em; }
-h2 { font: 600 1.1rem/1.3 var(--font-display); }
-button, input, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease, opacity 0.12s ease; }
-button:disabled { cursor: not-allowed; opacity: 0.55; }
-button:active:not(:disabled) { transform: scale(0.97); }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
 .app { max-width: 640px; margin: 0 auto; min-height: 100dvh; }
 .muted { color: var(--muted); }

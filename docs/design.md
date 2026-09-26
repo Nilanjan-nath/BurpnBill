@@ -27,22 +27,72 @@ screenshot's blue happens to be what we'd have picked anyway, fine — but the p
 chosen to read as our own, not as a copy. When in doubt, ask "would this look the same if I'd
 never seen the reference?" — if not, change it.
 
+### Worked example: the "DineFlow" POS reference
+
+The owner brought a second reference (a POS called DineFlow) and asked for Petuk to look like
+it. What that turned into, as a record of how this rule gets applied in practice:
+
+**Taken** (structure and emphasis): a solid-filled active nav item; a brand monogram beside the
+wordmark; an at-a-glance count strip over the floor map ("2 Occupied / 4 Free"); richer table
+cards that show the live order, not just a status word; two-letter monograms on item cards; a
+filled header bar on the cart panel; a boxed total above the CTA; and — most importantly —
+much heavier type and stronger contrast throughout.
+
+**Not taken**: its blue (we keep teal, for the reason above); its per-category pastel item-card
+tints (see "what color is *not* for"); and every feature Petuk doesn't have — Waitlist, Merge
+Tables, Clock In, Dine-in/Take-away, order priority, VIP flags, an itemised bill screen,
+Inventory/Customers/Reports nav. Drawing UI for features that don't exist would be faking
+capability, which is worse than looking plainer.
+
 ## Color
 
 **Base** — white/off-white, not brand-colored:
 - Page background: `bg-gray-50`
 - Cards/panels/sidebar/header: `bg-white`
-- Borders: `border-gray-200`
-- Text: `text-gray-900` (headings/primary), `text-gray-500` (secondary/muted), `text-gray-400`
-  (tertiary — category labels, placeholders)
+- Borders: `border-gray-200` (`border-gray-300` where a control needs to read as a control —
+  outlined buttons, inputs)
+- Text: `text-gray-900` (headings/primary), `text-gray-700` (secondary), `text-gray-600`
+  (tertiary — category labels, timestamps). **`text-gray-500` is the lightest text allowed,
+  and only on a tinted/filled background, never small gray-on-white.** `text-gray-400` is for
+  icons only, never text.
 
-**One primary accent — teal**, used sparingly for the single most important thing per screen
-(the active nav item, the primary CTA, a selected state):
-- Solid: `bg-teal-600` / `text-white` (the "Send to kitchen" button, in a
-  `from-teal-600 to-cyan-600` gradient)
-- Soft: `bg-teal-50 text-teal-700` (active sidebar item, selected table's badge, category
-  filter's active pill uses the solid version instead — see POS.jsx for both patterns in
-  context)
+**Why the floor is set there**: the first version of this system used
+`text-gray-500`/`text-gray-400` at `font-medium` for everything secondary, which is thin enough
+that it has no margin for error. It isn't what actually broke (see the cascade note below), but
+it's why the breakage was total rather than merely ugly — there was nothing left to read once
+anything went wrong. Pick colors that still work when something else is fighting you.
+
+### The cascade bug that made the dashboard unreadable
+
+Worth knowing about, because it will happen again to anyone adding CSS here. The owner reported
+the whole sidebar as invisible on a Mac while the same build looked correct on Windows. Two
+wrong diagnoses came first (Tailwind v4's oklch palette; then macOS font antialiasing). The
+actual cause:
+
+`web/src/styles.css` is the **customer** app's stylesheet, but `main.jsx` imports it for every
+route, so it also loads on `/staff`. Its global element resets were **unlayered**, and
+unlayered CSS outranks anything inside a cascade layer *regardless of specificity* — and
+Tailwind v4 puts every utility in one. So `button, input, textarea { color: inherit }` silently
+beat every `text-*` class in this dashboard, and each button inherited the customer palette's
+`body` color. Under `prefers-color-scheme: dark` that color is near-white — hence near-white
+text on the dashboard's white panels, on a Mac in dark mode, and no problem at all on a machine
+in light mode. `h1, h2 { font: … var(--font-display) }` beat the heading utilities the same way,
+which is why page titles rendered in Fraunces.
+
+The fix was to wrap those element rules in `@layer petuk-customer` (a no-op for the customer
+app, which has no layered CSS of its own) so the dashboard's utilities win. **If you add global
+element styles to `styles.css`, put them in that layer**, or they will leak into a design system
+that isn't theirs. Class-based rules there stay unlayered on purpose — `.veg-mark` is shared
+with this dashboard deliberately.
+
+**One primary accent — teal**, used for the single most important thing per screen (the active
+nav item, the primary CTA, the selected table, the cart panel's header):
+- Solid: `bg-teal-600` / `text-white` — the active sidebar item, the active category pill, the
+  selected table card, the cart header bar, and the "Send to kitchen" CTA (that one in a
+  `from-teal-600 to-cyan-600` gradient). **Selection and "you are here" are always a solid
+  fill, not a tint** — a soft `bg-teal-50` active state was too weak to answer "which tab am I
+  on?" at a glance.
+- Soft: `bg-teal-50 text-teal-700` — supporting accents only: the item-card monogram, a price.
 
 Why teal and not blue: the reference screenshots we looked at (and most competitor POS
 products) lean on blue as their primary color. Teal reads as premium and calm the same way,
@@ -75,11 +125,19 @@ elevation (shadow) or the veg dot, not a new color.
 System sans throughout (Tailwind's default stack) — no display/serif font here, unlike the
 customer app's Fraunces. This is a work tool, not a brand moment; hierarchy comes from weight
 and size, not typeface:
-- Page/section titles: `text-lg font-semibold text-gray-900`
-- Card titles: `text-sm font-semibold text-gray-900`
-- Secondary text: `text-sm text-gray-500` or `text-xs text-gray-400`
-- Never more than two weights on one screen (`font-medium` / `font-semibold` — regular and
-  bold both exist but stay unused so the hierarchy stays simple)
+- Page titles: `text-2xl font-bold text-gray-900`
+- Section/panel titles: `text-base font-bold text-gray-900`
+- Card titles and item names: `text-sm font-bold text-gray-900`
+- Secondary text: `text-xs font-semibold text-gray-600` / `text-sm font-semibold text-gray-700`
+- Money and counts: `font-bold` — these are the numbers someone is actually reading under time
+  pressure, so they get the most weight on the card
+- **`font-semibold` (600) is the floor for anything small or gray**; `font-medium` and
+  `font-normal` are effectively unused here. Two weights per screen is still the goal, they're
+  just `font-semibold` and `font-bold` now rather than `font-medium` and `font-semibold`.
+- Headings inherit the sans stack via a `.staff-app :is(h1, h2, h3) { font-family: inherit }`
+  rule in `tailwind.css` — the customer stylesheet sets Fraunces on `h1`/`h2` and Tailwind has
+  no font-family utility on those elements to override it with. Don't remove that rule without
+  checking a page title first.
 
 ## Shape, elevation, spacing
 
@@ -93,16 +151,25 @@ and size, not typeface:
 
 ## Layout pattern
 
-- **Sidebar**: fixed width (`w-60`), brand mark at top, vertical nav (icon + label, active =
-  filled `bg-teal-50 text-teal-700` rounded background), identity card pinned to the bottom.
-  Doesn't yet collapse for narrow screens — a known gap, not solved yet (this dashboard has
-  been tablet/desktop-first since step 4)
-- **Header**: page title (changes per tab) + live-connection status on the left, primary
-  actions (sign out, sound toggle) on the right
+- **Sidebar**: fixed width (`w-64`), a brand mark at top (teal rounded-square monogram + the
+  wordmark), vertical nav (icon + label, active = solid `bg-teal-600 text-white`), identity
+  card pinned to the bottom in its own `bg-gray-50 rounded-2xl` block. Doesn't yet collapse for
+  narrow screens — a known gap, not solved yet (this dashboard has been tablet/desktop-first
+  since step 4)
+- **Header**: page title (changes per tab) + live-connection status as a pill on the left,
+  actions on the right as outlined buttons (`border-gray-300`, icon + label) rather than bare
+  text links — a bare underlined link was another casualty of the contrast problem above
 - **Content**: a grid of cards for anything list-like (tables, menu items), each with a status
-  badge/price and a clear single primary action
-- **Contextual side panel** (POS's cart is the first example): tabs or a clear empty state,
-  a running total, one prominent CTA pinned to the bottom — never buried in a scrolling list
+  badge/price and a clear single primary action. Item cards carry a two-letter monogram
+  (`bg-teal-50 text-teal-700`) as a scanning aid — one consistent treatment for every item,
+  *not* a per-category color, which would be exactly the decoration the color rules rule out
+- **Status-bearing cards** (the floor map) show the underlying record, not just a badge: order
+  number and how long the table's been occupied, so the panel answers "what's going on" without
+  opening anything
+- **Contextual side panel** (POS's cart is the first example): a filled accent header bar, a
+  clear empty state (icon + bold line + supporting line), a running total in its own boxed
+  `bg-gray-100` row, and one prominent CTA pinned to the bottom — never buried in a scrolling
+  list
 
 ## Icons
 

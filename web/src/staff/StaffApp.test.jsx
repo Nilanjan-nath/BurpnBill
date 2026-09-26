@@ -637,7 +637,7 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     // The cart clears and the table now shows occupied on the floor map.
     // (Two "T3"s on screen now: the floor card, and the still-selected
     // cart header badge — the floor card renders first in DOM order.)
-    await waitFor(() => expect(screen.queryByText('No items yet — tap a menu item to add it.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('No items yet')).toBeInTheDocument());
     const t3Card = screen.getAllByText('T3')[0].closest('button');
     await waitFor(() => expect(within(t3Card).getByText('occupied')).toBeInTheDocument());
 
@@ -662,10 +662,10 @@ describe('the POS tab (step 7 slices 2-3)', () => {
 
     await user.click((await screen.findByText('T4')).closest('button'));
     await user.click((await screen.findByText('Filter Coffee')).closest('button'));
-    await waitFor(() => expect(screen.queryByText('No items yet — tap a menu item to add it.')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('No items yet')).not.toBeInTheDocument());
 
     await user.click(screen.getByText('T1').closest('button'));
-    expect(await screen.findByText('No items yet — tap a menu item to add it.')).toBeInTheDocument();
+    expect(await screen.findByText('No items yet')).toBeInTheDocument();
   });
 
   test('the "Send to kitchen" button is disabled with no table selected or an empty cart', async () => {

@@ -2,3 +2,14 @@
    /staff chunk only — same scoping as staff.css. Default Tailwind, no
    config file: no custom theme, no custom colors, per the design brief. */
 @import "tailwindcss";
+
+/* The customer stylesheet gives h1/h2 the Fraunces display face; this
+   dashboard is system-sans throughout (docs/design.md). Tailwind has no
+   font-family utility on those headings to override it with, so reset the
+   family once for the whole subtree instead of remembering `font-sans` on
+   every heading someone adds later. Deliberately family-only and unlayered:
+   `font: inherit` here would also clobber the `text-*`/`font-bold` utilities,
+   since unlayered rules outrank layered ones. */
+.staff-app :is(h1, h2, h3) {
+  font-family: inherit;
+}
