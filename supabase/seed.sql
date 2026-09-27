@@ -7,10 +7,17 @@ insert into public.restaurants (id, name, slug, currency_code)
 values ('11111111-1111-1111-1111-111111111111', 'Chai Point Cafe', 'chai-point', 'INR')
 on conflict (id) do nothing;
 
-insert into public.restaurant_tables (restaurant_id, label, seats)
-select '11111111-1111-1111-1111-111111111111', label, seats
-from (values ('T1', 2), ('T2', 4), ('T3', 4), ('T4', 6)) as t(label, seats)
-on conflict (restaurant_id, label) do nothing;
+-- Laid out as two rows of two on the floor-plan grid, so a fresh clone opens
+-- onto an arranged room rather than four unplaced tables. Cells, not pixels.
+insert into public.restaurant_tables (restaurant_id, label, seats, pos_x, pos_y)
+select '11111111-1111-1111-1111-111111111111', label, seats, pos_x, pos_y
+from (values
+  ('T1', 2, 0, 0), ('T2', 4, 1, 0),
+  ('T3', 4, 0, 1), ('T4', 6, 1, 1)
+) as t(label, seats, pos_x, pos_y)
+-- Matches restaurant_tables_label_live_unique, which is partial (live rows
+-- only), so the predicate has to be spelled out for the inference to work.
+on conflict (restaurant_id, label) where deleted_at is null do nothing;
 
 insert into public.menu_categories (restaurant_id, name, display_order)
 select '11111111-1111-1111-1111-111111111111', name, display_order

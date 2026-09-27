@@ -14,12 +14,79 @@ production build.
 
 **Migrated to this system:** the sidebar (`Sidebar.jsx`), the shared header (`Board.jsx`), POS
 (`POS.jsx`), Staff (`StaffTab.jsx`), the order board (`ActiveColumns.jsx` / `OrderCard.jsx`),
-the order detail drawer (`OrderDetailDrawer.jsx`), the Dashboard (`DashboardHome.jsx`) and the
-Menu (`MenuTab.jsx` / `ItemForm.jsx` / `CategoryForm.jsx`).
+the order detail drawer (`OrderDetailDrawer.jsx`), the Dashboard (`DashboardHome.jsx`),
+the Menu (`MenuTab.jsx` / `ItemForm.jsx` / `CategoryForm.jsx`) and Settings
+(`SettingsTab.jsx` / `RestaurantProfile.jsx` / `SeatingPlan.jsx` / `UserAccount.jsx`).
 **Not yet migrated** — still the older plain-CSS dark theme (`staff.css`, scoped to
-`.staff-legacy`): Recent and Tables. A known, temporary seam, not a design decision.
-`Board.jsx` decides which tabs get `.staff-legacy`; take a tab out of that list when you
-migrate it.
+`.staff-legacy`): Recent, and that is now the only one. A known, temporary seam, not a design
+decision. `Board.jsx` decides which tabs get `.staff-legacy`; take a tab out of that list when
+you migrate it.
+
+### Settings
+
+Three views behind one tab, and the split is the point: **Restaurant Profile** and **Seating
+Plan** are the café's, so they are the owner's; **User Account** is your own name and password,
+which every role needs and none should have to ask the owner for. A kitchen login therefore
+opens straight onto User Account — and gets **no tab strip at all**, rather than tabs it can't
+use. A disabled control you can see is an invitation to ask why.
+
+- Each view is a **card with its own header strip** (`bg-gray-50`, title + one line saying what
+  it's for) and its actions pinned to a footer strip of the same colour. Settings is read far
+  more often than it is changed, so the save lives at the end of the thing it saves rather than
+  floating over it
+- **Save is disabled until something actually changed**, and a `Saved` tick appears beside it
+  afterwards. Without the tick, a form that looks identical before and after gives no sign it
+  worked
+- A field the owner can't change isn't hidden from staff — it is `disabled` and reads as flat
+  (`disabled:bg-gray-50`), so a non-owner can still see the café's own details
+- The seating plan keeps the printable QR sheet, and warns before printing when the page's own
+  origin is `localhost` — the codes encode wherever you're browsing from (see `qr.js`), so a
+  sheet printed from a dev address is twenty dead links
+
+### The floor plan
+
+The room, drawn on a 12x8 dotted grid (`FloorPlanCanvas.jsx`). The dots are the affordance:
+they say "things go on squares" without a legend explaining it.
+
+- **Three statuses, because three are all this app can know.** Available and occupied come from
+  real orders (the same definition `GET /floor` has always used); paused is a real column.
+  A reference legend offering Waiting, Dirty and Reserved was not copied — nothing records
+  them, and colouring a table "dirty" the app can't know about is the same fake capability as
+  an AI description button that calls nothing
+- **A drag shows its work.** The card follows the cursor (lifted — scaled, raised, shadowed)
+  rather than sitting still and teleporting on release, and the square it would land in is
+  outlined as you go: teal when free, **red when taken**, with a line saying which row and
+  column, or "That square is taken". Escape abandons it. The hint sits at the *bottom* of the
+  plan — a room fills from the top, so a banner across the top row covers the tables you are
+  looking at.
+- **The outline follows the CARD, not the cursor.** Grab a card by its corner and the two are
+  half a cell apart; the square that lights up has to be the one the card is sitting over,
+  because that is what the eye reads. Computed from the table's own cell plus the drag delta,
+  so it needs no layout of its own and works the same in a test.
+- **The lift's scale belongs in the inline `transform`, never in a `scale-*` class.** Tailwind
+  v4 compiles `scale-110` to the standalone `scale` property, which composes *after*
+  `transform` — so the class silently multiplies the drag translation by 1.1 and the card
+  drifts a cell away from the square it claims it will land on. Found by measuring the card
+  and its target in a browser; it looked plausible in a screenshot. This is what the first version got
+  wrong: a refused drop was silent, so letting go and seeing nothing happen read as a bug
+  rather than as an answer
+- **Selection links the two halves of the screen.** Clicking a table on the plan highlights its
+  row in the list, and the row's name finds it on the plan. Twenty tables in a list is a
+  guessing game otherwise — "which of these is the one in the far corner?"
+- **Every table is a real `<button>`, and the arrow keys move it a cell at a time.** A plan you
+  can only arrange by dragging is a plan half the people here can't use. The pointer and the
+  keyboard both go through one `moveTo`, so they can't drift apart, and neither can stack two
+  tables — which the database refuses as well (see `schema.md`), so the client check is purely
+  about not throwing a 409 banner at someone for a drop that was never going to work
+- **POS draws the same arrangement, with its own cards.** Those cards carry a running total and
+  how long a table has been sitting; they can't shrink to a twelfth of the panel and still say
+  that. So the used rows and columns are *compacted* (`floorLayout.js`): a plan using columns
+  0, 3 and 7 becomes three columns of full-size cards. What survives is which tables are next
+  to each other; what's dropped is empty floor, which is a property of the room rather than of
+  the service
+- Retiring a table asks inline and **says what happens to its orders** ("Its past orders
+  stay") — next to a trash icon, "remove" reads like it takes the history with it, and here it
+  genuinely could have
 
 ### The Menu tab
 

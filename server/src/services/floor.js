@@ -7,7 +7,7 @@
 // one such order in practice, but the query takes the newest just in case.
 export async function getFloor(db, restaurantId) {
   const { rows } = await db.query(
-    `select t.id, t.label, t.seats, t.is_active, t.qr_token,
+    `select t.id, t.label, t.seats, t.is_active, t.qr_token, t.pos_x, t.pos_y,
             o.id as order_id, o.order_number, o.status, o.placed_at,
             b.unpaid_count, b.unpaid_total
        from public.restaurant_tables t
@@ -29,8 +29,10 @@ export async function getFloor(db, restaurantId) {
             -- counts it: the guests are at the table either way.
             and approved_at is not null
        ) b on true
-      where t.restaurant_id = $1
-      order by t.created_at`,
+      where t.restaurant_id = $1 and t.deleted_at is null
+      -- Layout order, the same one the seating plan arranges: POS draws the
+      -- room the way the owner laid it out, not the order tables were added.
+      order by t.pos_y nulls last, t.pos_x nulls last, t.created_at`,
     [restaurantId],
   );
 

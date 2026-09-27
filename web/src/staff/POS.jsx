@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, Plus, Minus, X, ShoppingCart, Users, Clock, LayoutGrid, QrCode, ReceiptText, Check, XCircle } from 'lucide-react';
 import { usePOS } from './usePOS.js';
+import { compactLayout } from './floorLayout.js';
 import { ageMinutes } from './age.js';
 import { formatMoney } from '../format.js';
 import { VegMark } from '../components/VegMark.jsx';
@@ -59,6 +60,9 @@ export function POS({ token }) {
   const selectedTable = pos.tables?.find((t) => t.id === pos.selectedTableId) ?? null;
   const occupiedCount = pos.tables?.filter((t) => t.status === 'occupied').length ?? 0;
   const freeCount = pos.tables?.filter((t) => t.status === 'free').length ?? 0;
+  // Two columns is what this panel can show a readable card in; a wider plan
+  // flows instead of being drawn (see floorLayout.js).
+  const floorGrid = compactLayout(pos.tables ?? [], { maxColumns: 2 });
   const outstanding = Number(selectedTable?.unpaid_total ?? 0);
   const pendingCount = pos.pending?.length ?? 0;
 
@@ -122,12 +126,18 @@ export function POS({ token }) {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* The owner's own arrangement from Settings -> Seating Plan, so the
+                till shows the room the way it actually is. Compacted, because
+                these cards carry a running total and a sitting time and can't
+                shrink to a twelfth of the panel — see floorLayout.js. */}
+            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${floorGrid.columns}, minmax(0, 1fr))` }}>
               {(pos.tables ?? []).map((t) => {
                 const selected = pos.selectedTableId === t.id;
+                const cell = floorGrid.cellOf(t);
                 return (
                   <div
                     key={t.id}
+                    style={cell ? { gridColumn: cell.column, gridRow: cell.row } : undefined}
                     className={`rounded-2xl border p-3 transition-colors ${
                       selected ? 'border-teal-600 bg-teal-600 shadow-md' : STATUS_CARD[t.status]
                     }`}
@@ -163,7 +173,7 @@ export function POS({ token }) {
                   </div>
                 );
               })}
-              {pos.tables?.length === 0 && <p className="col-span-2 text-sm font-semibold text-gray-700">No tables yet.</p>}
+              {pos.tables?.length === 0 && <p className="text-sm font-semibold text-gray-700">No tables yet.</p>}
             </div>
           </div>
         ) : (

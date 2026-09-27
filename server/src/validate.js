@@ -96,6 +96,34 @@ export const updateMenuItemBody = z
 
 export const setAvailabilityBody = z.strictObject({ is_available: z.boolean() });
 
+// The café's own profile (Settings → Restaurant Profile). `address` and `phone`
+// are nullable so the owner can clear one; `name` and currency are not — the
+// database refuses a blank name, and a café always trades in something.
+const profileText = (max, label) =>
+  z.string().trim().max(max, `${label} can be at most ${max} characters`).transform((v) => (v === '' ? null : v)).nullable();
+
+export const updateRestaurantBody = z
+  .strictObject({
+    name: z.string().trim().min(1, 'Restaurant name is required').max(120).optional(),
+    address: profileText(200, 'Address').optional(),
+    phone: profileText(40, 'Phone number').optional(),
+    // ISO 4217: three letters, stored and compared uppercase. The column's own
+    // check constraint only enforces the length, so the shape is enforced here.
+    currency_code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/, 'Currency must be a three-letter code, like INR')
+      .optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
+
+// PATCH /me — your own display name, and nothing else. A role is deliberately
+// not accepted here; that belongs to the owner's Staff tab.
+export const updateOwnProfileBody = z.strictObject({
+  display_name: z.string().trim().min(1, 'Display name is required').max(80, 'Display name can be at most 80 characters'),
+});
+
 // Menu categories. `display_order` is optional everywhere — createMenuCategory
 // puts a new one at the end when it's left out, which is almost always where a
 // new section belongs.
@@ -116,12 +144,32 @@ export const updateMenuCategoryBody = z
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
 
+// Floor-plan cells, not pixels — see the table_layout migration. The grid is
+// 20x20, which is a bigger room than this is for.
+const gridCell = z.number().int().min(0).max(19);
+
 // POST /tables. `seats` is nullable — not every table needs a seat count on
 // the printed QR sheet.
 export const createTableBody = z.strictObject({
   label: z.string().trim().min(1, 'Label is required').max(40, 'Label can be at most 40 characters'),
   seats: z.number().int().min(1).max(100).nullable().optional(),
+  // Optional: leaving it out means the first free cell (services/tables.js).
+  pos_x: gridCell.optional(),
+  pos_y: gridCell.optional(),
 });
+
+export const updateTableBody = z
+  .strictObject({
+    label: z.string().trim().min(1, 'Label is required').max(40, 'Label can be at most 40 characters').optional(),
+    seats: z.number().int().min(1, 'Seats must be at least 1').max(99).nullable().optional(),
+    is_active: z.boolean().optional(),
+    pos_x: gridCell.optional(),
+    pos_y: gridCell.optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' })
+  .refine((b) => (b.pos_x === undefined) === (b.pos_y === undefined), {
+    message: 'Send both pos_x and pos_y, or neither — half a position is not a place',
+  });
 
 // POST /staff/orders (step 7, POS) — a staff member placing an order for a
 // walk-in, dine-in only. Same item shape as the customer cart's add-item

@@ -55,6 +55,41 @@ live order data. Everything below already works and is covered by
 only one success. A succeeding payment sets `orders.paid_at` by trigger — that's
 the denormalised flag the dashboard and the `order_payment_updated` SSE event read.
 
+**The café's own details live on `restaurants`.** `name` and `currency_code` shipped with the
+first migration; `address` and `phone` arrived with Settings and are nullable free text — a
+café that hasn't filled them in is a normal state, not an incomplete record, and nothing
+depends on either being present. The phone is stored exactly as typed: formats vary by country
+and normalising them would only lose information.
+
+**There is deliberately no tax-rate column.** `orders.tax_amount` exists and is always 0.
+Storing a rate without applying it would let a settings screen promise a tax that no order
+charges; applying one touches order creation, both bills, checkout and the dashboard, so it is
+its own piece of work (ARCHITECTURE §2).
+
+**The floor plan lives on `restaurant_tables` as `pos_x` / `pos_y` — grid CELLS, not
+pixels.** A pixel offset means something different on a phone, a till screen and a printed
+sheet; a cell is the same square everywhere. Both are nullable (an unplaced table is a real
+state), and a partial unique index on `(restaurant_id, pos_x, pos_y)` means two tables can
+never be stacked on one square — dropping a table onto an occupied cell is a 409 the screen
+acts on, not a silent overlap nobody notices until they print the plan.
+
+**A table is retired with `deleted_at`, never deleted.** `orders.table_id` references
+`restaurant_tables` **ON DELETE CASCADE**, so a real `DELETE` would take every order ever
+placed there — items, payments, status events — out of the history the dashboard reports on.
+The soft delete also clears `is_active` and the table's cell: `is_active` is what
+`guestSession.js`, the dashboard's occupancy count and `staffOrders.js`'s "can I put an order
+here" check all gate on, so clearing it retires the table everywhere those look without each
+of them having to learn about `deleted_at`.
+
+**The label is unique among LIVE tables only** (`restaurant_tables_label_live_unique`, a
+partial index). A retired "Table 4" should not stop the next one being called "Table 4" — the
+old row exists for history, not to hold a name hostage. The same applies to its cell.
+
+**`restaurant_tables.is_active` is the pause switch**, not a soft delete. `openMenu` refuses an
+inactive table with 403 `ordering_unavailable`, so clearing it stops that table's printed QR
+code taking orders and setting it again brings the same code back. Nothing deletes a table:
+its code is stuck to a physical table, and `qr_token` is never rewritten for the same reason.
+
 **Menu reads are one indexed scan for the filter.** `menu_items_public_read_idx` is a
 partial index on `(restaurant_id, category_id, sort_order, name) where deleted_at is
 null and is_available` — the customer menu never touches an 86'd or deleted row. Since

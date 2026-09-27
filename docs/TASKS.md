@@ -217,7 +217,8 @@ Five slices, each tested, documented and committed on its own:
 
 **Decided:** no photos in v1 (the `image_url` column stays, unused, for later) · admin lives as
 new owner-only tabs in the existing `/staff` dashboard, not a separate route · renaming/pausing
-an existing table stays deferred (already on the "after v1" list below).
+an existing table stays deferred (already on the "after v1" list below). *Both of those were
+superseded in step 6: photos landed in slice 7, renaming and pausing in slice 8.*
 
 **Slice 1 — Menu API** — done
 - [x] `GET /items` — admin list: every live item including 86'd ones, never a deleted one
@@ -811,6 +812,127 @@ Teal, not the reference's blue, per `design.md`'s one rule.
       `URL.createObjectURL` is stubbed in `test/setup.js` alongside the dialog and Web Audio
       fakes
 
+**Slice 8 — Settings: café profile, seating plan, user account** — done
+
+**Decided:** three views behind one Settings tab, replacing the top-level Tables tab — the
+seating plan was already that screen, and two places to manage the same tables is how they
+drift apart. Restaurant Profile and Seating Plan are the café's, so owner-only; **User Account
+is every role's**, because a name and a password shouldn't need the owner. A non-owner gets no
+tab strip at all rather than tabs it can't use. Built from an owner-supplied reference; **not**
+taken from it: its **Tax Rate** field (see below), its UPI ID, and the Payment / Kitchen Mode /
+Billing tabs, none of which have anything behind them.
+
+**Tax stays out (ARCHITECTURE §2).** The reference puts a tax rate on this screen, but
+`orders.tax_amount` is always 0 and applying a rate touches order creation, both bills,
+checkout and the dashboard's takings — it is a change to how every order is priced, not a
+settings field. Storing one without applying it would let the screen promise a tax nothing
+charges, so there is deliberately no column and no field. Its own slice when it happens.
+
+- [x] Migration `20260927160000_restaurant_profile.sql`: `restaurants.address` and
+      `restaurants.phone`, both nullable — a café that hasn't filled them in is a normal state,
+      not an incomplete record
+- [x] `GET /restaurant` (any staff member — the currency alone decides how every price on their
+      screen is formatted) and `PATCH /restaurant` (owner). Partial: `address`/`phone` are
+      clearable with an explicit null, `name`/`currency_code` are not. The currency is
+      uppercased and shape-checked in `validate.js`, since the column's own check only enforces
+      length
+- [x] `PATCH /tables/:id` — rename, reseat, **pause**. Closes two items that had been on the
+      after-v1 list since step 5. Pausing is what `is_active` was always for: `openMenu` already
+      403s an inactive table, so a paused table's printed code stops taking orders immediately
+      and works again when resumed. `qr_token` is deliberately untouchable — it is printed on
+      something physical
+- [x] `PATCH /me` — your own display name, and nothing else. A role is not a field there, so no
+      login can promote itself
+- [x] `SettingsTab.jsx` + `RestaurantProfile.jsx` / `SeatingPlan.jsx` / `UserAccount.jsx`, all
+      Tailwind. `TablesTab.jsx` deleted, its content rebuilt as the seating plan; Settings joins
+      every role's sidebar. **Recent is now the only tab left on the legacy dark theme**
+- [x] A password change never reaches this API — the browser's own Supabase client holds the
+      session and changes it directly, so no password is sent to or logged by a server we wrote.
+      Renaming yourself updates the sidebar, not just the form
+- [x] The seating plan warns before printing when the page's own origin is localhost: the QR
+      codes encode wherever you are browsing from, so a sheet printed from a dev address is
+      twenty dead links
+- [x] Tests: 13 new server (`settings.test.js`) and 11 new web. Server 160 → 173, web 85 → 92.
+      Mutation-checked, 16 mutations, all caught
+
+**Slice 9 — Seating plan: a real floor plan, and retiring a table** — done
+
+**Decided:** positions are **grid cells, not pixels** — a pixel offset means something
+different on a phone, a till and a printed sheet. The owner's arrangement is not decorative:
+POS's floor map draws from the same positions, so the till shows the room as it is. POS keeps
+its own cards (they carry a running total and a sitting time, which a twelfth of a panel
+cannot), but places them on the arrangement, **compacted** so a plan using columns 0/3/7 is
+three columns of readable cards rather than twelve tiny ones.
+
+**Delete had to be soft.** `orders.table_id` references `restaurant_tables` **ON DELETE
+CASCADE**, so the trash icon in the reference would have silently erased every order ever
+placed at that table — items, payments, timeline — from the dashboard's history. It sets
+`deleted_at` instead, and is **refused with 409 while the table owes money**, because retiring
+a table mid-service hides a bill nobody would see again.
+
+**Three statuses, not five.** The reference legend has Available / Occupied / Waiting / Dirty
+/ Reserved. Free and occupied are real (derived from live orders, the same definition
+`GET /floor` already used) and paused is a real column; **Waiting, Dirty and Reserved have no
+schema at all**, so they are not drawn. Same rule as the menu's AI descriptions and variants.
+
+- [x] Migration `20260927190000_table_layout.sql`: `pos_x`/`pos_y` (nullable grid cells),
+      `deleted_at`, a partial unique index so **two tables can never share a cell**, and the
+      label constraint rebuilt as a partial index so a retired "Table 4" stops holding the name
+      hostage. Existing tables backfilled six to a row in the order they were already listed in,
+      so the first open is arranging rather than untangling
+- [x] Backfill verified against pre-migration data specifically (the seed runs after every
+      migration, so the test path never exercises it): placement, stacking refused, a retired
+      table freeing both its name and its cell, and two live tables still unable to share a name
+- [x] `DELETE /tables/:tableId` — soft, owner only, 409 while unpaid. Clearing `is_active` with
+      it is load-bearing: `guestSession.js`, the dashboard's occupancy count and
+      `staffOrders.js`'s "can I put an order here" all gate on that column, so one write retires
+      the table everywhere those look. `GET /menu/:token` now 404s a retired table's code
+- [x] `PATCH /tables/:id` takes `pos_x`/`pos_y` (both or neither — half a position is not a
+      place). `POST /tables` places a new table in the **first genuinely free cell**, not
+      "however many tables there are", which would land on top of one as soon as anything had
+      been moved or retired
+- [x] `FloorPlanCanvas.jsx`: a 12x8 dotted grid, tables dragged with a pointer **or moved a cell
+      at a time with the arrow keys** — a plan you can only arrange with a mouse is one half the
+      people here can't use. Both paths go through one `moveTo`, so they can't drift apart
+- [x] `SeatingPlan.jsx` rebuilt: inline add row, the plan, a legend, and a table list with
+      capacity steppers, pause/resume, rename, QR and remove. `TableQrDialog.jsx` shows one code
+      large with SVG and PNG downloads (SVG is what `qr.js` already produced, so it prints sharp)
+- [x] Tests: 9 new server, 9 new web. Server 173 → 182, web 92 → 101. Mutation-checked, 16
+      mutations; one exposed a weak test of mine (the seeded layout happens to match creation
+      order, so a "reads in layout order" assertion on it proved nothing) and one showed the
+      client-side stacking guard is only distinguishable from the database's by whether the
+      person gets an error banner
+
+**Slice 10 — Making the floor plan feel like a floor plan** — done
+
+Owner feedback after slice 9: the plan "is not that interactive". It wasn't — the card sat
+still through the whole drag and jumped on release, and a refused drop did nothing at all with
+no hint why, which reads as a bug rather than an answer.
+
+- [x] The dragged card **follows the cursor**, lifted (scale, raised z, heavier shadow), as a
+      CSS transform so `left`/`top` stay the table's real cell and nothing downstream has to
+      know a drag is happening
+- [x] A **drop-target outline** tracks the pointer: teal when the square is free, red when it
+      is taken, with a live line saying "Drop in row 3, column 5" or "That square is taken"
+- [x] **Escape cancels** a drag in flight (listener on window — a mouse drag may have taken
+      focus off the card), and releasing after a cancel lands nothing
+- [x] **Selection links the plan and the list**: picking a table on the plan highlights its row,
+      and the row's name finds it on the plan
+- [x] The drop-target outline follows the **card**, not the cursor — grab a card by its corner
+      and those are half a cell apart, and the square that lights up has to be the one the card
+      is over
+- [x] The drag path is now **actually tested**, which it wasn't in slice 9: jsdom does no
+      layout, so the plan measures 0x0 and a pointer drag has nothing to land on — the tests
+      give it a real `getBoundingClientRect` (12x8 cells of 100px) and drive genuine pointer
+      events through it. 4 new web tests, 101 → 105. Mutation-checked, 7 mutations, one of
+      which showed the release was re-measuring a cell the preview had already decided — it
+      now lands on exactly the square the outline drew
+- [x] Two bugs found by driving the real component in a real browser, neither of which any
+      test or screenshot would have caught: `scale-110` compiles to Tailwind v4's standalone
+      `scale` property, which composes after `transform` and so multiplied the drag translation
+      by 1.1 (the card drifted a cell from its own target); and the drag hint sat across the top
+      row, covering the tables
+
 ## Step 7 — Landing page
 
 - [ ] Built last, with real screenshots of the working flow
@@ -833,6 +955,5 @@ Teal, not the reference's blue, per `design.md`'s one rule.
 - Staff "mark as paid" without a payment row, if cafes want paid/unpaid on the board
 - Table-level bill on the staff side (all sessions at a table, incl. after a session expires)
 - Print / save the bill as PDF; tax invoices (with invoices, above)
-- Pause QR ordering for a single table
 - Separate kitchen and reception views
 - Structured modifiers, stock counts, tax engine, customer login

@@ -39,14 +39,14 @@ function Authenticated({ auth }) {
 
   if (session.token === undefined) return <Centered>Loading…</Centered>;
   if (session.token === null) return <SignInScreen session={session} />;
-  return <SignedIn key={session.token} token={session.token} onSignOut={session.signOut} />;
+  return <SignedIn key={session.token} token={session.token} auth={auth} onSignOut={session.signOut} />;
 }
 
 // Being logged into Supabase and being LINKED to a café are two different
 // things — a login can exist without a staff_members row (see
 // docs/TASKS.md's housekeeping item). GET /me is what tells them apart, and
 // a 403 there means "sign in worked, but this account isn't staff anywhere".
-function SignedIn({ token, onSignOut }) {
+function SignedIn({ token, auth, onSignOut }) {
   const [identity, setIdentity] = useState(undefined); // undefined = checking, null = not linked
   const [error, setError] = useState(null);
   const board = useBoard(identity ? token : null);
@@ -89,7 +89,18 @@ function SignedIn({ token, onSignOut }) {
       </Centered>
     );
   }
-  return <Board identity={identity} board={board} token={token} onSignOut={onSignOut} />;
+  // setIdentity, so renaming yourself in Settings updates the sidebar too
+  // rather than only the form you typed it into.
+  return (
+    <Board
+      identity={identity}
+      board={board}
+      token={token}
+      auth={auth}
+      onIdentityChange={setIdentity}
+      onSignOut={onSignOut}
+    />
+  );
 }
 
 function Centered({ children }) {

@@ -5,12 +5,19 @@ import { badRequest, notFound } from '../errors.js';
 
 // GET /tables — staff and owner; oldest first, so a new table lands at the
 // bottom of the list rather than reshuffling ones already printed.
+const TABLE_COLUMNS = 'id, label, seats, qr_token, is_active, pos_x, pos_y';
+
+// Layout order, so the list beside the floor plan reads the way the room does
+// — left to right, front to back. A table that has somehow lost its position
+// sorts last rather than jumping to the front.
+const LAYOUT_ORDER = 'pos_y nulls last, pos_x nulls last, created_at';
+
 export async function listTables(db, restaurantId) {
   const { rows } = await db.query(
-    `select id, label, seats, qr_token, is_active
+    `select ${TABLE_COLUMNS}
        from public.restaurant_tables
-      where restaurant_id = $1
-      order by created_at`,
+      where restaurant_id = $1 and deleted_at is null
+      order by ${LAYOUT_ORDER}`,
     [restaurantId],
   );
   return rows;
@@ -21,14 +28,109 @@ export async function listTables(db, restaurantId) {
 // one itself. A duplicate label is rejected by the table's own unique
 // constraint (restaurant_id, label), surfacing as a 409 via errors.js's
 // existing unique_violation mapping — no special-casing needed here.
-export async function createTable(db, restaurantId, { label, seats }) {
+export async function createTable(db, restaurantId, { label, seats, pos_x, pos_y }) {
   const { rows } = await db.query(
-    `insert into public.restaurant_tables (restaurant_id, label, seats)
-     values ($1, $2, $3)
-     returning id, label, seats, qr_token, is_active`,
-    [restaurantId, label, seats ?? null],
+    `insert into public.restaurant_tables (restaurant_id, label, seats, pos_x, pos_y)
+     select $1, $2, $3, coalesce($4, free.x), coalesce($5, free.y)
+       from (
+         -- The first genuinely free cell, row-major: not simply "however many
+         -- tables there are", which would land on top of an existing one as
+         -- soon as anything has been moved or retired.
+         select gx.x, gy.y
+           from generate_series(0, 19) as gy(y)
+           cross join generate_series(0, 19) as gx(x)
+          where not exists (
+            select 1 from public.restaurant_tables t
+             where t.restaurant_id = $1 and t.deleted_at is null
+               and t.pos_x = gx.x and t.pos_y = gy.y
+          )
+          order by gy.y, gx.x
+          limit 1
+       ) as free
+     returning ${TABLE_COLUMNS}`,
+    [restaurantId, label, seats ?? null, pos_x ?? null, pos_y ?? null],
   );
   return rows[0];
+}
+
+// PATCH /tables/:tableId — owner only. Renaming and pausing, both deferred
+// since step 5 and both now reachable from Settings → Seating Plan.
+//
+// Pausing is what `is_active` was always for: openMenu already refuses an
+// inactive table with 403 `ordering_unavailable`, so a paused table's QR code
+// stops taking orders the moment this is set — the code itself stays valid,
+// which is the point. Nobody has to reprint anything to close a table for the
+// evening.
+//
+// The qr_token is deliberately not touchable here. It is printed on something
+// physical; changing it silently would turn every printed code on that table
+// into a dead link.
+export async function updateTable(db, restaurantId, tableId, input) {
+  const { rows } = await db.query(
+    `update public.restaurant_tables
+        set label     = coalesce($3, label),
+            seats     = case when $4::boolean then $5 else seats end,
+            is_active = coalesce($6, is_active),
+            pos_x     = coalesce($7, pos_x),
+            pos_y     = coalesce($8, pos_y)
+      where id = $1 and restaurant_id = $2 and deleted_at is null
+      returning ${TABLE_COLUMNS}`,
+    [
+      tableId,
+      restaurantId,
+      input.label ?? null,
+      'seats' in input,
+      input.seats ?? null,
+      input.is_active ?? null,
+      input.pos_x ?? null,
+      input.pos_y ?? null,
+    ],
+  );
+  return rows[0] ?? null;
+}
+
+// DELETE /tables/:tableId — owner only, and a SOFT delete.
+//
+// It has to be: orders.table_id references this table ON DELETE CASCADE, so a
+// real DELETE would take every order ever placed here — items, payments,
+// timeline — out of the history the dashboard reports on. The row stays, stops
+// appearing anywhere, and its QR code stops resolving.
+//
+// Refused while the table still owes money. Retiring a table mid-service would
+// hide a bill somebody has not paid, and no screen would ever show it again.
+export async function deleteTable(db, restaurantId, tableId) {
+  return db.withTransaction(async (tx) => {
+    const { rows: found } = await tx.query(
+      `select id from public.restaurant_tables
+        where id = $1 and restaurant_id = $2 and deleted_at is null
+        for update`,
+      [tableId, restaurantId],
+    );
+    if (!found[0]) return { ok: false, reason: 'not_found' };
+
+    const { rows: owing } = await tx.query(
+      `select count(*)::int as n, coalesce(sum(total_amount), 0)::numeric(12, 2) as total
+         from public.orders
+        where table_id = $1 and paid_at is null and status != 'cancelled'`,
+      [tableId],
+    );
+    if (owing[0].n > 0) {
+      return { ok: false, reason: 'unpaid_orders', unpaid_count: owing[0].n, unpaid_total: owing[0].total };
+    }
+
+    // is_active = false is load-bearing, not tidiness: guestSession.js,
+    // dashboard.js's occupancy count and staffOrders.js's "can I put an order
+    // here" check all gate on it, so clearing it retires the table everywhere
+    // those look, without each of them having to learn about deleted_at.
+    // Its cell is freed too, so the next table can be put where it stood.
+    await tx.query(
+      `update public.restaurant_tables
+          set deleted_at = now(), is_active = false, pos_x = null, pos_y = null
+        where id = $1 and restaurant_id = $2`,
+      [tableId, restaurantId],
+    );
+    return { ok: true };
+  });
 }
 
 // GET /tables/:tableId/bill (step 6) — owner only. The staff-side table bill:
@@ -41,7 +143,7 @@ export async function getTableBill(db, restaurantId, tableId) {
     `select t.id, t.label, r.currency_code
        from public.restaurant_tables t
        join public.restaurants r on r.id = t.restaurant_id
-      where t.id = $1 and t.restaurant_id = $2`,
+      where t.id = $1 and t.restaurant_id = $2 and t.deleted_at is null`,
     [tableId, restaurantId],
   );
   if (!tables.length) throw notFound('Table not found');
@@ -111,7 +213,7 @@ export async function getTableBill(db, restaurantId, tableId) {
 // still cooks and serves it exactly as before.
 export async function checkoutTable(db, restaurantId, tableId, { method, idempotencyKey }) {
   const { rows: tables } = await db.query(
-    `select id from public.restaurant_tables where id = $1 and restaurant_id = $2`,
+    `select id from public.restaurant_tables where id = $1 and restaurant_id = $2 and deleted_at is null`,
     [tableId, restaurantId],
   );
   if (!tables.length) throw notFound('Table not found');

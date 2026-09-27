@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, beforeEach, vi, inject } from 'vitest';
-import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StaffApp from './StaffApp.jsx';
 
@@ -78,6 +78,13 @@ async function placeUnapproved(table, itemName, note) {
 // returns a session from signUp only when "Confirm email" is OFF. Pass
 // { requiresConfirmation: true } to get the other case, where the account
 // exists but there is no session until they click the emailed link.
+// Anything the dashboard hands Supabase's own client rather than our API —
+// today just the new password, which deliberately never touches the server.
+let passwordChanges = [];
+beforeEach(() => {
+  passwordChanges = [];
+});
+
 function createFakeAuth(userId, { signUpAs, requiresConfirmation = false } = {}) {
   let session = null;
   const listeners = new Set();
@@ -101,7 +108,7 @@ function createFakeAuth(userId, { signUpAs, requiresConfirmation = false } = {})
         if (email !== 'owner@example.com' || password !== 'secret') {
           return { data: {}, error: { message: 'Invalid login credentials' } };
         }
-        session = { access_token: `valid-${userId}` };
+        session = { access_token: `valid-${userId}`, user: { id: userId, email } };
         listeners.forEach((fn) => fn('SIGNED_IN', session));
         return { data: { session }, error: null };
       },
@@ -109,6 +116,11 @@ function createFakeAuth(userId, { signUpAs, requiresConfirmation = false } = {})
         session = null;
         listeners.forEach((fn) => fn('SIGNED_OUT', null));
         return { error: null };
+      },
+      async updateUser({ password }) {
+        if (password === 'password') return { data: {}, error: { message: 'Password is too weak' } };
+        passwordChanges.push(password);
+        return { data: { user: { id: userId } }, error: null };
       },
     },
   };
@@ -731,67 +743,496 @@ describe('the Menu tab', () => {
   });
 });
 
-describe('the Tables tab', () => {
-  test('owner sees a Tables tab', async () => {
+describe('Settings', () => {
+  // A table's name appears twice once the floor plan is up: on the plan and
+  // in the list under it. Row lookups have to say which they mean.
+  const listRow = async (label) =>
+    within(await screen.findByRole('table')).getByText(label).closest('tr');
+
+  const openSettings = async (user, asUserId, view) => {
+    await signIn(user, asUserId);
+    await user.click(await screen.findByRole('button', { name: 'Settings' }));
+    // A role with only one view gets no tab strip at all, so there is nothing
+    // to click — it is already on the view it owns.
+    const tab = view && screen.queryByRole('tab', { name: view });
+    if (tab) await user.click(tab);
+  };
+
+  test('every role gets Settings, but only the owner gets the café half of it', async () => {
     const owner = userEvent.setup();
-    await signIn(owner, STAFF_USER);
-    expect(await screen.findByRole('button', { name: 'Tables' })).toBeInTheDocument();
+    await openSettings(owner, STAFF_USER);
+    expect(await screen.findByRole('tab', { name: /Restaurant profile/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Seating plan/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /User account/ })).toBeInTheDocument();
+
+    cleanup();
+    const kitchen = userEvent.setup();
+    await openSettings(kitchen, KITCHEN_USER);
+    // Not a tab it can't reach — no tab strip at all, and it opens straight
+    // onto the one view it does own.
+    expect(await screen.findByRole('heading', { name: 'Your account' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Restaurant profile/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Seating plan/ })).not.toBeInTheDocument();
   });
 
-  test('staff do not see a Tables tab', async () => {
-    const staff = userEvent.setup();
-    await signIn(staff, SECOND_STAFF);
-    await screen.findByRole('heading', { name: 'Order board' });
-    expect(screen.queryByRole('button', { name: 'Tables' })).not.toBeInTheDocument();
+  // --- Restaurant profile ---------------------------------------------------
+
+  test("the profile loads the café's real record, and saving reaches the customer menu", async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Restaurant profile/);
+
+    const name = await screen.findByLabelText('Restaurant name');
+    expect(name).toHaveValue('Chai Point Cafe');
+    expect(screen.getByLabelText('Operational currency')).toHaveValue('INR');
+
+    await user.type(screen.getByLabelText('Physical address'), 'north tripura, batarashi road');
+    await user.type(screen.getByLabelText('Phone number'), '8787368753');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    const { body } = await api('GET', `/api/menu/${tokens.T1}`);
+    expect(body.restaurant.name).toBe('Chai Point Cafe');
+
+    const rows = await sql('select address, phone from restaurants where slug = $1', ['chai-point']);
+    expect(rows[0]).toEqual({ address: 'north tripura, batarashi road', phone: '8787368753' });
+
+    await sql('update restaurants set address = null, phone = null where slug = $1', ['chai-point']);
   });
 
-  test('lists the seeded tables with a QR code and its printable URL', async () => {
+  test('Save is only offered once something has actually changed', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Restaurant profile/);
+
+    const save = await screen.findByRole('button', { name: 'Save profile' });
+    expect(save).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Phone number'), '9');
+    expect(save).toBeEnabled();
+  });
+
+  test('changing the currency changes what a customer is quoted in', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Restaurant profile/);
+
+    await user.selectOptions(await screen.findByLabelText('Operational currency'), 'AED');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+
+    const { body } = await api('GET', `/api/menu/${tokens.T1}`);
+    expect(body.restaurant.currency_code).toBe('AED');
+
+    await sql("update restaurants set currency_code = 'INR' where slug = 'chai-point'");
+  });
+
+  // --- Seating plan ---------------------------------------------------------
+
+  test('the floor plan shows every table where the owner put it, coloured by what it is doing', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    // Seeded as two rows of two (see supabase/seed.sql).
+    expect(within(plan).getByRole('button', { name: /^T1, / })).toHaveStyle({ left: '0.0000%', top: '0.0000%' });
+    expect(within(plan).getByRole('button', { name: /^T2, / })).toHaveStyle({ left: '8.3333%', top: '0.0000%' });
+    expect(within(plan).getByRole('button', { name: /^T3, / })).toHaveStyle({ left: '0.0000%', top: '12.5000%' });
+
+    // Only the three states this app can actually know.
+    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getByText('Occupied')).toBeInTheDocument();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    expect(screen.queryByText('Dirty')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reserved')).not.toBeInTheDocument();
+    expect(screen.queryByText('Waiting')).not.toBeInTheDocument();
+  });
+
+  test('a table with a live order shows as occupied on the plan', async () => {
+    await place('T2', 'Masala Chai');
+    try {
+      const user = userEvent.setup();
+      await openSettings(user, STAFF_USER, /Seating plan/);
+      const plan = await screen.findByTestId('floor-plan');
+      expect(within(plan).getByRole('button', { name: /^T2, Occupied/ })).toBeInTheDocument();
+    } finally {
+      await sql("update orders set paid_at = now() where table_id = (select id from restaurant_tables where label = 'T2')");
+    }
+  });
+
+  test('a table can be moved with the keyboard, and the move is saved', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const t2 = within(plan).getByRole('button', { name: /^T2, / });
+    t2.focus();
+    await user.keyboard('{ArrowRight}'); // (1,0) -> (2,0), a free cell
+
+    try {
+      await waitFor(async () => {
+        const rows = await sql("select pos_x, pos_y from restaurant_tables where label = 'T2'");
+        expect(rows[0]).toEqual({ pos_x: 2, pos_y: 0 });
+      });
+      await waitFor(() =>
+        expect(within(screen.getByTestId('floor-plan')).getByRole('button', { name: /^T2, / })).toHaveStyle({
+          left: '16.6667%',
+        }),
+      );
+    } finally {
+      await sql("update restaurant_tables set pos_x = 1, pos_y = 0 where label = 'T2'");
+    }
+  });
+
+  // jsdom does no layout, so the plan measures 0x0 and a pointer drag has
+  // nothing to land on. Giving it a real rect is what makes dragging testable
+  // at all — otherwise this whole path is eyeball-only. 12x8 cells of 100px.
+  const measurePlan = (plan) => {
+    plan.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 1200, height: 800, right: 1200, bottom: 800, x: 0, y: 0, toJSON: () => {},
+    });
+    return { cell: (x, y) => ({ clientX: x * 100 + 50, clientY: y * 100 + 50 }) };
+  };
+
+  test('dragging a table follows the cursor, previews where it lands, and saves it there', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const { cell } = measurePlan(plan);
+    const t2 = within(plan).getByRole('button', { name: /^T2, / }); // (1,0)
+
+    await user.pointer({ keys: '[MouseLeft>]', target: t2, coords: cell(1, 0) });
+    await user.pointer({ target: t2, coords: cell(4, 2) });
+
+    try {
+      // Mid-drag: the card is lifted and following, and the target square is
+      // showing where it would land.
+      expect(within(plan).getByRole('button', { name: /^T2, / }).style.transform).toMatch(/translate\(300px, 200px\)/);
+      const target = within(plan).getByTestId('drop-target');
+      expect(target).toHaveStyle({ left: '33.3333%', top: '25.0000%' });
+      expect(target).toHaveAttribute('data-blocked', 'false');
+      expect(screen.getByRole('status')).toHaveTextContent('Drop in row 3, column 5');
+
+      await user.pointer({ keys: '[/MouseLeft]', target: t2, coords: cell(4, 2) });
+
+      await waitFor(async () => {
+        const rows = await sql("select pos_x, pos_y from restaurant_tables where label = 'T2'");
+        expect(rows[0]).toEqual({ pos_x: 4, pos_y: 2 });
+      });
+      // And the lift is over — no stray transform left behind.
+      await waitFor(() => expect(within(screen.getByTestId('floor-plan')).getByRole('button', { name: /^T2, / }).style.transform).toBe(''));
+    } finally {
+      await sql("update restaurant_tables set pos_x = 1, pos_y = 0 where label = 'T2'");
+    }
+  });
+
+  test('dragging onto an occupied square says so, and drops nothing', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const { cell } = measurePlan(plan);
+    const t1 = within(plan).getByRole('button', { name: /^T1, / }); // (0,0)
+
+    await user.pointer({ keys: '[MouseLeft>]', target: t1, coords: cell(0, 0) });
+    await user.pointer({ target: t1, coords: cell(1, 0) }); // T2 lives here
+
+    expect(within(plan).getByTestId('drop-target')).toHaveAttribute('data-blocked', 'true');
+    expect(screen.getByRole('status')).toHaveTextContent('That square is taken');
+
+    await user.pointer({ keys: '[/MouseLeft]', target: t1, coords: cell(1, 0) });
+
+    const rows = await sql("select pos_x, pos_y from restaurant_tables where label = 'T1'");
+    expect(rows[0]).toEqual({ pos_x: 0, pos_y: 0 });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('Escape abandons a drag and puts the table back', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const { cell } = measurePlan(plan);
+    const t3 = within(plan).getByRole('button', { name: /^T3, / }); // (0,1)
+
+    await user.pointer({ keys: '[MouseLeft>]', target: t3, coords: cell(0, 1) });
+    await user.pointer({ target: t3, coords: cell(6, 4) });
+    expect(within(plan).getByTestId('drop-target')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(within(plan).queryByTestId('drop-target')).not.toBeInTheDocument();
+
+    // Releasing after a cancel must not land it either.
+    await user.pointer({ keys: '[/MouseLeft]', target: t3, coords: cell(6, 4) });
+    const rows = await sql("select pos_x, pos_y from restaurant_tables where label = 'T3'");
+    expect(rows[0]).toEqual({ pos_x: 0, pos_y: 1 });
+  });
+
+  test('picking a table on the plan highlights its row, and picking the row highlights the table', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const card = within(plan).getByRole('button', { name: /^T4, / });
+    expect(card).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(card);
+    expect(within(plan).getByRole('button', { name: /^T4, / })).toHaveAttribute('aria-pressed', 'true');
+    expect(await listRow('T4')).toHaveClass('bg-teal-50');
+
+    // And back the other way — the row's name finds it on the plan.
+    await user.click(within(await listRow('T4')).getByRole('button', { name: 'Find T4 on the plan' }));
+    expect(within(screen.getByTestId('floor-plan')).getByRole('button', { name: /^T4, / })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('a table cannot be moved onto one that is already there', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const t1 = within(plan).getByRole('button', { name: /^T1, / }); // (0,0)
+    t1.focus();
+    await user.keyboard('{ArrowRight}'); // T2 is at (1,0)
+
+    const rows = await sql("select pos_x, pos_y from restaurant_tables where label = 'T1'");
+    expect(rows[0]).toEqual({ pos_x: 0, pos_y: 0 });
+
+    // And QUIETLY. The database refuses a stacked cell too, so "it didn't
+    // move" alone proves nothing about this screen — what the client-side
+    // check buys is not throwing a 409 banner at someone for a drop that was
+    // obviously never going to work.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('the plan cannot push a table off the grid', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const plan = await screen.findByTestId('floor-plan');
+    const t1 = within(plan).getByRole('button', { name: /^T1, / }); // already at 0,0
+    t1.focus();
+    await user.keyboard('{ArrowLeft}{ArrowUp}');
+
+    const rows = await sql("select pos_x, pos_y from restaurant_tables where label = 'T1'");
+    expect(rows[0]).toEqual({ pos_x: 0, pos_y: 0 });
+    // Clamped here, not bounced off the server's 400 — same reasoning as the
+    // stacking check above.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('the POS floor map draws the same arrangement', async () => {
     const user = userEvent.setup();
     await signIn(user, STAFF_USER);
-    await user.click(await screen.findByRole('button', { name: 'Tables' }));
+    await user.click(await screen.findByRole('button', { name: 'POS' }));
 
-    const card = (await screen.findByText('T1')).closest('.staff-qr-card');
-    expect(within(card).getByText('2 seats')).toBeInTheDocument();
-    expect(within(card).getByText(new RegExp(`/t/${tokens.T1}$`))).toBeInTheDocument();
-    const qrImg = await within(card).findByRole('img', { name: 'QR code for table T1' });
-    expect(qrImg.src).toMatch(/^data:image\/svg\+xml;base64,/);
+    // Seeded two-by-two, so the till's grid is two columns and each card sits
+    // in the cell the owner put it in.
+    const cardFor = async (label) => (await screen.findByText(label)).closest('div.rounded-2xl');
+    expect(await cardFor('T1')).toHaveStyle({ gridColumn: '1', gridRow: '1' });
+    // A second COLUMN, not just a second row: without one, a layout collapsed
+    // to a single column would satisfy every other assertion here.
+    expect(await cardFor('T2')).toHaveStyle({ gridColumn: '2', gridRow: '1' });
+    expect(await cardFor('T3')).toHaveStyle({ gridColumn: '1', gridRow: '2' });
+    expect(await cardFor('T4')).toHaveStyle({ gridColumn: '2', gridRow: '2' });
   });
 
-  test('owner can add a table, and its QR token resolves to a real, working menu', async () => {
+  test('owner can add a table inline, and its QR token resolves to a real, working menu', async () => {
     const user = userEvent.setup();
-    await signIn(user, STAFF_USER);
-    await user.click(await screen.findByRole('button', { name: 'Tables' }));
+    await openSettings(user, STAFF_USER, /Seating plan/);
 
-    await user.click(await screen.findByRole('button', { name: '+ Add table' }));
-    const form = await screen.findByRole('dialog', { name: 'Add table' });
-    await user.type(within(form).getByLabelText('Label'), 'T9');
-    await user.type(within(form).getByLabelText(/Seats/), '5');
-    await user.click(within(form).getByRole('button', { name: 'Add table' }));
+    await user.type(await screen.findByLabelText('Table name'), 'T9');
+    const capacity = screen.getByLabelText('Capacity');
+    await user.clear(capacity);
+    await user.type(capacity, '5');
+    await user.click(screen.getByRole('button', { name: /Add table/ }));
+
+    const row = await listRow('T9');
+    await waitFor(() => expect(within(row).getByText('5')).toBeInTheDocument());
+    // It lands on the plan too, in the first free cell.
+    expect(within(screen.getByTestId('floor-plan')).getByRole('button', { name: /^T9, / })).toBeInTheDocument();
+
+    const token = (await sql("select qr_token from restaurant_tables where label = 'T9'"))[0].qr_token;
+    expect((await api('GET', `/api/menu/${token}`)).body.table.label).toBe('T9');
+
+    await sql("update restaurant_tables set deleted_at = now(), pos_x = null, pos_y = null where label = 'T9'");
+  });
+
+  test("a duplicate table label shows the server's error inline", async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    await user.type(await screen.findByLabelText('Table name'), 'T1');
+    await user.click(screen.getByRole('button', { name: /Add table/ }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  test('capacity is changed from the list with a stepper', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const row = await listRow('T4');
+    expect(within(row).getByText('6')).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'More seats at T4' }));
+
+    await waitFor(async () => {
+      const rows = await sql("select seats from restaurant_tables where label = 'T4'");
+      expect(rows[0].seats).toBe(7);
+    });
+
+    await sql("update restaurant_tables set seats = 6 where label = 'T4'");
+  });
+
+  test('renaming a table keeps its printed QR code working', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const row = await listRow('T4');
+    await user.click(within(row).getByRole('button', { name: 'Edit T4' }));
+    const form = await screen.findByRole('dialog', { name: 'Edit T4' });
+    await user.clear(within(form).getByLabelText('Table name'));
+    await user.type(within(form).getByLabelText('Table name'), 'Terrace');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const card = (await screen.findByText('T9')).closest('.staff-qr-card');
-    expect(within(card).getByText('5 seats')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Terrace')).toBeInTheDocument();
 
-    const urlText = within(card).getByText(/\/t\//).textContent;
-    const qrToken = urlText.split('/t/')[1];
-    const menu = (await api('GET', `/api/menu/${qrToken}`)).body;
-    expect(menu.table.label).toBe('T9');
+    const menu = (await api('GET', `/api/menu/${tokens.T4}`)).body;
+    expect(menu.table.label).toBe('Terrace');
 
-    await sql("delete from restaurant_tables where label = 'T9'");
+    await sql("update restaurant_tables set label = 'T4' where qr_token = $1", [tokens.T4]);
   });
 
-  test('a duplicate table label shows the server\'s error inline', async () => {
+  test('pausing a table stops its QR code taking orders, and resuming brings it back', async () => {
     const user = userEvent.setup();
-    await signIn(user, STAFF_USER);
-    await user.click(await screen.findByRole('button', { name: 'Tables' }));
+    await openSettings(user, STAFF_USER, /Seating plan/);
 
-    await user.click(await screen.findByRole('button', { name: '+ Add table' }));
-    const form = await screen.findByRole('dialog', { name: 'Add table' });
-    await user.type(within(form).getByLabelText('Label'), 'T1');
-    await user.click(within(form).getByRole('button', { name: 'Add table' }));
+    let row = await listRow('T3');
+    await user.click(within(row).getByRole('button', { name: 'Pause T3' }));
 
-    expect(await within(form).findByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Add table' })).toBeInTheDocument(); // stays open
+    await waitFor(async () => expect((await api('GET', `/api/menu/${tokens.T3}`)).status).toBe(403));
+    row = await listRow('T3');
+    expect(within(row).getByText('Paused')).toBeInTheDocument();
+    // And the plan says so too.
+    expect(within(screen.getByTestId('floor-plan')).getByRole('button', { name: /^T3, Paused/ })).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Resume T3' }));
+    await waitFor(async () => expect((await api('GET', `/api/menu/${tokens.T3}`)).status).toBe(200));
+  });
+
+  // --- the QR code ----------------------------------------------------------
+
+  test('a table\'s QR code can be opened and downloaded', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const row = await listRow('T1');
+    await user.click(within(row).getByRole('button', { name: 'Show the QR code for T1' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'QR code for T1' });
+    const img = await within(dialog).findByRole('img', { name: 'QR code for table T1' });
+    expect(img.src).toMatch(/^data:image\/svg\+xml;base64,/);
+    expect(within(dialog).getByText(new RegExp(`/t/${tokens.T1}$`))).toBeInTheDocument();
+
+    // The download is the SVG we already generated, named after the table.
+    const link = within(dialog).getByRole('link', { name: /Download SVG/ });
+    expect(link).toHaveAttribute('download', 't1-qr.svg');
+    expect(link.getAttribute('href')).toBe(img.getAttribute('src'));
+    expect(within(dialog).getByRole('button', { name: /Download PNG/ })).toBeInTheDocument();
+  });
+
+  // --- retiring a table -----------------------------------------------------
+
+  test('removing a table asks first, and says what happens to its orders', async () => {
+    await sql("insert into restaurant_tables (restaurant_id, label, seats, pos_x, pos_y) select id, 'Spare', 2, 5, 5 from restaurants where slug = 'chai-point'");
+
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    let row = await listRow('Spare');
+    await user.click(within(row).getByRole('button', { name: 'Remove Spare' }));
+    expect(within(row).getByText(/Its past orders stay/)).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Keep' }));
+    expect(within(screen.getByRole('table')).getByText('Spare')).toBeInTheDocument();
+
+    row = await listRow('Spare');
+    await user.click(within(row).getByRole('button', { name: 'Remove Spare' }));
+    await user.click(within(row).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(within(screen.getByRole('table')).queryByText('Spare')).not.toBeInTheDocument());
+    // Soft: the row is still there for history, just retired.
+    const rows = await sql("select deleted_at from restaurant_tables where label = 'Spare'");
+    expect(rows[0].deleted_at).not.toBeNull();
+  });
+
+  test('a table that still owes money refuses to be removed, and says why', async () => {
+    await sql("insert into restaurant_tables (restaurant_id, label, seats, pos_x, pos_y) select id, 'Owing', 2, 6, 6 from restaurants where slug = 'chai-point'");
+    const token = (await sql("select qr_token from restaurant_tables where label = 'Owing'"))[0].qr_token;
+
+    const menu = (await api('GET', `/api/menu/${token}`)).body;
+    const item = menu.categories.flatMap((c) => c.items)[0];
+    await api('POST', '/api/cart/items', { session: menu.session.id, body: { menu_item_id: item.id, quantity: 1 } });
+    const cart = (await api('GET', '/api/cart', { session: menu.session.id })).body;
+    await api('POST', '/api/orders', { session: menu.session.id, body: { cart_id: cart.cart_id } });
+
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+
+    const row = await listRow('Owing');
+    await user.click(within(row).getByRole('button', { name: 'Remove Owing' }));
+    await user.click(within(row).getByRole('button', { name: 'Remove' }));
+
+    expect(await screen.findByText(/Settle this table before removing it/)).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Owing')).toBeInTheDocument();
+
+    // Delete it outright, not just mark it paid: an unapproved QR order left
+    // behind sits in POS's queue and every later POS test trips over it.
+    await sql("delete from orders where table_id = (select id from restaurant_tables where label = 'Owing')");
+    await sql("update restaurant_tables set deleted_at = now(), pos_x = null, pos_y = null where label = 'Owing'");
+  });
+
+  // --- User account ---------------------------------------------------------
+
+  test('renaming yourself updates the sidebar too, not just the form', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, SECOND_STAFF, /User account/);
+
+    const name = await screen.findByLabelText('Display name');
+    expect(name).toHaveValue('Ravi');
+
+    await user.clear(name);
+    await user.type(name, 'Ravi Kumar');
+    await user.click(screen.getByRole('button', { name: 'Save name' }));
+
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    // The sidebar's identity card reads from the same record.
+    expect(within(screen.getByRole('navigation', { name: 'View' })).getByText('Ravi Kumar')).toBeInTheDocument();
+
+    await sql("update staff_members set display_name = 'Ravi' where user_id = $1", [SECOND_STAFF]);
+  });
+
+  test('your own role is shown but never editable from here', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, KITCHEN_USER, /User account/);
+
+    await screen.findByRole('heading', { name: 'Your account' });
+    expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /role/i })).not.toBeInTheDocument();
+  });
+
+  test("a password change goes to the login provider, never through Petuk's API", async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /User account/);
+
+    await user.type(await screen.findByLabelText('New password'), 'sixchars');
+    await user.type(screen.getByLabelText('Confirm new password'), 'different');
+    await user.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByText(/don't match/)).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Confirm new password'));
+    await user.type(screen.getByLabelText('Confirm new password'), 'sixchars');
+    await user.click(screen.getByRole('button', { name: 'Change password' }));
+
+    expect(await screen.findByText('Password changed')).toBeInTheDocument();
+    expect(passwordChanges).toEqual(['sixchars']);
   });
 });
 

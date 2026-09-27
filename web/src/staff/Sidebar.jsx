@@ -2,20 +2,20 @@ import {
   ClipboardList,
   History,
   UtensilsCrossed,
-  Table2,
   LayoutDashboard,
   ShoppingCart,
   Users,
+  Settings,
 } from 'lucide-react';
 
 const ICONS = {
   board: ClipboardList,
   recent: History,
   menu: UtensilsCrossed,
-  tables: Table2,
   dashboard: LayoutDashboard,
   pos: ShoppingCart,
   staff: Users,
+  settings: Settings,
 };
 
 // Tailwind, replacing the old plain-CSS sidebar (staff.css's .staff-sidebar)

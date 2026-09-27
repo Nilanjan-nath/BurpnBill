@@ -23,6 +23,9 @@ and place an order directly — which appears instantly on a live kitchen/recept
 - Customer pays at the counter; payment happens outside the app **(decided)**
 - Customer can open a read-only **bill** — every order placed from their phone, with the
   total to pay — and show it at the counter **(decided)**
+- Owner keeps the café's own profile — name, address, phone, currency — its **seating plan**
+  (tables, their QR codes, renaming and pausing), and every staff member manages their own
+  name and password **(decided, step 6)**
 - Owner adds, edits, and deletes menu items, **with a photo and a category** — categories are
   records the owner creates and orders, and a photo is uploaded through the API into Supabase
   Storage **(decided, step 6)**
@@ -39,7 +42,11 @@ and place an order directly — which appears instantly on a live kitchen/recept
   orders paid and frees the table (see §7's `POST /tables/:tableId/checkout`). Wiring an actual
   gateway later is new code against the same schema, not a migration **(decided)**
 - **Discounts, tips, split bills, partial payments, tax** — none of these have any schema, and
-  `orders.tax_amount` is always 0 (no tax engine). Each is its own piece of work; the checkout
+  `orders.tax_amount` is always 0 (no tax engine). The Settings screen deliberately carries **no
+  tax-rate field** for that reason: storing a rate the app then ignores would promise a tax
+  nothing charges. Applying one is a change to how every order is priced — order creation, both
+  bills, checkout and the dashboard's takings all read those totals — so it is its own piece of
+  work, not a settings field **(decided, step 6)**. Each is its own piece of work; the checkout
   screen deliberately stops at "what's owed, and how was it paid" **(decided, step 6)**
 - **Invoices** (email/SMS) — planned for after v1 **(decided)**
 - Customer-facing live order-status tracking, including polling an order's status **(decided)**.
@@ -76,7 +83,9 @@ restaurants ──< menu_items          restaurants ──< staff_members
 ```
 
 - **Restaurant** — one row per cafe/tenant. Everything else scopes to `restaurant_id`.
-- **Table** — belongs to a restaurant; holds an opaque `qr_token` the QR code encodes.
+- **Table** — belongs to a restaurant; holds an opaque `qr_token` the QR code encodes, a
+  position on the floor plan (`pos_x`/`pos_y`, grid cells), and `deleted_at` for retiring one
+  without erasing its orders **(extended, step 6)**.
 - **MenuCategory** — a section of the menu, belonging to a restaurant: a name and a
   `display_order`. Exists as a record so a category can be created before anything is in it,
   and so menu order is the owner's rather than the alphabet's **(added, step 6)**.
@@ -140,6 +149,13 @@ trigger enforces the same table as a backstop, in case the two ever drift apart.
   nothing here should depend on deliverability. The address is only as trustworthy as
   Supabase's own "Confirm email" setting, which is what proves the person owns the inbox;
   invites expire after 7 days and can be revoked, to keep that window small.
+- **Settings (decided, step 6)**: the café's profile and its seating plan are the café's, so
+  they are the owner's — `PATCH /restaurant` and `PATCH /tables/:id` are owner-only, while the
+  *reads* are open to any staff member because the currency alone decides how every price on
+  their screen is formatted. **Your own account is yours**: `PATCH /me` changes your display
+  name and accepts nothing else — a role is not a field there at all, so no login can promote
+  itself. A password change never reaches this API: the browser's own Supabase client holds the
+  session and changes it directly, so no password is sent to, or logged by, a server we wrote.
 - **Sign-up (added):** because an invite creates no login, `/staff` has a sign-up mode beside
   sign-in — otherwise an invited person has no way in at all. Anyone may create an account;
   that alone grants nothing, since access comes from claiming an invite. With Supabase's
@@ -176,6 +192,12 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 ### Private (staff/owner, authenticated + restaurant-scoped)
 
 - `GET /me` — the signed-in staff member and their restaurant **(added)**
+- `PATCH /me` — your own `display_name`, and nothing else. Never a role **(added, step 6)**
+- `GET /restaurant` — any staff member; the café's name, address, phone and currency
+- `PATCH /restaurant` — owner only; partial. `address` and `phone` are clearable (an explicit
+  null differs from omitting the field); `name` and `currency_code` are not. The currency is
+  normalised to upper case and validated as three letters here, since the column's own check
+  only enforces the length **(added, step 6)**
 - `GET /orders?status=&table_id=` — order board initial load (active orders + server time). Only approved orders: a QR order the counter hasn't accepted is not the kitchen's problem
 - `GET /orders/pending` — the QR approval queue, oldest first, with lines and totals **(added, step 6)**
 - `POST /orders/:orderId/approve` — hand a queued order to the kitchen. Locks the row first, so two people accepting at once can't both win; the loser gets a 409 like any lost race. Publishes `order_created` — this is the moment the kitchen hears about it **(added, step 6)**
@@ -209,6 +231,19 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   it**: its items move to Uncategorised in the same transaction, which is also why the foreign
   key has no `ON DELETE` action — the move is deliberate, not a side effect. Returns
   `moved_items` so the UI can say where they went **(added, step 6)**
+- `DELETE /tables/:tableId` — owner only, and a **soft** delete (`deleted_at`). It has to be:
+  `orders.table_id` cascades, so a real delete would erase every order ever placed at that
+  table. **Refused with 409 while the table still owes money** — retiring a table mid-service
+  would hide a bill nobody would ever see again. A retired table stops appearing anywhere, its
+  QR code stops resolving (404), and it gives up both its name and its cell for the next one
+  **(added, step 6)**
+- `PATCH /tables/:tableId` — owner only; rename, change the seat count, **move it on the floor
+  plan** (`pos_x`/`pos_y`, both or neither), or **pause** a table.
+  Pausing is what `is_active` was always for: `openMenu` already refuses an inactive table with
+  403 `ordering_unavailable`, so a paused table's QR code stops taking orders immediately and
+  starts again when it's unpaused — nothing is reprinted. The `qr_token` is deliberately not
+  touchable: it is printed on something physical, and changing it would turn every copy into a
+  dead link **(added, step 6)**
 - `GET /tables` — owner and staff; `POST /tables` — owner only. The Tables *tab* in the dashboard
   is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
   wider allowance is unused by the UI, not a mismatch
@@ -228,7 +263,9 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `POST /staff/invites` — owner only; pre-authorise `{ email, role, display_name? }`. Re-inviting an address replaces the open invite rather than erroring **(added, step 6)**
 - `DELETE /staff/invites/:inviteId` — withdraw one that hasn't been claimed **(added, step 6)**
 - `PATCH /staff/:userId` `{ role }` and `DELETE /staff/:userId` — change a role, or unlink someone. Removing leaves their Supabase Auth account alone: that identity may be used elsewhere. Both refuse to remove the **last owner** — a cafe with no owner has nobody who can put one back **(added, step 6)**
-- `GET /floor` — front of house (owner or staff), not the kitchen. Every table plus whether it's occupied, derived from active orders,
+- `GET /floor` — front of house (owner or staff), not the kitchen. Carries the floor-plan
+  positions and reads in layout order, so POS draws the room the owner actually arranged
+  rather than the order tables were added **(extended, step 6)**. Every table plus whether it's occupied, derived from active orders,
   no new schema. Also carries the table's running bill (`unpaid_total`, `unpaid_count`, summed
   over every unpaid order, not just the newest) and its `qr_token`, so POS can show what a table
   owes and its QR code without a second request **(added, step 7; extended, step 6)**

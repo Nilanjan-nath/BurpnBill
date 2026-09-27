@@ -13,7 +13,9 @@ export async function openMenu(db, { qrToken, sessionHeader, sessionTtlHours }) 
             r.currency_code, (t.is_active and r.is_active) as ordering_open
        from public.restaurant_tables t
        join public.restaurants r on r.id = t.restaurant_id
-      where t.qr_token = $1`,
+      -- A retired table's code stops working entirely. Not "ordering is
+      -- closed" — this table no longer exists, so the code is unrecognised.
+      where t.qr_token = $1 and t.deleted_at is null`,
     [qrToken],
   );
   const table = tables[0];

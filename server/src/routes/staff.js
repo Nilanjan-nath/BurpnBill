@@ -28,7 +28,8 @@ import {
   deleteMenuCategory,
 } from '../services/menuCategories.js';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../services/itemImages.js';
-import { listTables, createTable, getTableBill, checkoutTable } from '../services/tables.js';
+import { listTables, createTable, updateTable, deleteTable, getTableBill, checkoutTable } from '../services/tables.js';
+import { getRestaurantProfile, updateRestaurantProfile, updateOwnProfile } from '../services/restaurantProfile.js';
 import { listStaff, inviteStaff, revokeInvite, updateStaffRole, removeStaff } from '../services/staffAdmin.js';
 import { notFound, HttpError } from '../errors.js';
 import {
@@ -45,6 +46,9 @@ import {
   createMenuCategoryBody,
   updateMenuCategoryBody,
   createTableBody,
+  updateTableBody,
+  updateRestaurantBody,
+  updateOwnProfileBody,
   checkoutTableBody,
   createStaffOrderBody,
   tableIdParams,
@@ -70,6 +74,29 @@ export function staffRoutes({ db, requireStaff, hub, imageStore }) {
   // Who am I, and which cafe — the dashboard calls this after sign-in.
   router.get('/me', staff, (req, res) => {
     res.json({ staff: req.staff });
+  });
+  // Your own display name. Never a role — that is the owner's Staff tab, and
+  // accepting one here would let the kitchen promote itself.
+  router.patch('/me', staff, async (req, res) => {
+    const body = parse(updateOwnProfileBody, req.body);
+    const updated = await updateOwnProfile(db, req.staff.userId, body);
+    if (!updated) throw notFound('Staff member not found');
+    res.json({ staff: { ...req.staff, displayName: updated.display_name } });
+  });
+
+  // The café's own profile (Settings → Restaurant Profile). Any staff member
+  // can read it — the currency alone decides how every price on their screen
+  // is formatted — but only the owner changes it.
+  router.get('/restaurant', staff, async (req, res) => {
+    const restaurant = await getRestaurantProfile(db, req.staff.restaurantId);
+    if (!restaurant) throw notFound('Restaurant not found');
+    res.json({ restaurant });
+  });
+  router.patch('/restaurant', owner, async (req, res) => {
+    const body = parse(updateRestaurantBody, req.body);
+    const restaurant = await updateRestaurantProfile(db, req.staff.restaurantId, body);
+    if (!restaurant) throw notFound('Restaurant not found');
+    res.json({ restaurant });
   });
 
   // Live order board (step 4).
@@ -265,6 +292,29 @@ export function staffRoutes({ db, requireStaff, hub, imageStore }) {
   router.post('/tables', owner, async (req, res) => {
     const body = parse(createTableBody, req.body);
     res.status(201).json({ table: await createTable(db, req.staff.restaurantId, body) });
+  });
+  // Rename, reseat, or pause a table. Pausing is what closes a table for the
+  // evening without reprinting its QR code — see updateTable in tables.js.
+  router.patch('/tables/:tableId', owner, async (req, res) => {
+    const { tableId } = parse(tableIdParams, req.params);
+    const body = parse(updateTableBody, req.body);
+    const table = await updateTable(db, req.staff.restaurantId, tableId, body);
+    if (!table) throw notFound('Table not found');
+    res.json({ table });
+  });
+  // Retiring a table. Soft, because orders.table_id cascades — see
+  // deleteTable in tables.js. Refused while the table still owes money.
+  router.delete('/tables/:tableId', owner, async (req, res) => {
+    const { tableId } = parse(tableIdParams, req.params);
+    const result = await deleteTable(db, req.staff.restaurantId, tableId);
+    if (result.reason === 'not_found') throw notFound('Table not found');
+    if (result.reason === 'unpaid_orders') {
+      throw new HttpError(409, 'unpaid_orders', 'Settle this table before removing it — it still has an unpaid bill', {
+        unpaid_count: result.unpaid_count,
+        unpaid_total: result.unpaid_total,
+      });
+    }
+    res.status(204).end();
   });
   // The staff-side table bill, and settling it. The money itself is taken at
   // the counter — this records which method was used and frees the table. See
