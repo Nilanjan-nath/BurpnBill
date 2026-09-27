@@ -28,11 +28,17 @@ export async function openMenu(db, { qrToken, sessionHeader, sessionTtlHours }) 
     [session.id],
   );
 
+  // Ordered by the owner's own category order, not the alphabet's. An item with
+  // no category is a real state, not missing data — it reads as "Uncategorised"
+  // and sorts after everything the owner has deliberately placed.
   const { rows: items } = await db.query(
-    `select id, name, description, category, price, is_veg, image_url
-       from public.menu_items
-      where restaurant_id = $1 and deleted_at is null and is_available
-      order by category, sort_order, name`,
+    `select i.id, i.name, i.description, coalesce(c.name, 'Uncategorised') as category,
+            i.price, i.is_veg, i.image_url
+       from public.menu_items i
+       left join public.menu_categories c on c.id = i.category_id
+      where i.restaurant_id = $1 and i.deleted_at is null and i.is_available
+      order by coalesce(c.display_order, 2147483647), coalesce(c.name, 'Uncategorised'),
+               i.sort_order, i.name`,
     [table.restaurant_id],
   );
 

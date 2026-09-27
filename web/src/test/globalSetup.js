@@ -38,10 +38,27 @@ export default async function setup({ provide }) {
     },
   };
 
+  // Item photos: a stand-in for Supabase Storage, for the same reason the auth
+  // client above is faked — the point of these tests is the dashboard against
+  // the real API, not a round trip to Supabase. It hands back a URL shaped
+  // exactly like the real bucket's, so what lands in `image_url` (and in an
+  // <img src>) is what production would put there.
+  let uploadCount = 0;
+  const imageStore = {
+    async upload({ restaurantId, itemId, contentType }) {
+      const ext = contentType.split('/')[1].replace('jpeg', 'jpg');
+      return `https://storage.test/storage/v1/object/public/menu-images/${restaurantId}/${itemId}-${++uploadCount}.${ext}`;
+    },
+    async remove() {
+      return true;
+    },
+  };
+
   const api = createApp({
     config: { appBaseUrl: 'http://localhost:5173', guestSessionTtlHours: 3 },
     db,
     supabase,
+    imageStore,
   });
 
   // Two staff logins already linked to the demo café — the dashboard tests

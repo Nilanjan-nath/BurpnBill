@@ -237,7 +237,7 @@ test('a made-up or inactive table is 404, not a crash', async () => {
 
 test('another café\'s table is 404, and their menu items can\'t be ordered onto your table', async () => {
   const t1 = await tableId('T1');
-  await db.query(`insert into menu_items (restaurant_id, name, price, category) values ($1, 'Rival Chai', 20, 'Beverages')`, [otherRestaurantId]);
+  await db.query(`insert into menu_items (restaurant_id, name, price) values ($1, 'Rival Chai', 20)`, [otherRestaurantId]);
   const rivalChai = await itemId('Rival Chai', otherRestaurantId);
   const chai = await itemId('Masala Chai');
 

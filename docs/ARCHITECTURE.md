@@ -23,7 +23,9 @@ and place an order directly — which appears instantly on a live kitchen/recept
 - Customer pays at the counter; payment happens outside the app **(decided)**
 - Customer can open a read-only **bill** — every order placed from their phone, with the
   total to pay — and show it at the counter **(decided)**
-- Owner adds, edits, and deletes menu items
+- Owner adds, edits, and deletes menu items, **with a photo and a category** — categories are
+  records the owner creates and orders, and a photo is uploaded through the API into Supabase
+  Storage **(decided, step 6)**
 - Owner and staff toggle item availability on/off (86'd items disappear from the menu)
 - Owner and staff see live incoming orders per table on one shared dashboard, update
   their status, and see each order's status timeline **(decided)**
@@ -69,12 +71,20 @@ restaurants ──< restaurant_tables ──< guest_sessions ──< carts ─�
                        └────────────────────┴──< orders ──< order_items ┘
                                                   │   └──< order_status_events
                                                   └──< payments   (unused in v1)
+restaurants ──< menu_categories ──< menu_items
 restaurants ──< menu_items          restaurants ──< staff_members
 ```
 
 - **Restaurant** — one row per cafe/tenant. Everything else scopes to `restaurant_id`.
 - **Table** — belongs to a restaurant; holds an opaque `qr_token` the QR code encodes.
-- **MenuItem** — belongs to a restaurant; `is_available`, price, category, soft delete.
+- **MenuCategory** — a section of the menu, belonging to a restaurant: a name and a
+  `display_order`. Exists as a record so a category can be created before anything is in it,
+  and so menu order is the owner's rather than the alphabet's **(added, step 6)**.
+- **MenuItem** — belongs to a restaurant; `is_available`, price, soft delete, and a nullable
+  `category_id`. **Null means Uncategorised** — a real state, not missing data: it keeps
+  `POST /items`'s "name and price, everything else optional" contract, and means deleting a
+  category has somewhere to put its items without a magic fallback row **(changed, step 6)**.
+  `image_url` holds an owner-uploaded photo (see §8).
 - **GuestSession** — created per QR scan (no login), tied to a table, expires 3 hours after its last activity.
 - **Cart / CartItem** — server-side cart, at most one open cart per guest session
   **(decided)**. Same item with different notes is a separate line.
@@ -177,6 +187,28 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `GET /items` — admin menu list, including 86'd items **(added)**
 - `POST /items`, `PATCH /items/:itemId`, `DELETE /items/:itemId` (soft) — owner only
 - `PATCH /items/:itemId/availability` — owner and staff
+- `PUT /items/:itemId/image` — owner only; the photo's **raw bytes** with an image
+  `Content-Type` (PNG/JPG/WEBP, 5MB cap), not multipart — there is exactly one file and no
+  other fields travel with it, so `express.raw` is the whole parser. The upload goes through
+  the API rather than straight from the browser to Supabase: a signed upload URL would save a
+  hop, but it would mean the browser telling the server where the file landed and the server
+  writing that string into `image_url` on trust. This way the service-role key is the only
+  thing that can write to the bucket, and the URL stored is one the server produced. Replacing
+  a photo writes a new path (so a cached copy of the old one can't win) and deletes the file it
+  replaced; deleting the item deletes its file too **(added, step 6)**
+- `DELETE /items/:itemId/image` — owner only; clears the column and the file **(added, step 6)**
+- `GET /categories` — owner and staff (the Menu tab groups by them for the kitchen too)
+- `POST /categories` — owner only; `{ name, display_order? }`. An omitted `display_order`
+  puts the category at the **end** of the menu — a new section almost never belongs first, and
+  landing on 0 would silently reorder the menu. A duplicate name is a 409 from
+  `menu_categories_name_key` (case- and whitespace-insensitive), not an app-level check, so
+  there's no read-then-write race to lose **(added, step 6)**
+- `PATCH /categories/:categoryId` — owner only; rename and/or reorder. Renaming never touches
+  the items — they point at the record, which is the whole reason this stopped being a string
+- `DELETE /categories/:categoryId` — owner only. **Deleting a section never deletes the food in
+  it**: its items move to Uncategorised in the same transaction, which is also why the foreign
+  key has no `ON DELETE` action — the move is deliberate, not a side effect. Returns
+  `moved_items` so the UI can say where they went **(added, step 6)**
 - `GET /tables` — owner and staff; `POST /tables` — owner only. The Tables *tab* in the dashboard
   is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
   wider allowance is unused by the UI, not a mismatch
@@ -267,8 +299,15 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   rules also apply to `/staff`. They live in `@layer petuk-customer` for that reason — unlayered
   CSS outranks anything in a cascade layer, and Tailwind v4 puts all its utilities in one, so
   left unlayered the customer reset silently won over every dashboard utility **(added, step 6)** The rest of the staff
-  dashboard (Board/Recent/Menu/Tables) still uses the older plain-CSS dark theme, scoped to
-  `.staff-legacy` — a known, temporary visual seam until those pages are migrated too
+  dashboard (Board/Recent/Tables) still uses the older plain-CSS dark theme, scoped to
+  `.staff-legacy` — a known, temporary visual seam until those pages are migrated too. The Menu
+  tab joined the Tailwind system in step 6, with photo cards, a search field and its own
+  Categories view
+- **Item photos (added, step 6)**: a public `menu-images` bucket in Supabase Storage, created on
+  demand by the API rather than as a setup step the owner has to remember. Public read because
+  these are menu photos on a page anyone at a table can open — signing every URL would buy
+  nothing and cost a round trip per item. The customer menu renders them as a fixed square
+  thumbnail, so a tall photo and a wide one don't make the rows jump as they load
 - **Package manager**: npm
 - **Hosting (later)**: Render/Railway (backend), Vercel/Netlify (frontend), Supabase
 

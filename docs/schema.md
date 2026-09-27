@@ -6,6 +6,7 @@ restaurants ──< restaurant_tables ──< guest_sessions ──< carts ─�
                        └────────────────────┴──< orders ──< order_items ┘
                                                   │   └──< order_status_events
                                                   └──< payments
+restaurants ──< menu_categories ──< menu_items
 restaurants ──< menu_items          restaurants ──< staff_members
 ```
 
@@ -54,9 +55,26 @@ live order data. Everything below already works and is covered by
 only one success. A succeeding payment sets `orders.paid_at` by trigger — that's
 the denormalised flag the dashboard and the `order_payment_updated` SSE event read.
 
-**Menu reads are one indexed scan.** `menu_items_public_read_idx` is a partial
-index on `(restaurant_id, category, sort_order, name) where deleted_at is null
-and is_available` — the customer menu never touches an 86'd or deleted row.
+**Menu reads are one indexed scan for the filter.** `menu_items_public_read_idx` is a
+partial index on `(restaurant_id, category_id, sort_order, name) where deleted_at is
+null and is_available` — the customer menu never touches an 86'd or deleted row. Since
+categories became records (step 6) the *sort* is no longer covered by that index: it runs
+over a join to `menu_categories`, which holds a handful of rows per cafe, because the
+order a menu reads in is the owner's `display_order` and not the category's spelling.
+
+**A null `menu_items.category_id` is Uncategorised**, not missing data. Reads coalesce it
+to that name and sort it last. Keeping it nullable is what lets `POST /items` stay
+"name and price, everything else optional", and what gives `DELETE /categories/:id`
+somewhere to put a section's items without a magic fallback row. Its foreign key is
+composite — `(category_id, restaurant_id) → menu_categories (id, restaurant_id)`, like
+every other child here — and carries **no `ON DELETE` action** on purpose: the items are
+moved deliberately, in the same transaction as the delete. (`SET NULL` on a composite key
+would null `restaurant_id` too, and the column-list form that avoids that is Postgres 15+
+only.)
+
+**One category name per cafe**, case- and whitespace-insensitively:
+`menu_categories_name_key` on `(restaurant_id, lower(btrim(name)))`. A second "beverages"
+is a 409 from the database, so there is no read-then-write race to lose.
 
 **RLS is on for every table, with zero policies.** Supabase exposes the public
 schema to the `anon` key that ships in frontend JS; without this, anyone with that

@@ -94,13 +94,14 @@ export function Board({ identity, board, token, onSignOut }) {
           </div>
         )}
 
-        {/* Board, POS and Staff are the new Tailwind design; Recent, Menu and
-            Tables are still the old dark theme (see staff.css's header note)
-            — only the latter get .staff-legacy, so the light panels aren't
-            nested inside a dark-background ancestor. */}
+        {/* Board, POS, Staff, Dashboard and Menu are the new Tailwind design;
+            Recent and Tables are still the old dark theme (see staff.css's
+            header note) — only the latter get .staff-legacy, so the light
+            panels aren't nested inside a dark-background ancestor. Take a tab
+            out of this list as you migrate it. */}
         <div
           className={
-            ['board', 'pos', 'staff', 'dashboard'].includes(tab)
+            ['board', 'pos', 'staff', 'dashboard', 'menu'].includes(tab)
               ? 'flex min-h-0 flex-1 flex-col'
               : 'staff-legacy flex min-h-0 flex-1 flex-col'
           }

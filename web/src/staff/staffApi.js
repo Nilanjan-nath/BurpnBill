@@ -43,6 +43,34 @@ async function request(method, path, { token, body } = {}) {
   return data;
 }
 
+// The photo upload is the one call that doesn't send JSON — it PUTs the file's
+// own bytes with its own content type, which is what the server reads. Sharing
+// request() would mean teaching it about bodies it otherwise never sees.
+async function upload(path, { token, file }) {
+  // The bytes, not the File object: the server reads the body raw and takes the
+  // format from Content-Type, so the filename and the wrapper carry nothing —
+  // and a File doesn't survive every fetch implementation this runs under.
+  const bytes = await file.arrayBuffer();
+
+  let res;
+  try {
+    res = await fetch(BASE + path, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type, ...(token && { Authorization: `Bearer ${token}` }) },
+      body: bytes,
+    });
+  } catch {
+    throw new StaffApiError(0, 'network', "Can't reach the server. Check your connection and try again.");
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = data?.error ?? {};
+    throw new StaffApiError(res.status, err.code ?? 'unknown', err.message ?? 'That photo could not be uploaded.', err);
+  }
+  return data;
+}
+
 export const staffApi = {
   me: (token) => request('GET', '/me', { token }),
   listOrders: (token) => request('GET', '/orders', { token }),
@@ -55,6 +83,12 @@ export const staffApi = {
   deleteItem: (token, itemId) => request('DELETE', `/items/${itemId}`, { token }),
   setItemAvailability: (token, itemId, isAvailable) =>
     request('PATCH', `/items/${itemId}/availability`, { token, body: { is_available: isAvailable } }),
+  uploadItemImage: (token, itemId, file) => upload(`/items/${itemId}/image`, { token, file }),
+  removeItemImage: (token, itemId) => request('DELETE', `/items/${itemId}/image`, { token }),
+  listCategories: (token) => request('GET', '/categories', { token }),
+  createCategory: (token, body) => request('POST', '/categories', { token, body }),
+  updateCategory: (token, categoryId, body) => request('PATCH', `/categories/${categoryId}`, { token, body }),
+  deleteCategory: (token, categoryId) => request('DELETE', `/categories/${categoryId}`, { token }),
   listTables: (token) => request('GET', '/tables', { token }),
   createTable: (token, body) => request('POST', '/tables', { token, body }),
   getFloor: (token) => request('GET', '/floor', { token }),

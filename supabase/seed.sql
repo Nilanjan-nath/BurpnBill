@@ -12,8 +12,18 @@ select '11111111-1111-1111-1111-111111111111', label, seats
 from (values ('T1', 2), ('T2', 4), ('T3', 4), ('T4', 6)) as t(label, seats)
 on conflict (restaurant_id, label) do nothing;
 
-insert into public.menu_items (restaurant_id, name, description, category, price, is_veg, sort_order)
-select '11111111-1111-1111-1111-111111111111', name, description, category, price, is_veg, sort_order
+insert into public.menu_categories (restaurant_id, name, display_order)
+select '11111111-1111-1111-1111-111111111111', name, display_order
+from (values
+  ('Beverages', 10),
+  ('Snacks',    20),
+  ('Mains',     30),
+  ('Desserts',  40)
+) as c(name, display_order)
+on conflict do nothing;
+
+insert into public.menu_items (restaurant_id, name, description, category_id, price, is_veg, sort_order)
+select '11111111-1111-1111-1111-111111111111', m.name, m.description, c.id, m.price, m.is_veg, m.sort_order
 from (values
   ('Masala Chai',        'Cutting chai, brewed strong with ginger and cardamom', 'Beverages', 30.00,  true,  10),
   ('Filter Coffee',      'South Indian filter coffee, served hot',               'Beverages', 40.00,  true,  20),
@@ -28,6 +38,8 @@ from (values
   ('Butter Chicken Bowl','With two butter rotis',                                'Mains',    240.00,  false, 30),
   ('Chocolate Brownie',  'Served warm',                                          'Desserts', 110.00,  true,  10)
 ) as m(name, description, category, price, is_veg, sort_order)
+join public.menu_categories c
+  on c.restaurant_id = '11111111-1111-1111-1111-111111111111' and c.name = m.category
 where not exists (
   select 1 from public.menu_items existing
   where existing.restaurant_id = '11111111-1111-1111-1111-111111111111'

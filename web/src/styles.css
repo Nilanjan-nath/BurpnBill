@@ -135,6 +135,15 @@ section h2 {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 15px 16px; box-shadow: var(--shadow-sm);
 }
+/* Owner-uploaded dish photo. Fixed square so a tall and a wide photo sit on
+   the same line without the rows jumping about as they load. */
+.item-photo {
+  flex: none; width: 72px; height: 72px; object-fit: cover;
+  border-radius: var(--radius-sm); background: var(--border);
+  /* Top-aligned, not centred with the row: otherwise the dish name overhangs
+     the photo and the picture reads as belonging to the description. */
+  align-self: flex-start;
+}
 .item-name { font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
 .item-info .muted { font-size: 0.88rem; line-height: 1.4; margin: 3px 0 8px; }
 .price { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); font-family: var(--font-display); }

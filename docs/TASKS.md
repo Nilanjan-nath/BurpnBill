@@ -762,6 +762,55 @@ that had been flagged since slice 3.*
 - [ ] Replaces the `StaffTab.jsx` placeholder: invite form + active staff list with an
       inline role dropdown and a remove action
 
+**Slice 7 — Menu tab: categories, photos, and the Tailwind migration** — done
+
+**Decided:** categories become a **record** (`menu_categories`, migration 5), not the free-text
+`menu_items.category` column they were. The free-text column couldn't represent two things the
+owner actually needs — a category that exists before anything is in it, and a menu order that
+isn't the alphabet's — and both are properties of the category, not of an item. `category_id`
+is **nullable**, and null reads as "Uncategorised" everywhere: that keeps step 5's `POST /items`
+contract ("name and price, everything else optional") and means deleting a category has somewhere
+to put its items without a magic fallback row. Photos land in a public `menu-images` Supabase
+Storage bucket, uploaded **through the API** (raw bytes + an image Content-Type, no multipart
+parser and no new dependency) so the service-role key stays the only writer and the stored URL is
+one the server produced. Built from an owner-supplied POS reference; **not** taken from it, for
+the usual "don't fake capability" reason: AI-generated descriptions, Variants/Add-ons/Combo,
+Key Ingredients, the "5/20 items used" quota, and Clock In — none of which have any schema.
+Teal, not the reference's blue, per `design.md`'s one rule.
+
+- [x] Migration `20260927120000_menu_categories.sql`: `menu_categories` (name + `display_order`,
+      unique per café case- and whitespace-insensitively), `menu_items.category_id` with the
+      usual composite FK, backfilled from the distinct values already in use — ordered
+      alphabetically so nothing visibly reordered the moment it landed — then the text column
+      dropped and both partial indexes rebuilt on `category_id`
+- [x] Backfill verified against pre-migration data specifically (the test path never exercises
+      it, since the seed now inserts categories directly): sloppy spellings merge, existing
+      "Uncategorised" items stay null, a category that exists only because of a soft-deleted
+      item isn't created, and one café cannot be filed under another's section
+- [x] `GET/POST/PATCH/DELETE /categories` — owner-only except the read. A new category lands at
+      the **end** of the menu when no `display_order` is given; a duplicate name is a 409 from
+      the unique index, not an app-level check; deleting one moves its items to Uncategorised in
+      the same transaction and returns `moved_items`
+- [x] `PUT /items/:id/image` and `DELETE /items/:id/image` — owner only, PNG/JPG/WEBP, 5MB.
+      Replacing writes a new path (a cached copy of the old one can't win) and deletes the file
+      it replaced; deleting the item deletes its file too. The bucket is created on demand
+      rather than being a setup step the owner has to remember
+- [x] Customer menu renders the photo as a fixed square thumbnail and reads in the owner's
+      category order — a photo nobody eating ever sees would be pointless
+- [x] `MenuTab.jsx` rebuilt in Tailwind: header card, Menu items / Categories sub-tabs, search
+      over name and description, photo cards with a monogram fallback, hover edit/delete, and
+      the 86 toggle still available to the kitchen. `ItemForm.jsx` rebuilt with the upload box
+      and a category picker; `CategoryForm.jsx` is new. Menu came out of `Board.jsx`'s
+      `.staff-legacy` list
+- [x] Tests: 16 new server tests (`menu-categories.test.js`) and 10 new web tests. Server 144 →
+      160, web 73 → 81. Mutation-checked, 11 mutations, all caught — one of which exposed a real
+      redundancy (two statements in the category delete, where the second silently did the
+      first's work), now one statement
+- [x] Two test-harness gaps found and closed: an assertion sitting outside a `try/finally` left
+      an item 86'd for every later test in the run, and jsdom has no object-URL store, so
+      `URL.createObjectURL` is stubbed in `test/setup.js` alongside the dialog and Web Audio
+      fakes
+
 ## Step 7 — Landing page
 
 - [ ] Built last, with real screenshots of the working flow

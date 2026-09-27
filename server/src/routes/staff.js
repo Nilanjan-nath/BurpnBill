@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { requireOwner, requireFrontOfHouse } from '../middleware/auth.js';
 import {
   listActiveOrders,
@@ -19,7 +19,15 @@ import {
   updateMenuItem,
   deleteMenuItem,
   setItemAvailability,
+  setItemImage,
 } from '../services/menuAdmin.js';
+import {
+  listMenuCategories,
+  createMenuCategory,
+  updateMenuCategory,
+  deleteMenuCategory,
+} from '../services/menuCategories.js';
+import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../services/itemImages.js';
 import { listTables, createTable, getTableBill, checkoutTable } from '../services/tables.js';
 import { listStaff, inviteStaff, revokeInvite, updateStaffRole, removeStaff } from '../services/staffAdmin.js';
 import { notFound, HttpError } from '../errors.js';
@@ -33,6 +41,9 @@ import {
   createMenuItemBody,
   updateMenuItemBody,
   setAvailabilityBody,
+  categoryIdParams,
+  createMenuCategoryBody,
+  updateMenuCategoryBody,
   createTableBody,
   checkoutTableBody,
   createStaffOrderBody,
@@ -48,7 +59,7 @@ import {
 // query is scoped to req.staff.restaurantId.
 //   owner: everything
 //   staff: work the order board, 86 items
-export function staffRoutes({ db, requireStaff, hub }) {
+export function staffRoutes({ db, requireStaff, hub, imageStore }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
@@ -161,6 +172,9 @@ export function staffRoutes({ db, requireStaff, hub }) {
     const { itemId } = parse(itemIdParams, req.params);
     const deleted = await deleteMenuItem(db, req.staff.restaurantId, itemId);
     if (!deleted) throw notFound('Item not found');
+    // Nothing will ever render this photo again, and the soft-deleted row was
+    // the only record of where it lived.
+    if (deleted.image_url) await imageStore?.remove(deleted.image_url);
     res.status(204).end();
   });
   router.patch('/items/:itemId/availability', staff, async (req, res) => {
@@ -169,6 +183,79 @@ export function staffRoutes({ db, requireStaff, hub }) {
     const item = await setItemAvailability(db, req.staff.restaurantId, itemId, is_available);
     if (!item) throw notFound('Item not found');
     res.json({ item });
+  });
+
+  // The item photo. Raw bytes with an image Content-Type rather than multipart:
+  // there is exactly one file, no other fields travel with it, and this needs
+  // no parser beyond what Express already ships. express.json above ignores the
+  // body because the content type doesn't match it.
+  router.put(
+    '/items/:itemId/image',
+    owner,
+    express.raw({ type: Object.keys(IMAGE_TYPES), limit: MAX_IMAGE_BYTES }),
+    async (req, res) => {
+      const { itemId } = parse(itemIdParams, req.params);
+      const contentType = req.get('content-type')?.split(';')[0].trim();
+      if (!IMAGE_TYPES[contentType]) {
+        throw new HttpError(415, 'unsupported_image', 'Photos must be a PNG, JPG or WEBP');
+      }
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        throw new HttpError(400, 'empty_image', 'That file arrived empty');
+      }
+
+      const url = await imageStore.upload({
+        restaurantId: req.staff.restaurantId,
+        itemId,
+        bytes: req.body,
+        contentType,
+      });
+      const item = await setItemImage(db, req.staff.restaurantId, itemId, url);
+      // The item vanished between the upload and the write — don't leave the
+      // file behind pointing at nothing.
+      if (!item) {
+        await imageStore.remove(url);
+        throw notFound('Item not found');
+      }
+      if (item.replaced_image_url) await imageStore.remove(item.replaced_image_url);
+
+      const { replaced_image_url, ...rest } = item;
+      res.json({ item: rest });
+    },
+  );
+
+  router.delete('/items/:itemId/image', owner, async (req, res) => {
+    const { itemId } = parse(itemIdParams, req.params);
+    const item = await setItemImage(db, req.staff.restaurantId, itemId, null);
+    if (!item) throw notFound('Item not found');
+    if (item.replaced_image_url) await imageStore?.remove(item.replaced_image_url);
+
+    const { replaced_image_url, ...rest } = item;
+    res.json({ item: rest });
+  });
+
+  // Menu categories (step 6). Readable by anyone on the dashboard — the Menu
+  // tab groups by them for the kitchen too — but only the owner rearranges the
+  // menu.
+  router.get('/categories', staff, async (req, res) => {
+    res.json({ categories: await listMenuCategories(db, req.staff.restaurantId) });
+  });
+  router.post('/categories', owner, async (req, res) => {
+    const body = parse(createMenuCategoryBody, req.body);
+    res.status(201).json({ category: await createMenuCategory(db, req.staff.restaurantId, body) });
+  });
+  router.patch('/categories/:categoryId', owner, async (req, res) => {
+    const { categoryId } = parse(categoryIdParams, req.params);
+    const body = parse(updateMenuCategoryBody, req.body);
+    const category = await updateMenuCategory(db, req.staff.restaurantId, categoryId, body);
+    if (!category) throw notFound('Category not found');
+    res.json({ category });
+  });
+  router.delete('/categories/:categoryId', owner, async (req, res) => {
+    const { categoryId } = parse(categoryIdParams, req.params);
+    const result = await deleteMenuCategory(db, req.staff.restaurantId, categoryId);
+    if (!result) throw notFound('Category not found');
+    // What happened to the food that was in it, so the UI can say so.
+    res.json(result);
   });
 
   // Tables and their QR tokens (step 5).

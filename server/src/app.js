@@ -6,13 +6,23 @@ import { createRequireGuestSession, GUEST_SESSION_HEADER } from './middleware/gu
 import { createOrderEventHub } from './orderStream.js';
 import { publicRoutes } from './routes/public.js';
 import { staffRoutes } from './routes/staff.js';
+import { createImageStore } from './services/itemImages.js';
 
 // Builds the Express app from its dependencies, so tests can pass fakes.
 //   checks: { name: async () => void } — run by GET /health/ready
 //   hub: the SSE pub/sub from orderStream.js; created once in src/index.js so
 //        it can be closed there on shutdown. Defaults to a fresh one so tests
 //        that don't care about SSE (most of them) don't need to supply it.
-export function createApp({ config, db, supabase, checks = {}, hub = createOrderEventHub() }) {
+//   imageStore: where item photos go. Injected so tests can hand in one that
+//        records calls instead of reaching Supabase Storage.
+export function createApp({
+  config,
+  db,
+  supabase,
+  checks = {},
+  hub = createOrderEventHub(),
+  imageStore = createImageStore({ supabase }),
+}) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -48,7 +58,7 @@ export function createApp({ config, db, supabase, checks = {}, hub = createOrder
   const requireGuestSession = createRequireGuestSession({ db, sessionTtlHours: config.guestSessionTtlHours });
 
   app.use('/api', publicRoutes({ db, config, requireGuestSession, hub }));
-  app.use('/api', staffRoutes({ db, requireStaff, hub }));
+  app.use('/api', staffRoutes({ db, requireStaff, hub, imageStore }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

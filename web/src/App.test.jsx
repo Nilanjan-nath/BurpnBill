@@ -56,7 +56,7 @@ describe('menu', () => {
   test('shows the cafe, table, categories, veg marks and prices', async () => {
     await visit('T2');
     expect(screen.getByText('Table T2')).toBeInTheDocument();
-    for (const category of ['Beverages', 'Desserts', 'Mains', 'Snacks']) {
+    for (const category of ['Beverages', 'Snacks', 'Mains', 'Desserts']) {
       expect(screen.getByRole('heading', { name: category })).toBeInTheDocument();
     }
     const chai = screen.getByText('Masala Chai').closest('li');
@@ -65,6 +65,33 @@ describe('menu', () => {
     const puff = screen.getByText('Chicken Puff').closest('li');
     expect(within(puff).getByRole('img', { name: 'Non-vegetarian' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^View order/ })).not.toBeInTheDocument();
+  });
+
+  test('categories read in the order the owner set, not alphabetically', async () => {
+    await visit('T2');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    // display_order on menu_categories. Alphabetically this would be
+    // Beverages, Desserts, Mains, Snacks.
+    expect(headings).toEqual(['Beverages', 'Snacks', 'Mains', 'Desserts']);
+  });
+
+  test("an item's photo is shown when the owner has uploaded one, and nothing breaks when they haven't", async () => {
+    await sql("update menu_items set image_url = 'https://storage.test/storage/v1/object/public/menu-images/chai.png' where name = 'Masala Chai'");
+    try {
+      await visit('T2');
+      const chai = screen.getByText('Masala Chai').closest('li');
+      const photo = within(chai).getByRole('presentation');
+      expect(photo.getAttribute('src')).toContain('menu-images/chai.png');
+      // Decorative: the dish name sits right beside it, so a screen reader
+      // repeating it would be noise.
+      expect(photo).toHaveAttribute('alt', '');
+
+      const withoutPhoto = screen.getByText('Filter Coffee').closest('li');
+      expect(withoutPhoto.querySelector('img')).toBeNull();
+      expect(within(withoutPhoto).getByText('₹40.00')).toBeInTheDocument();
+    } finally {
+      await sql("update menu_items set image_url = null where name = 'Masala Chai'");
+    }
   });
 
   test('a menu item switched off while the phone was in a pocket disappears on return', async () => {

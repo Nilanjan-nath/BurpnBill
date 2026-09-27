@@ -36,6 +36,9 @@ export function MenuScreen({ menu, cart, hasOrders, busy, onAdd, onOpenCart, onO
             <ul className="items">
               {category.items.map((item) => (
                 <li key={item.id} className="item">
+                  {/* Decorative: the name right beside it already says what the
+                      dish is, so a screen reader repeating it is just noise. */}
+                  {item.image_url && <img className="item-photo" src={item.image_url} alt="" loading="lazy" />}
                   <div className="item-info">
                     <div className="item-name"><VegMark isVeg={item.is_veg} /> {item.name}</div>
                     {item.description && <p className="muted">{item.description}</p>}

@@ -47,7 +47,7 @@ before(async () => {
     [otherRestaurantId],
   );
   tokens.X1 = table[0].qr_token;
-  await db.query(`insert into menu_items (restaurant_id, name, price, category) values ($1, 'Rival Chai', 20, 'Beverages')`, [otherRestaurantId]);
+  await db.query(`insert into menu_items (restaurant_id, name, price) values ($1, 'Rival Chai', 20)`, [otherRestaurantId]);
   await db.query(
     `insert into staff_members (user_id, restaurant_id, role, display_name) values
        ($1, $3, 'owner', 'Mita'), ($2, $3, 'staff', 'Ravi'), ($4, $5, 'owner', 'Rival')`,

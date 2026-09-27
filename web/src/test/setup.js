@@ -43,3 +43,14 @@ if (!window.AudioContext) {
   }
   window.AudioContext = FakeAudioContext;
 }
+
+// jsdom has no object-URL store, so URL.createObjectURL either throws or
+// (under vitest's Blob shim) trips over a File built from a raw byte array.
+// The item form uses one to preview a photo before it is uploaded; a stable
+// fake string is all a test can meaningfully assert on anyway, since nothing
+// here decodes an image. Same category of gap as no layout and no Web Audio.
+if (!URL.createObjectURL || String(URL.createObjectURL).includes('makeCompatBlob')) {
+  let n = 0;
+  URL.createObjectURL = () => `blob:petuk-test/${++n}`;
+  URL.revokeObjectURL = () => {};
+}

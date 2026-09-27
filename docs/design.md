@@ -13,12 +13,35 @@ imported by `StaffApp.jsx`), so none of it reaches the customer bundle. Verified
 production build.
 
 **Migrated to this system:** the sidebar (`Sidebar.jsx`), the shared header (`Board.jsx`), POS
-(`POS.jsx`), Staff (`StaffTab.jsx`), the order board (`ActiveColumns.jsx` / `OrderCard.jsx`) and
-the order detail drawer (`OrderDetailDrawer.jsx`).
+(`POS.jsx`), Staff (`StaffTab.jsx`), the order board (`ActiveColumns.jsx` / `OrderCard.jsx`),
+the order detail drawer (`OrderDetailDrawer.jsx`), the Dashboard (`DashboardHome.jsx`) and the
+Menu (`MenuTab.jsx` / `ItemForm.jsx` / `CategoryForm.jsx`).
 **Not yet migrated** — still the older plain-CSS dark theme (`staff.css`, scoped to
-`.staff-legacy`): Recent, Menu, Tables, and the Dashboard placeholder. A known, temporary seam,
-not a design decision. `Board.jsx` decides which tabs get `.staff-legacy`; take a tab out of
-that list when you migrate it.
+`.staff-legacy`): Recent and Tables. A known, temporary seam, not a design decision.
+`Board.jsx` decides which tabs get `.staff-legacy`; take a tab out of that list when you
+migrate it.
+
+### The Menu tab
+
+The owner's catalog, and the only screen here with photography on it:
+- An item is a **card**, not a row: a fixed-height (`h-32`) photo area on top, then name, price,
+  description and the 86 toggle. Cards because a photo is the fastest way to find a dish in a
+  list of thirty, and a row can't carry one without becoming a thumbnail nobody can read
+- **No photo falls back to the item's two-letter monogram** on `bg-teal-50 text-teal-700` —
+  the same one treatment for every item, never a per-category tint (see "what color is *not*
+  for"). An owner part-way through uploading photos gets a grid that still reads as one thing
+- Edit and delete sit **on the photo, revealed on hover**, so thirty cards aren't sixty
+  competing buttons. They are `focus-within:opacity-100` as well as `group-hover`, or they
+  would be unreachable by keyboard
+- The category pill sits on the photo bottom-left; **86'd** is a hard red fill top-right, the
+  one place a hard status fill is allowed here, because an unavailable item has to be
+  findable at a glance in a full grid. The card also drops to `opacity-70`
+- A second view, **Categories**, is a plain list: display order in a teal monogram square,
+  name, live item count. Deleting one says *"Move 4 to Uncategorised?"* rather than "Delete?"
+  — next to a section holding four dishes, "delete" reads like it takes them too
+- The veg/non-veg dot keeps `role="img"` and a real label. It is food-safety information, so
+  it is announced, not merely seen — which is also why a test looking for "no photo here"
+  has to ask for an `<img>` element rather than `queryByRole('img')`
 
 ### The order board
 
@@ -74,6 +97,11 @@ checkout `<dialog>` had neither, so it fell back to the UA's `canvas` color — 
 `prefers-color-scheme: dark` — and its gray text became unreadable on near-black. Whenever you
 add a panel, dialog, popover or sheet, set `bg-*` and a text color on it explicitly rather than
 inheriting whatever is underneath.
+
+**A file input's visible label may not be its accessible name.** The photo box in
+`ItemForm.jsx` swaps between a drop zone ("Click to add a photo") and a preview with a
+"Replace" label, so the input's name changed with its state and a heading above it is a
+`<span>`, not a `<label>`. It carries its own `aria-label="Item photo"` for that reason.
 
 **A modal `<dialog>` also needs `m-auto`.** Tailwind's preflight sets `margin: 0` on every
 element, which overrides the `margin: auto` the browser uses to centre a `showModal()` dialog —

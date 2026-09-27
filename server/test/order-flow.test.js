@@ -62,7 +62,9 @@ test('menu: grouped by category, only live items, with a guest session', async (
   const { menu } = await scan('T2');
   assert.equal(menu.restaurant.name, 'Chai Point Cafe');
   assert.equal(menu.table.label, 'T2');
-  assert.deepEqual(menu.categories.map((c) => c.name), ['Beverages', 'Desserts', 'Mains', 'Snacks']);
+  // The owner's own display_order, not the alphabet's — which would put
+  // Desserts second and Snacks last.
+  assert.deepEqual(menu.categories.map((c) => c.name), ['Beverages', 'Snacks', 'Mains', 'Desserts']);
   assert.equal(menu.categories.flatMap((c) => c.items).length, 12);
   assert.deepEqual(menu.categories[0].items.map((i) => i.name), ['Masala Chai', 'Filter Coffee', 'Cold Coffee', 'Fresh Lime Soda']);
   assert.equal(menu.categories[0].items[0].price, '30.00');

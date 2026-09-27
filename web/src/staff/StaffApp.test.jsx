@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, beforeEach, vi, inject } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StaffApp from './StaffApp.jsx';
 
@@ -429,15 +429,20 @@ describe('the Menu tab', () => {
     await user.click(await screen.findByRole('button', { name: 'Menu' }));
   };
 
-  test('owner sees Add item and per-item Edit/Delete', async () => {
+  // Cards, not rows, since the redesign: the photo (or its monogram) is part
+  // of the card, so the whole card is what a test reaches into.
+  const cardFor = async (name) => (await screen.findByRole('heading', { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })).closest('div.group');
+
+  test('owner sees New menu item and per-card Edit/Delete', async () => {
     const owner = userEvent.setup();
     await openMenuTab(owner, STAFF_USER);
 
-    expect(await screen.findByRole('button', { name: '+ Add item' })).toBeInTheDocument();
-    const chaiRow = (await screen.findByText('Masala Chai')).closest('li');
-    expect(within(chaiRow).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
-    expect(within(chaiRow).getByRole('button', { name: 'Delete' })).toBeInTheDocument();
-    expect(within(chaiRow).getByRole('checkbox')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /New menu item/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /New category/ })).toBeInTheDocument();
+    const chai = await cardFor('Masala Chai');
+    expect(within(chai).getByRole('button', { name: 'Edit Masala Chai' })).toBeInTheDocument();
+    expect(within(chai).getByRole('button', { name: 'Delete Masala Chai' })).toBeInTheDocument();
+    expect(within(chai).getByRole('checkbox')).toBeInTheDocument();
   });
 
   test('staff see the same list with only the availability toggle — no add/edit/delete', async () => {
@@ -447,58 +452,93 @@ describe('the Menu tab', () => {
     // Wait for the menu to actually finish loading BEFORE checking anything
     // is absent — a "not present" check against a still-loading screen
     // (nothing rendered yet either way) would pass vacuously either way.
-    const staffChaiRow = (await screen.findByText('Masala Chai')).closest('li');
-    expect(screen.queryByRole('button', { name: '+ Add item' })).not.toBeInTheDocument();
-    expect(within(staffChaiRow).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-    expect(within(staffChaiRow).queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
-    expect(within(staffChaiRow).getByRole('checkbox')).toBeInTheDocument();
+    const chai = await cardFor('Masala Chai');
+    expect(screen.queryByRole('button', { name: /New menu item/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /New category/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Categories/ })).not.toBeInTheDocument();
+    expect(within(chai).queryByRole('button', { name: 'Edit Masala Chai' })).not.toBeInTheDocument();
+    expect(within(chai).queryByRole('button', { name: 'Delete Masala Chai' })).not.toBeInTheDocument();
+    expect(within(chai).getByRole('checkbox')).toBeInTheDocument();
   });
 
   test('staff can 86 an item from here, and it disappears from the real customer menu immediately', async () => {
     const user = userEvent.setup();
     await openMenuTab(user, SECOND_STAFF);
 
-    const row = (await screen.findByText('Filter Coffee')).closest('li');
-    const toggle = within(row).getByRole('checkbox');
+    const card = await cardFor('Filter Coffee');
+    const toggle = within(card).getByRole('checkbox');
     expect(toggle).toBeChecked();
     await user.click(toggle);
-    await waitFor(() => expect(within(row).getByRole('checkbox')).not.toBeChecked());
-
     try {
+      await waitFor(() => expect(within(card).getByRole('checkbox')).not.toBeChecked());
       const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
       expect(menu.categories.flatMap((c) => c.items).some((i) => i.name === 'Filter Coffee')).toBe(false);
     } finally {
+      // Everything above the restore, not just the API call: an assertion that
+      // throws outside it leaves the item 86'd for every later test in the run.
       await sql("update menu_items set is_available = true where name = 'Filter Coffee'");
     }
   });
 
-  test('owner can add an item, and it\'s on the real customer menu right away', async () => {
+  test('search narrows to name or description, and says so when nothing matches', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+    await cardFor('Masala Chai');
+
+    const search = screen.getByRole('searchbox', { name: 'Search dishes' });
+    await user.type(search, 'cardamom'); // only in Masala Chai's description
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Veg Sandwich' })).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: /Masala Chai/ })).toBeInTheDocument();
+
+    await user.clear(search);
+    await user.type(search, 'zzzz');
+    expect(await screen.findByText(/Nothing matches/)).toBeInTheDocument();
+  });
+
+  test("owner can add an item into a category, and it's on the real customer menu right away", async () => {
     const user = userEvent.setup();
     await openMenuTab(user, STAFF_USER);
 
-    await user.click(await screen.findByRole('button', { name: '+ Add item' }));
-    const form = await screen.findByRole('dialog', { name: 'Add item' });
-    await user.type(within(form).getByLabelText('Name'), 'Cold Kokum Sherbet');
-    await user.clear(within(form).getByLabelText('Category'));
-    await user.type(within(form).getByLabelText('Category'), 'Beverages');
+    await user.click(await screen.findByRole('button', { name: /New menu item/ }));
+    const form = await screen.findByRole('dialog', { name: 'Add menu item' });
+    await user.type(within(form).getByLabelText('Item name'), 'Cold Kokum Sherbet');
     await user.type(within(form).getByLabelText(/Price/), '45');
+    await user.selectOptions(within(form).getByLabelText('Category'), 'Beverages');
     await user.click(within(form).getByRole('radio', { name: 'Veg' }));
-    await user.click(within(form).getByRole('button', { name: 'Add item' }));
+    await user.click(within(form).getByRole('button', { name: 'Create menu item' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(await screen.findByText('Cold Kokum Sherbet')).toBeInTheDocument();
+    const card = await cardFor('Cold Kokum Sherbet');
+    expect(within(card).getByText('Beverages')).toBeInTheDocument();
 
     const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
-    const item = menu.categories.flatMap((c) => c.items).find((i) => i.name === 'Cold Kokum Sherbet');
-    expect(item?.price).toBe('45.00');
+    const beverages = menu.categories.find((c) => c.name === 'Beverages');
+    expect(beverages.items.find((i) => i.name === 'Cold Kokum Sherbet')?.price).toBe('45.00');
+  });
+
+  test('an item with no category is filed under Uncategorised, not left blank', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    await user.click(await screen.findByRole('button', { name: /New menu item/ }));
+    const form = await screen.findByRole('dialog', { name: 'Add menu item' });
+    await user.type(within(form).getByLabelText('Item name'), 'Loose Leaf');
+    await user.type(within(form).getByLabelText(/Price/), '15');
+    await user.click(within(form).getByRole('button', { name: 'Create menu item' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const card = await cardFor('Loose Leaf');
+    expect(within(card).getByText('Uncategorised')).toBeInTheDocument();
+
+    await sql("delete from menu_items where name = 'Loose Leaf'");
   });
 
   test('owner can edit an item — the whole form resubmits, values update everywhere', async () => {
     const user = userEvent.setup();
     await openMenuTab(user, STAFF_USER);
 
-    const row = (await screen.findByText('Samosa (2 pcs)')).closest('li');
-    await user.click(within(row).getByRole('button', { name: 'Edit' }));
+    const card = await cardFor('Samosa (2 pcs)');
+    await user.click(within(card).getByRole('button', { name: 'Edit Samosa (2 pcs)' }));
     const form = await screen.findByRole('dialog', { name: 'Edit Samosa (2 pcs)' });
 
     const priceInput = within(form).getByLabelText(/Price/);
@@ -507,8 +547,7 @@ describe('the Menu tab', () => {
     await user.click(within(form).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const updatedRow = (await screen.findByText('Samosa (2 pcs)')).closest('li');
-    expect(within(updatedRow).getByText('₹50.00')).toBeInTheDocument();
+    expect(within(await cardFor('Samosa (2 pcs)')).getByText('₹50.00')).toBeInTheDocument();
 
     await sql("update menu_items set price = 40 where name = 'Samosa (2 pcs)'");
   });
@@ -517,26 +556,178 @@ describe('the Menu tab', () => {
     const user = userEvent.setup();
     await openMenuTab(user, STAFF_USER);
 
-    await user.click(await screen.findByRole('button', { name: '+ Add item' }));
-    const form = await screen.findByRole('dialog', { name: 'Add item' });
-    await user.type(within(form).getByLabelText('Name'), 'Test Special');
+    await user.click(await screen.findByRole('button', { name: /New menu item/ }));
+    const form = await screen.findByRole('dialog', { name: 'Add menu item' });
+    await user.type(within(form).getByLabelText('Item name'), 'Test Special');
     await user.type(within(form).getByLabelText(/Price/), '99');
-    await user.click(within(form).getByRole('button', { name: 'Add item' }));
+    await user.click(within(form).getByRole('button', { name: 'Create menu item' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    const row = (await screen.findByText('Test Special')).closest('li');
-    await user.click(within(row).getByRole('button', { name: 'Delete' }));
-    expect(within(row).getByText('Delete this item?')).toBeInTheDocument();
+    let card = await cardFor('Test Special');
+    await user.click(within(card).getByRole('button', { name: 'Delete Test Special' }));
+    expect(within(card).getByText('Delete Test Special?')).toBeInTheDocument();
 
-    await user.click(within(row).getByRole('button', { name: 'Keep it' }));
-    expect(screen.getByText('Test Special')).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: 'Keep it' }));
+    expect(screen.getByRole('heading', { name: 'Test Special' })).toBeInTheDocument();
 
-    await user.click(within(row).getByRole('button', { name: 'Delete' }));
-    await user.click(within(row).getByRole('button', { name: 'Yes, delete it' }));
-    await waitFor(() => expect(screen.queryByText('Test Special')).not.toBeInTheDocument());
+    card = await cardFor('Test Special');
+    await user.click(within(card).getByRole('button', { name: 'Delete Test Special' }));
+    await user.click(within(card).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Test Special' })).not.toBeInTheDocument());
 
     const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
     expect(menu.categories.flatMap((c) => c.items).some((i) => i.name === 'Test Special')).toBe(false);
+  });
+
+  // --- photos ---------------------------------------------------------------
+
+  test('a photo uploaded here is the photo a customer sees, and the card stops showing a monogram', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    // A card with no photo falls back to the item's two-letter monogram.
+    let card = await cardFor('Cold Coffee');
+    expect(within(card).getByText('CC')).toBeInTheDocument();
+    // An <img> element specifically — the veg dot is a role="img" of its own,
+    // because "is this vegetarian" has to be announced, not just seen.
+    expect(card.querySelector('img')).toBeNull();
+
+    await user.click(within(card).getByRole('button', { name: 'Edit Cold Coffee' }));
+    const form = await screen.findByRole('dialog', { name: 'Edit Cold Coffee' });
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'coffee.png', { type: 'image/png' });
+    await user.upload(within(form).getByLabelText('Item photo'), file);
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    card = await cardFor('Cold Coffee');
+    await waitFor(() => expect(within(card).queryByText('CC')).not.toBeInTheDocument());
+    const img = within(card).getByRole('presentation');
+    expect(img.getAttribute('src')).toContain('menu-images/');
+
+    const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
+    const onMenu = menu.categories.flatMap((c) => c.items).find((i) => i.name === 'Cold Coffee');
+    expect(onMenu.image_url).toBe(img.getAttribute('src'));
+
+    await sql("update menu_items set image_url = null where name = 'Cold Coffee'");
+  });
+
+  test('the monogram fallback skips counts and brackets in a dish name', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    // "Samosa (2 pcs)" — first letters of the first two words that actually
+    // start with a letter, not of "(2".
+    expect(within(await cardFor('Samosa (2 pcs)')).getByText('SP')).toBeInTheDocument();
+    expect(within(await cardFor('Masala Chai')).getByText('MC')).toBeInTheDocument();
+  });
+
+  test('editing an item opens with its current category already chosen', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    const card = await cardFor('Masala Chai');
+    await user.click(within(card).getByRole('button', { name: 'Edit Masala Chai' }));
+    const form = await screen.findByRole('dialog', { name: 'Edit Masala Chai' });
+
+    const select = within(form).getByLabelText('Category');
+    expect(select.selectedOptions[0].textContent).toBe('Beverages');
+  });
+
+  test('a file that is not an image we render is refused in the dialog, before any upload', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    const card = await cardFor('Maggi Masala');
+    await user.click(within(card).getByRole('button', { name: 'Edit Maggi Masala' }));
+    const form = await screen.findByRole('dialog', { name: 'Edit Maggi Masala' });
+
+    // Dropped, not picked: the file input's own `accept` already turns a PDF
+    // away in the picker, so a drop is the path this guard actually exists for.
+    const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'menu.pdf', { type: 'application/pdf' });
+    fireEvent.drop(within(form).getByText('Click to add a photo'), { dataTransfer: { files: [pdf] } });
+
+    expect(await within(form).findByText(/must be a PNG, JPG or WEBP/)).toBeInTheDocument();
+    expect(form.querySelector('img')).toBeNull();
+  });
+
+  // --- categories -----------------------------------------------------------
+
+  test('the Categories view lists them in menu order with a live item count', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+    await user.click(await screen.findByRole('tab', { name: /Categories/ }));
+
+    const rows = (await screen.findAllByText(/^(Beverages|Snacks|Mains|Desserts)$/)).map((el) => el.textContent);
+    expect(rows).toEqual(['Beverages', 'Snacks', 'Mains', 'Desserts']);
+    expect(screen.getByText('4 items')).toBeInTheDocument(); // Beverages
+  });
+
+  test('a new category can be created before anything is in it, and lands last on the menu', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+
+    await user.click(await screen.findByRole('button', { name: /New category/ }));
+    const form = await screen.findByRole('dialog', { name: 'Add category' });
+    await user.type(within(form).getByLabelText('Category name'), 'Chef specials');
+    await user.click(within(form).getByRole('button', { name: 'Create category' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(await screen.findByRole('tab', { name: /Categories/ }));
+    const empty = (await screen.findByText('Chef specials')).closest('div.flex');
+    expect(within(empty).getByText('0 items')).toBeInTheDocument();
+
+    // It is on the customer's menu picker only once something is in it —
+    // an empty section is a thing the owner is mid-way through building.
+    const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
+    expect(menu.categories.some((c) => c.name === 'Chef specials')).toBe(false);
+
+    await sql("delete from menu_categories where name = 'Chef specials'");
+  });
+
+  test('deleting a category moves its items to Uncategorised, and says so before it does', async () => {
+    await sql("insert into menu_categories (restaurant_id, name, display_order) select id, 'Sides', 60 from restaurants where slug = 'chai-point'");
+    await sql("update menu_items set category_id = (select id from menu_categories where name = 'Sides') where name = 'Chicken Puff'");
+
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+    await user.click(await screen.findByRole('tab', { name: /Categories/ }));
+
+    const row = (await screen.findByText('Sides')).closest('div.flex');
+    await user.click(within(row).getByRole('button', { name: 'Delete Sides' }));
+    expect(within(row).getByText('Move 1 to Uncategorised?')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByText('Sides')).not.toBeInTheDocument());
+
+    // The food survived its section.
+    await user.click(screen.getByRole('tab', { name: /Menu items/ }));
+    const card = await cardFor('Chicken Puff');
+    expect(within(card).getByText('Uncategorised')).toBeInTheDocument();
+
+    await sql("update menu_items set category_id = (select id from menu_categories where name = 'Snacks') where name = 'Chicken Puff'");
+  });
+
+  test('renaming a category renames it everywhere, without touching the items', async () => {
+    const user = userEvent.setup();
+    await openMenuTab(user, STAFF_USER);
+    await user.click(await screen.findByRole('tab', { name: /Categories/ }));
+
+    const row = (await screen.findByText('Desserts')).closest('div.flex');
+    await user.click(within(row).getByRole('button', { name: 'Edit Desserts' }));
+    const form = await screen.findByRole('dialog', { name: 'Edit Desserts' });
+    await user.clear(within(form).getByLabelText('Category name'));
+    await user.type(within(form).getByLabelText('Category name'), 'Sweets');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('tab', { name: /Menu items/ }));
+    const card = await cardFor('Chocolate Brownie');
+    expect(within(card).getByText('Sweets')).toBeInTheDocument();
+
+    const menu = (await api('GET', `/api/menu/${tokens.T1}`)).body;
+    expect(menu.categories.some((c) => c.name === 'Sweets')).toBe(true);
+
+    await sql("update menu_categories set name = 'Desserts' where name = 'Sweets'");
   });
 });
 

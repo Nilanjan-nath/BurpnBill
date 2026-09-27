@@ -65,7 +65,9 @@ const itemDescription = z
   .max(500, 'Description can be at most 500 characters')
   .transform((s) => (s === '' ? null : s))
   .nullable();
-const itemCategory = z.string().trim().min(1, 'Category cannot be blank').max(60);
+// An item's category is a record now, not a string. Nullable on purpose:
+// null is Uncategorised, which is a real place for an item to sit.
+const itemCategoryId = id.nullable();
 const itemPrice = z.number().min(0, 'Price cannot be negative').max(100_000, 'That price looks like a typo');
 const itemIsVeg = z.boolean().nullable();
 const itemSortOrder = z.number().int().min(0).max(100_000);
@@ -75,7 +77,7 @@ export const itemIdParams = z.strictObject({ itemId: id });
 export const createMenuItemBody = z.strictObject({
   name: itemName,
   description: itemDescription.optional(),
-  category: itemCategory.optional(),
+  category_id: itemCategoryId.optional(),
   price: itemPrice,
   is_veg: itemIsVeg.optional(),
   sort_order: itemSortOrder.optional(),
@@ -85,7 +87,7 @@ export const updateMenuItemBody = z
   .strictObject({
     name: itemName.optional(),
     description: itemDescription.optional(),
-    category: itemCategory.optional(),
+    category_id: itemCategoryId.optional(),
     price: itemPrice.optional(),
     is_veg: itemIsVeg.optional(),
     sort_order: itemSortOrder.optional(),
@@ -93,6 +95,26 @@ export const updateMenuItemBody = z
   .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
 
 export const setAvailabilityBody = z.strictObject({ is_available: z.boolean() });
+
+// Menu categories. `display_order` is optional everywhere — createMenuCategory
+// puts a new one at the end when it's left out, which is almost always where a
+// new section belongs.
+const categoryName = z.string().trim().min(1, 'Category name is required').max(60, 'Category name can be at most 60 characters');
+const categoryDisplayOrder = z.number().int().min(0).max(100_000);
+
+export const categoryIdParams = z.strictObject({ categoryId: id });
+
+export const createMenuCategoryBody = z.strictObject({
+  name: categoryName,
+  display_order: categoryDisplayOrder.optional(),
+});
+
+export const updateMenuCategoryBody = z
+  .strictObject({
+    name: categoryName.optional(),
+    display_order: categoryDisplayOrder.optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
 
 // POST /tables. `seats` is nullable — not every table needs a seat count on
 // the printed QR sheet.

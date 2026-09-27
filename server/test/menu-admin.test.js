@@ -36,7 +36,7 @@ before(async () => {
 
   const { rows } = await db.query(`insert into restaurants (name) values ('Other Cafe') returning id`);
   otherRestaurantId = rows[0].id;
-  await db.query(`insert into menu_items (restaurant_id, name, price, category) values ($1, 'Rival Chai', 20, 'Beverages')`, [otherRestaurantId]);
+  await db.query(`insert into menu_items (restaurant_id, name, price) values ($1, 'Rival Chai', 20)`, [otherRestaurantId]);
 
   await db.query(
     `insert into staff_members (user_id, restaurant_id, role, display_name) values
@@ -116,7 +116,8 @@ test('a created item appears in the admin list with sane defaults, available by 
 });
 
 test('a new item is on the real customer menu immediately', async () => {
-  await call('POST', '/api/items', { as: OWNER, body: { name: 'Rose Lassi', price: 60, category: 'Beverages', is_veg: true } });
+  const { rows } = await db.query(`select id from menu_categories where restaurant_id = $1 and name = 'Beverages'`, [RESTAURANT_ID]);
+  await call('POST', '/api/items', { as: OWNER, body: { name: 'Rose Lassi', price: 60, category_id: rows[0].id, is_veg: true } });
   const menu = await call('GET', `/api/menu/${tokens.T1}`);
   const item = menu.body.categories.flatMap((c) => c.items).find((i) => i.name === 'Rose Lassi');
   assert.ok(item, 'shows up without any extra step');
