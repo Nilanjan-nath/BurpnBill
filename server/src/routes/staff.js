@@ -12,6 +12,7 @@ import {
   isPendingApproval,
 } from '../services/staffOrders.js';
 import { getFloor } from '../services/floor.js';
+import { getDashboardSummary } from '../services/dashboard.js';
 import {
   listMenuItemsAdmin,
   createMenuItem,
@@ -40,6 +41,7 @@ import {
   updateStaffRoleBody,
   staffUserParams,
   inviteIdParams,
+  dashboardQuery,
 } from '../validate.js';
 
 // Staff/owner routes. Every one requires a signed-in staff member, and every
@@ -201,6 +203,12 @@ export function staffRoutes({ db, requireStaff, hub }) {
     const order = await getOrderDetail(db, req.staff.restaurantId, orderId);
     res.status(201).json({ order });
     publishBoardCard(hub, db, req.staff.restaurantId, orderId, 'order_created');
+  });
+
+  // Today at a glance (step 6 slice 4) — owner only: it reports money.
+  router.get('/dashboard/summary', owner, async (req, res) => {
+    const { tz } = parse(dashboardQuery, req.query);
+    res.json(await getDashboardSummary(db, req.staff.restaurantId, tz));
   });
 
   // Staff management (step 6 slice 5) — owner only. An invite is a

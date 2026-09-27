@@ -180,6 +180,18 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `GET /tables` — owner and staff; `POST /tables` — owner only. The Tables *tab* in the dashboard
   is owner only regardless — staff have no reason to add tables or print QR sheets — so the API's
   wider allowance is unused by the UI, not a mismatch
+- `GET /dashboard/summary?tz=` — owner only (it reports money). Today's takings kept separate
+  from what's still open on tables, order and cancellation counts, the kitchen's live queue
+  including the QR approval backlog, table occupancy on the floor map's own definition, average
+  kitchen-to-ready time, today's best sellers, and menu/team counts. **"Today" is the café's
+  day**: Postgres runs in UTC, where the boundary falls at 05:30 IST — mid-morning-shift — so
+  the caller passes its IANA zone and the boundary is computed in it, resolved against
+  `pg_timezone_names` with a UTC fallback. Also returns the analytics the screen is built on:
+  sales by hour (on `placed_at` — when the café is busy, not when money was banked), the same
+  time **yesterday** for comparison, the last seven days, the payment mix from real `payments`
+  rows, and a QR-vs-counter split **inferred from `orders.cart_id`** — a customer's order is
+  converted from a cart and a POS order never has one, which is why `orders.source` has still
+  not been needed **(added, step 6)**
 - `GET /staff` — owner only; the team plus the invites still waiting to be claimed **(added, step 6)**
 - `POST /staff/invites` — owner only; pre-authorise `{ email, role, display_name? }`. Re-inviting an address replaces the open invite rather than erroring **(added, step 6)**
 - `DELETE /staff/invites/:inviteId` — withdraw one that hasn't been claimed **(added, step 6)**

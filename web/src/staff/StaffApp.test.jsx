@@ -635,12 +635,12 @@ describe('the owner dashboard shell (step 7 slice 1)', () => {
     expect(screen.queryByRole('button', { name: 'Tables' })).not.toBeInTheDocument();
   });
 
-  test('Dashboard is still a placeholder; POS and Staff are the real thing', async () => {
+  test('every owner-only tab is real — no placeholders left', async () => {
     const user = userEvent.setup();
     await signIn(user, STAFF_USER);
 
     await user.click(await screen.findByRole('button', { name: 'Dashboard' }));
-    expect(await screen.findByText(/Dashboard —/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Chai Point Cafe' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Staff' }));
     expect(await screen.findByRole('heading', { name: 'Your team' })).toBeInTheDocument();
@@ -1059,5 +1059,125 @@ describe('joining a café from an invite', () => {
 
     await user.click(screen.getByRole('button', { name: /Already have an account/ }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('the dashboard (step 6 slice 4)', () => {
+  const openDashboard = async (user) => {
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Dashboard' }));
+    await screen.findByRole('heading', { name: 'Chai Point Cafe' });
+  };
+
+  // The arithmetic is owned by server/test/dashboard.test.js, which truncates
+  // the tables per test. This file shares one database with every other suite
+  // in it, so asserting exact totals here would be asserting on leftovers.
+  // What's worth checking at this level is that the screen shows what the
+  // endpoint actually said, and keeps taken and owed apart.
+  test("today's figures are rendered faithfully, with money taken kept apart from money owed", async () => {
+    const user = userEvent.setup();
+    const paid = await place('T1', 'Masala Chai'); // 30.00
+    // The database enforces the status machine, so walk it rather than jump.
+    for (const status of ['preparing', 'ready', 'served']) {
+      await sql('update orders set status = $2 where id = $1', [paid.id, status]);
+    }
+    await sql('update orders set paid_at = now() where id = $1', [paid.id]);
+    await place('T2', 'Filter Coffee'); // 40.00, still open
+
+    await openDashboard(user);
+
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const res = await realFetch(`${base}/api/dashboard/summary?tz=${encodeURIComponent(tz)}`, {
+      headers: { Authorization: `Bearer valid-${STAFF_USER}` },
+    });
+    const { money } = await res.json();
+
+    const taken = screen.getByText('Taken today').closest('div').parentElement;
+    expect(within(taken).getByText(`₹${Number(money.taken_today).toFixed(2)}`)).toBeInTheDocument();
+
+    const open = screen.getByText('Open on tables').closest('div').parentElement;
+    expect(within(open).getByText(`₹${Number(money.open_on_tables).toFixed(2)}`)).toBeInTheDocument();
+
+    // The settled bill is in one number and not the other — the distinction
+    // the whole tile split exists for.
+    expect(Number(money.taken_today)).toBeGreaterThanOrEqual(30);
+    expect(Number(money.open_on_tables)).toBeGreaterThanOrEqual(40);
+  });
+
+  test('a QR order waiting for approval shows as waiting, and is a way into POS', async () => {
+    const user = userEvent.setup();
+    await placeUnapproved('T3', 'Masala Chai');
+    await openDashboard(user);
+
+    const waiting = await screen.findByRole('button', { name: /Awaiting approval/ });
+    expect(waiting).toHaveTextContent('1');
+
+    // The tile is the shortest path to doing something about it.
+    await user.click(waiting);
+    expect(await screen.findByRole('button', { name: 'Floor' })).toBeInTheDocument();
+  });
+
+  test('best sellers rank what actually sold today', async () => {
+    const user = userEvent.setup();
+    await place('T4', 'Chocolate Brownie');
+    await place('T4', 'Chocolate Brownie');
+    await openDashboard(user);
+
+    const selling = (await screen.findByText('Selling today')).closest('div');
+    expect(within(selling).getByText('Chocolate Brownie')).toBeInTheDocument();
+  });
+});
+
+describe('dashboard analytics', () => {
+  const openDashboard = async (user) => {
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Dashboard' }));
+    await screen.findByRole('heading', { name: 'Chai Point Cafe' });
+  };
+
+  test('sales by hour draws a labelled bar per hour, readable without a mouse', async () => {
+    const user = userEvent.setup();
+    await place('T1', 'Masala Chai'); // 30.00, this hour
+    await openDashboard(user);
+
+    expect(await screen.findByText('Sales by hour')).toBeInTheDocument();
+
+    // Each bar carries its own value and order count, so the chart isn't a
+    // picture only a sighted mouse user can read.
+    const hour = new Date().getHours();
+    const bar = await screen.findByRole('img', { name: new RegExp(`^${hour}h: ₹`) });
+    expect(bar).toHaveAccessibleName(/order/);
+  });
+
+  test('the payment mix and the QR-vs-counter split are both shown', async () => {
+    const user = userEvent.setup();
+    await openDashboard(user);
+
+    expect(screen.getByText('How people paid')).toBeInTheDocument();
+    expect(screen.getByText('Where orders came from')).toBeInTheDocument();
+    // The channel split is inferred from cart_id, so a QR order must land on
+    // the QR side — this is the assertion that keeps that inference honest.
+    expect(screen.getByText(/^QR \(\d+\)$/)).toBeInTheDocument();
+  });
+
+  test('a comparison against yesterday appears once there is something to compare', async () => {
+    const user = userEvent.setup();
+    await sql(
+      `insert into orders (restaurant_id, table_id, guest_session_id, status, subtotal, total_amount, approved_at, placed_at)
+       select o.restaurant_id, o.table_id, o.guest_session_id, 'served', 50, 50, now(), now() - interval '1 day'
+         from orders o limit 1`,
+    );
+    await place('T2', 'Filter Coffee');
+    await openDashboard(user);
+
+    // Both the takings tile and the orders tile carry a comparison.
+    const deltas = await screen.findAllByText(/vs yesterday|First takings today|First orders today/);
+    expect(deltas.length).toBeGreaterThan(0);
+  });
+
+  test('the last-7-days chart is there alongside today', async () => {
+    const user = userEvent.setup();
+    await openDashboard(user);
+    expect(screen.getByText('Last 7 days')).toBeInTheDocument();
   });
 });

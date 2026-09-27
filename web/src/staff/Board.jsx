@@ -100,7 +100,7 @@ export function Board({ identity, board, token, onSignOut }) {
             nested inside a dark-background ancestor. */}
         <div
           className={
-            ['board', 'pos', 'staff'].includes(tab)
+            ['board', 'pos', 'staff', 'dashboard'].includes(tab)
               ? 'flex min-h-0 flex-1 flex-col'
               : 'staff-legacy flex min-h-0 flex-1 flex-col'
           }
@@ -109,7 +109,7 @@ export function Board({ identity, board, token, onSignOut }) {
           {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
           {tab === 'menu' && <MenuTab isOwner={isOwner} token={token} />}
           {tab === 'tables' && isOwner && <TablesTab token={token} />}
-          {tab === 'dashboard' && isOwner && <DashboardHome />}
+          {tab === 'dashboard' && isOwner && <DashboardHome token={token} onNavigate={setTab} />}
           {tab === 'pos' && identity.role !== 'kitchen' && <POS token={token} />}
           {tab === 'staff' && isOwner && <StaffTab token={token} />}
         </div>

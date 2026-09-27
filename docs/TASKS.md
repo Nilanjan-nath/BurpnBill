@@ -631,10 +631,69 @@ that had been flagged since slice 3.*
 - [ ] **Still legacy dark**: Recent, Menu, Tables, and the Dashboard placeholder. `Board.jsx`'s
       `['board', 'pos', 'staff']` list is what decides; remove a tab from it as it's migrated
 
-**Slice 4 — Dashboard home** — not started
-- [ ] `GET /dashboard/summary`: today's revenue (sum of non-cancelled orders' totals),
-      active order count, table free/occupied counts — reuses the floor endpoint's data
-- [ ] Replaces the `DashboardHome.jsx` placeholder
+**Slice 4 — Dashboard home** — done
+- [x] `GET /dashboard/summary?tz=` — owner only. No new schema; everything is derived from
+      orders, tables and the menu as they already are
+- [x] **"Today" is the café's day, not the database's.** Postgres runs in UTC, where the day
+      rolls over at 05:30 IST — halfway through a morning shift, which would have split a
+      day's takings in two. The browser passes its IANA zone and the boundary is computed in
+      it, resolved against `pg_timezone_names` with a UTC fallback so a nonsense value degrades
+      instead of erroring. No timezone column needed on `restaurants`
+- [x] **Takings and what's owed are separate numbers**, not one "revenue" figure: one is in the
+      till, the other is sitting on tables. A single total would be a number nobody could act on
+- [x] Also: order/cancellation counts, average order value, the live kitchen queue *including*
+      the QR approval backlog, table occupancy on the floor map's own definition (so the two
+      screens can't disagree), average **kitchen-to-ready** time — measured from the `preparing`
+      event, so it's the kitchen's time and not time spent waiting to be accepted — today's best
+      sellers, 86'd item count and team size
+- [x] **Averages are `null`, never 0, when nothing has happened yet** — zero minutes reads as
+      "instant" and zero average order reads as "worthless tickets". The UI renders those as "—"
+- [x] `DashboardHome.jsx` replaces the placeholder: white tiles with dark numbers and colour
+      only where it means something (money owed, a queue waiting, a cancellation). Deliberately
+      *not* the reference's wall of pastel tiles — this screen is scanned in five seconds, and
+      design.md's "clarity beats decoration" applies hardest here. Queue tiles are buttons that
+      jump to where the work is. Refetches on any SSE order event rather than patching, since
+      recomputing an aggregate in the browser means re-implementing the SQL and getting it
+      subtly wrong
+- [x] **Not built, because there's no data behind it**: stock levels ("Low stock"), clock-in
+      ("Staff on duty"), waitlist, and table turnover. Drawing those would be faking capability
+**Dashboard follow-up — make it analytical, not a status board** — done
+*Owner's note: "it looked kind of static… make it a real dashboard you can ANALYZE".*
+- [x] **Sales by hour** bar chart, on `placed_at` rather than `paid_at`: the question is when
+      the café is busy — which is a staffing decision — not when money was banked, which lags
+      and would make a busy unpaid hour look empty. Axis trimmed to the trading day so far
+- [x] **Compared against the same time yesterday**, not against a whole finished day — that
+      would show a fall every morning. Silent when the baseline is zero; "+100% vs nothing" is
+      noise
+- [x] **Last 7 days**, **how people paid** (from real `payments` rows, succeeded only — a failed
+      payment took no money), and **where orders came from**
+- [x] **QR vs counter is inferred, not declared**: a customer's order is converted from a cart,
+      a POS order never has one, so `orders.cart_id is not null` separates them. This is why
+      `orders.source` (deferred in slice 3) has still not been needed
+- [x] Splits are percentages of **money, not order count** — two ₹30 chais and one ₹500 biryani
+      are not "mostly chai" in any sense an owner cares about
+- [x] Charts are hand-drawn with divs, no charting dependency: two bar charts aren't worth the
+      bundle on a tablet over café wifi, and this way they inherit the design system. Every bar
+      is focusable and carries its own label, so the chart isn't a picture only a sighted mouse
+      user can read
+- [x] **Found only by looking at it**: the bars rendered at zero height. The row is `items-end`,
+      so columns size to content, and a percentage height inside a zero-height box draws
+      nothing. jsdom does no layout, so the tests passed with an invisible chart — a reminder
+      that "tests green" is not "the feature works"
+- [x] Tests: 144 server + 73 web. Mutation-checked seven more ways (the yesterday window, the
+      hourly zero-fill, failed payments counted in the mix, the channel split inverted, bar
+      labels, the channel section, and the delta) — each verified as actually applied first
+- [x] Two of my own test bugs found and fixed: the "yesterday" test computed its boundary in
+      PGlite's session zone while asking the API for UTC, and the carts insert omitted NOT NULL
+      columns
+
+- [x] Tests: 139 server (new `dashboard.test.js`, which truncates orders per test so the
+      arithmetic is asserted on a known state) + 69 web. The web test asserts the screen renders
+      what the endpoint returned rather than re-deriving totals, since that suite shares one
+      database. Mutation-checked seven ways — unpaid counted as taken, cancelled counted as
+      orders, prep measured from the wrong event, the empty-day null, swapped money tiles, a
+      dead queue tile, and best sellers not rendering — each verified as actually applied before
+      being believed, after one mutation silently failed to apply and produced a false pass
 
 **Slice 5 — Staff management** — done
 - [x] **Migration `20260926130000_staff_roles_and_invites.sql` — applied to Supabase.** Adds

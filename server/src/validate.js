@@ -128,6 +128,20 @@ export const updateStaffRoleBody = z.strictObject({ role: staffRole });
 export const staffUserParams = z.strictObject({ userId: id });
 export const inviteIdParams = z.strictObject({ inviteId: id });
 
+// GET /dashboard/summary?tz=. An IANA zone name from the browser, so "today"
+// means the cafe's day rather than UTC's (which rolls over mid-morning-shift
+// in India). Shape-checked only — the service resolves it against
+// pg_timezone_names and falls back to UTC, so an unknown-but-valid-looking
+// name degrades instead of erroring.
+export const dashboardQuery = z.strictObject({
+  tz: z
+    .string()
+    .trim()
+    .max(64)
+    .regex(/^[A-Za-z][A-Za-z0-9+_-]*(\/[A-Za-z0-9+_-]+)*$/, 'Not a time zone name')
+    .optional(),
+});
+
 // POST /tables/:tableId/checkout. `method` mirrors the schema's own
 // payment_method enum minus 'mock', which exists for tests, not for a cashier
 // to pick. idempotency_key is the client's — a retried Confirm must not settle
