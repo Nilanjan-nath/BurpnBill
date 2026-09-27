@@ -600,6 +600,37 @@ accept it, per the owner's reference POS.*
       orders wait. The API deliberately allows **staff** too, so surfacing the queue on the Board
       (which staff can see) is a small follow-up and probably the next thing to do
 
+**Slice 6 — Kitchen display: the order board on the new design system** — done
+*The owner's reference was a kitchen display screen; this is also the legacy-theme migration
+that had been flagged since slice 3.*
+- [x] `ActiveColumns.jsx` and `OrderCard.jsx` rebuilt in Tailwind. **Every behaviour kept**: only
+      the single legal next status is offered (`transitions.js`), Cancel still confirms inline
+      rather than via `window.confirm`, live SSE patching, server-corrected ages, per-card ticking
+- [x] Columns are white panels with an accent bar and a count: **New = amber** (waiting),
+      **Preparing = teal**, **Ready = emerald**. That is finally a real use for the amber the
+      status palette had reserved — and deliberately not the reference's blue/orange
+- [x] Cards lead with the **table**, which is what a kitchen calls out; the order number below
+      is the link into the detail drawer. The forward button is coloured by where the order is
+      *going*, is full-width and uppercase, and presses in (`active:scale-[0.98]`) for tablets
+- [x] Stuck orders now ring the whole card (amber 5 min, red 10 min) instead of only tinting the
+      age — it has to read from across a kitchen
+- [x] Responsive: three independently-scrolling columns at `lg`, stacking to one scrolling page
+      on a phone. Checked at 1400px and 390px
+- [x] `OrderDetailDrawer.jsx` migrated too — it opens *from* the board, and a dark drawer over a
+      light board was the whole reason to keep going. Needed `ml-auto mr-0 my-0` for the same
+      preflight reason the checkout dialog needed `m-auto`
+- [x] Two brittle test hooks replaced while migrating: the stuck assertion used the CSS class
+      `staff-card-danger` (now `data-stuck="danger"`, a deliberate hook rather than a styling
+      class), and the drawer test queried `.staff-status-pill` (now asserts the drawer's own
+      heading, which is also where a reader looks)
+- [x] Tests: 66 web, all passing. Mutation-checked three ways — the stuck threshold, column
+      filtering by status, and "Keep order" not cancelling — all caught
+- [ ] **Deliberately not taken from the reference**: order priority (LOW/NORMAL/HIGH/VIP) and
+      VIP flags have no schema, and "Avg prep: 6m" needs history this screen doesn't load. A
+      columns/grid view toggle was skipped too — the responsive layout already does that job
+- [ ] **Still legacy dark**: Recent, Menu, Tables, and the Dashboard placeholder. `Board.jsx`'s
+      `['board', 'pos', 'staff']` list is what decides; remove a tab from it as it's migrated
+
 **Slice 4 — Dashboard home** — not started
 - [ ] `GET /dashboard/summary`: today's revenue (sum of non-cancelled orders' totals),
       active order count, table free/occupied counts — reuses the floor endpoint's data

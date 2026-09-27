@@ -13,11 +13,29 @@ imported by `StaffApp.jsx`), so none of it reaches the customer bundle. Verified
 production build.
 
 **Migrated to this system:** the sidebar (`Sidebar.jsx`), the shared header (`Board.jsx`), POS
-(`POS.jsx`).
+(`POS.jsx`), Staff (`StaffTab.jsx`), the order board (`ActiveColumns.jsx` / `OrderCard.jsx`) and
+the order detail drawer (`OrderDetailDrawer.jsx`).
 **Not yet migrated** — still the older plain-CSS dark theme (`staff.css`, scoped to
-`.staff-legacy`): Board, Recent, Menu, Tables, the Dashboard and Staff placeholders. This is a
-known, temporary seam, not a design decision — the plan is to bring every tab onto the system
-below over time, one slice at a time, the same way POS was.
+`.staff-legacy`): Recent, Menu, Tables, and the Dashboard placeholder. A known, temporary seam,
+not a design decision. `Board.jsx` decides which tabs get `.staff-legacy`; take a tab out of
+that list when you migrate it.
+
+### The order board
+
+The kitchen's own screen, so it is read from further away than anything else here and gets the
+loudest treatment in the system:
+- Each column is a white panel with a 1px accent bar on top and its count in a pill: **New =
+  amber** (waiting on someone), **Preparing = teal** (work in hand), **Ready = emerald** (done).
+  That is the status palette doing its actual job — deliberately not the reference screenshot's
+  blue/orange
+- A card leads with the **table**, not the order number: that is what the kitchen calls out.
+  The order number below it is the link into the detail drawer
+- The forward button is coloured by **where the order is going**, so button and destination
+  column are visibly the same thing; it is full-width, uppercase, and has `active:scale-[0.98]`
+  so a tap on a tablet feels like a press
+- An order sitting too long gets a whole-card ring (amber at 5 min, red at 10) rather than only
+  a tinted age — it has to read across a kitchen, not reward close inspection
+- Columns scroll independently at `lg` and stack into one scrolling page below it
 
 ## The one rule that matters most
 
@@ -123,8 +141,8 @@ text on a light tint of the same hue), never a hard fill except where noted:
   `bg-emerald-50` (a stronger card-level treatment, e.g. a free table)
 - **Occupied / busy**: `bg-red-50 text-red-700` (soft), `border-red-200` / `bg-red-50` (card
   level)
-- **Pending / waiting**: `bg-amber-50 text-amber-700` — reserved for a future third floor
-  state (e.g. "bill requested"); not in use yet, don't invent a use for it prematurely
+- **Pending / waiting**: amber. Now in real use as the order board's *New* column and on a
+  QR order awaiting approval — "someone needs to act on this". Still not a floor-map state
 - **Veg / non-veg**: a small green or red dot (`.veg-mark`, ported from the customer app) —
   this is food-safety information, not decoration, and is the one place a small dot of color
   belongs directly on an item card. It is not part of the status-color system above; don't

@@ -297,7 +297,7 @@ describe('going live', () => {
 
     await signIn(user, STAFF_USER);
     const card = (await screen.findByText(`#${order.order_number}`)).closest('article');
-    expect(card).toHaveClass('staff-card-danger');
+    expect(card).toHaveAttribute('data-stuck', 'danger');
     expect(within(card).getByText('12m')).toBeInTheDocument();
   });
 
@@ -361,7 +361,9 @@ describe('order detail and Recent', () => {
     await user.click(await screen.findByRole('button', { name: `#${order.order_number}` }));
     const drawer = await screen.findByRole('dialog', { name: `Order #${order.order_number}` });
 
-    expect(drawer.querySelector('.staff-status-pill')).toHaveTextContent('placed');
+    // The drawer's own heading carries the current status, so assert there
+    // rather than on a class — "placed" also appears down in the timeline.
+    expect(within(drawer).getByRole('heading', { level: 2 })).toHaveTextContent('placed');
     expect(within(drawer).getByText('Table T1')).toBeInTheDocument();
     const itemLine = within(drawer).getByText(/Masala Chai/).closest('li');
     expect(within(itemLine).getByText(/less sugar/)).toBeInTheDocument();
