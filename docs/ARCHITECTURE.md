@@ -233,7 +233,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   null when nobody has paid yet) — both read off records that already existed, not new schema
   **(added; extended, step 6)**
 - `GET /orders/:orderId` — lines, notes, totals and status timeline (who changed it, when) **(added)**
-- `PATCH /orders/:orderId/status` — validated against §5; 409 on an illegal or lost-race move
+- `PATCH /orders/:orderId/status` — validated against §5; 409 on an illegal or lost-race move. **Also 409 `awaiting_approval` for any move except a cancel on an order the counter hasn't accepted** — approval is what hands an order to the kitchen, so nothing may start one first. Without the guard an order could be started unapproved and then fell out of every screen at once: off the board (approved only), out of the queue (`placed` only), out of the bill (approved only) and so uncheckable, while still keeping its table occupied **(added, after a live incident)**
 - `GET /orders/stream` — SSE stream for the live board; scoped by the signed-in staff member and read with fetch + an Authorization header **(changed)**
 - `GET /items` — admin menu list, including 86'd items **(added)**
 - `POST /items`, `PATCH /items/:itemId`, `DELETE /items/:itemId` (soft) — owner only
@@ -321,7 +321,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - Custom Server-Sent Events from Express — not Supabase Realtime, not websockets. Data flows
   one way (server → dashboard), and the server already knows about every change because it
   makes them.
-- Events in v1: `qr_order_pending`, `order_created`, `order_status_changed`.
+- Events in v1: `qr_order_pending`, `order_created`, `order_status_changed`. The board **ignores `qr_order_pending`**: it is for POS's queue, and patching it into the board put an unaccepted order in the New column.
   (`order_payment_updated` arrives with payments.) A QR order publishes `qr_order_pending` —
   the POS approval queue, not the kitchen. `order_created` fires when staff approve it, or
   immediately for a staff-placed POS order, and that is what the board listens for.

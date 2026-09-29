@@ -303,6 +303,26 @@ describe('going live', () => {
     await waitFor(() => expect(document.title).toBe('Petuk staff — Order board'));
   });
 
+  test('a QR order waiting for the counter never appears on the live board, so it cannot be started', async () => {
+    const user = userEvent.setup();
+    await clearApprovalQueue();
+    await signIn(user, STAFF_USER);
+    await screen.findByText('Live');
+
+    // Placing it pushes qr_order_pending, which the POS queue listens for. The
+    // board used to patch in ANY pushed order, so this landed in New.
+    const waiting = await placeUnapproved('T2', 'Masala Chai');
+    // Events arrive in order, so once this later order — accepted through the
+    // real API, which is what pushes order_created — is on the board, the
+    // earlier push has certainly been handled. That is what makes the absence
+    // below mean something rather than "not arrived yet".
+    const accepted = await placeUnapproved('T4', 'Filter Coffee');
+    await approveViaApi(accepted.id);
+    await screen.findByText(`#${accepted.order_number}`);
+    expect(screen.queryByText(`#${waiting.order_number}`)).not.toBeInTheDocument();
+    await clearApprovalQueue();
+  });
+
   test('"Turn on sound" arms it, without replaying for orders already on the board', async () => {
     const user = userEvent.setup();
     await place('T4', 'Masala Chai'); // already on the board before sound is armed — must not chime retroactively
@@ -313,7 +333,9 @@ describe('going live', () => {
     expect(screen.queryByRole('button', { name: 'Turn on sound' })).not.toBeInTheDocument();
 
     // A genuinely new order after arming still works end to end (no crash from the audio path).
-    const order = await place('T4', 'Filter Coffee');
+    // Reaching the board live takes an approval now — that is what pushes order_created.
+    const order = await placeUnapproved('T4', 'Filter Coffee');
+    await approveViaApi(order.id);
     await waitFor(() => expect(screen.getByText(`#${order.order_number}`)).toBeInTheDocument());
   });
 

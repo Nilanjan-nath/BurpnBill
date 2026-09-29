@@ -290,10 +290,21 @@ export async function getOrderDetail(db, restaurantId, orderId) {
 export async function updateOrderStatus(db, restaurantId, orderId, targetStatus, actorId) {
   const result = await db.withTransaction(async (tx) => {
     const { rows } = await tx.query(
-      `select status from public.orders where id = $1 and restaurant_id = $2 for update`,
+      `select status, approved_at, order_number from public.orders where id = $1 and restaurant_id = $2 for update`,
       [orderId, restaurantId],
     );
     if (!rows.length) return { outcome: 'not_found' };
+
+    // A QR order the counter hasn't accepted is not the kitchen's yet, so
+    // nothing may move it forward — approval is what hands it over, and it
+    // changes no status. The only thing an unapproved order may do here is be
+    // cancelled, which is what turning it away from the queue is. Without this
+    // an order could be started with no approval, after which it fell out of the
+    // queue (that lists 'placed' only) AND stayed off the board: unbilled, so
+    // uncheckable, yet still holding its table occupied.
+    if (!rows[0].approved_at && targetStatus !== 'cancelled') {
+      return { outcome: 'unapproved', orderNumber: rows[0].order_number };
+    }
 
     const currentStatus = rows[0].status;
     if (!ORDER_TRANSITIONS[currentStatus].includes(targetStatus)) {
@@ -312,6 +323,12 @@ export async function updateOrderStatus(db, restaurantId, orderId, targetStatus,
   }, { actorId });
 
   if (result.outcome === 'not_found') return null;
+  if (result.outcome === 'unapproved') {
+    throw new HttpError(409, 'awaiting_approval', `Order #${result.orderNumber} is waiting for the counter to accept it — approve it in POS first`, {
+      current_status: 'placed',
+      changed_by: null,
+    });
+  }
   if (result.outcome === 'conflict') {
     const by = result.changedBy ? ` by ${result.changedBy}` : '';
     throw new HttpError(409, 'invalid_transition', `Order is already "${result.currentStatus}"${by} — refresh to see its current state`, {

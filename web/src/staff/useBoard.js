@@ -47,6 +47,11 @@ export function useBoard(token) {
   }, [load]);
 
   const onStreamEvent = useCallback((event, order) => {
+    // A QR order waiting for the counter is pushed as qr_order_pending so POS's
+    // queue can hear about it. It is NOT the kitchen's yet, and patching it in
+    // here put it in the New column — where someone could start it before it was
+    // accepted. The board takes it only when approval sends order_created.
+    if (event === 'qr_order_pending') return;
     setOrders((current) => (current === null ? current : applyBoardEvent(current, order)));
     if (event === 'order_created') setNewOrderCount((n) => n + 1);
   }, []);

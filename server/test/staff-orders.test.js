@@ -659,6 +659,20 @@ test('approving twice is a 409, not a silent no-op; a made-up id is 404', async 
   assert.equal((await approve(OWNER, '99999999-9999-4999-8999-999999999999')).status, 404);
 });
 
+test('nothing but a cancel can move an order the counter has not accepted', async () => {
+  const order = await placeUnapproved('T2', [{ name: 'Masala Chai' }]);
+
+  const start = await moveStatus(OWNER, order.id, 'preparing');
+  assert.equal(start.status, 409);
+  assert.equal(start.body.error.code, 'awaiting_approval');
+  const { rows } = await db.query('select status from orders where id = $1', [order.id]);
+  assert.equal(rows[0].status, 'placed', 'and nothing moved');
+
+  // Once accepted it is the kitchen's, and moves as normal.
+  assert.equal((await approve(OWNER, order.id)).status, 200);
+  assert.equal((await moveStatus(OWNER, order.id, 'preparing')).status, 200);
+});
+
 test('reject is only for the queue — an order the kitchen has already started is not rejectable', async () => {
   const order = await place('T1', [{ name: 'Masala Chai' }]); // approved by the helper
   await setStatus(order.id, 'preparing');

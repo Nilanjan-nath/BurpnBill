@@ -225,6 +225,10 @@ test('approving a queued order is what finally pushes order_created to the kitch
 
 test('moving an order pushes order_status_changed with its new status', async () => {
   const order = await place('T3', [{ name: 'Masala Chai' }]);
+  // Accepted first: an order the counter hasn't accepted can't be moved at all.
+  // Done before the stream opens so it is this test's move, not the approval,
+  // whose event is being waited for.
+  assert.equal((await api('POST', `/api/orders/${order.id}/approve`, { as: STAFF })).status, 200);
   const stream = openStream(OWNER);
   await stream.opened;
   await waitFor(() => stream.comments.length >= 1);

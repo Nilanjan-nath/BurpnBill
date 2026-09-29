@@ -1216,6 +1216,29 @@ wrong for a café's own categories), and anything with no schema behind it.
 - [ ] Item photos are `h-24 w-24` `object-cover`; a very wide photo will crop. Fine for dishes,
       worth a look with the first real uploads
 
+## Incident — an order that fell out of every screen (found by the owner, 2026-09-30)
+
+*Table T4 showed occupied with a ₹0.00 bill after its checkout; POS's Ongoing tab listed
+#1063 as Preparing; the kitchen board had no #1063.*
+
+**Root cause, two faults that only hurt together.** (1) The live board patched in **every**
+pushed order, including `qr_order_pending` — the event for an order the counter has not accepted —
+so an unaccepted QR order appeared in **New** on an open board. (2) `PATCH /orders/:id/status`
+never checked approval, so it could be started from there. Started, it was `preparing` with
+`approved_at` null, which every screen filters on differently: the board wants approved, the
+approval queue wants `placed`, the bill and checkout want approved. So it appeared on none,
+could not be paid, and still held its table occupied.
+
+- [x] Server: a move on an unapproved order is a 409 `awaiting_approval`, except a cancel (which is
+      what Reject is). The backstop — it holds whatever any client does
+- [x] Board: ignores `qr_order_pending` (the cause of the order showing up at all)
+- [x] Tests: server 195 (was 194) + web 120 (was 119). Mutation-checked both guards, each verified as
+      applied first. **Two existing tests had been passing because of the bug** — they placed an
+      order and expected it to appear "live", which it only did through the unapproved push; they
+      now approve through the real API, which is what pushes `order_created`
+- [ ] **Live data:** #1063 itself is still `preparing` with no approval and needs a decision — approve it
+      (it is billable, then checkout clears T4) or cancel it. Not repaired by code on purpose
+
 ## Before first real cafe
 
 - [ ] Deploy: API on Render/Railway, web app on Vercel/Netlify
