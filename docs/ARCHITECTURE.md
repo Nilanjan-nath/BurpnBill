@@ -360,7 +360,14 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   dashboard (`/staff`) is lazy-loaded, so customers never download it. It signs in with its own
   Supabase Auth client, built from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in a separate
   `web/.env` — never the service-role key, which stays in the server's own `.env` **(decided)**
-- **Styling**: the customer app is plain CSS (`styles.css`). The staff dashboard's sidebar,
+- **Customer app styling (changed)**: the customer app (`/t/<token>`) is Tailwind too now, in
+  its own lazy chunk (`customer/CustomerApp.jsx`, importing `customer/tailwind.css`) — the same
+  scoping the dashboard and landing page use, and for the same reason: Tailwind's preflight is
+  global, so it may only load on a route styled for it. Verified in a production build: the
+  eagerly loaded stylesheet is ~2 kB with no Tailwind in it. Palette is **white with red as the single accent** (it began as mustard and red; owner
+  feedback removed the mustard) — see `docs/design.md`, "The customer app". `styles.css` shrank to what the non-customer routes still reach (the Loading fallbacks
+  in `App.jsx`, the staff sign-in's base type, `.veg-mark`).
+- **Dashboard styling**: the staff dashboard's sidebar,
   header and POS page are Tailwind CSS v4 (`@tailwindcss/vite`, no config file) plus
   `lucide-react` for icons **(added, step 7)** — a deliberate "premium SaaS" look distinct from
   the customer app's warm palette, per direct owner design feedback. Rules and palette (teal
