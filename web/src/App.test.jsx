@@ -94,6 +94,77 @@ describe('menu', () => {
     }
   });
 
+  test('an item with no photo gets a placeholder in the same square, not a gap', async () => {
+    await visit('T2');
+    const row = screen.getByText('Filter Coffee').closest('li');
+    // Decorative and not an <img>: nothing for a screen reader to announce or a
+    // broken-image icon to appear in, and the row keeps its thumbnail column.
+    expect(row.querySelector('img')).toBeNull();
+    expect(row.querySelector('div[aria-hidden="true"] svg')).not.toBeNull();
+  });
+
+  test('search narrows the list by name or description, and says so when nothing matches', async () => {
+    const user = userEvent.setup();
+    await visit('T2');
+    await user.type(screen.getByRole('searchbox', { name: 'Search the menu' }), 'chicken');
+    // "Chicken Puff" by name; "Butter Chicken Bowl" by name; "Cold Coffee"'s
+    // description never mentions it.
+    expect(screen.getByText('Chicken Puff')).toBeInTheDocument();
+    expect(screen.getByText('Butter Chicken Bowl')).toBeInTheDocument();
+    expect(screen.queryByText('Masala Chai')).not.toBeInTheDocument();
+    // A section left with nothing in it disappears rather than sitting empty.
+    expect(screen.queryByRole('heading', { name: 'Beverages' })).not.toBeInTheDocument();
+
+    await user.clear(screen.getByRole('searchbox'));
+    await user.type(screen.getByRole('searchbox'), 'served warm'); // Brownie's description
+    expect(screen.getByText('Chocolate Brownie')).toBeInTheDocument();
+
+    await user.clear(screen.getByRole('searchbox'));
+    await user.type(screen.getByRole('searchbox'), 'zzzz');
+    expect(screen.getByText('Nothing matches that.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Clear search and filters/ }));
+    expect(screen.getByText('Masala Chai')).toBeInTheDocument();
+  });
+
+  test('the veg filter shows only what is marked vegetarian, and non-veg only what is marked otherwise', async () => {
+    const user = userEvent.setup();
+    await visit('T2');
+    await user.click(screen.getByRole('button', { name: 'Filter by veg or non-veg' }));
+
+    await user.click(screen.getByRole('button', { name: 'Non-veg' }));
+    expect(screen.getByText('Chicken Puff')).toBeInTheDocument();
+    expect(screen.getByText('Butter Chicken Bowl')).toBeInTheDocument();
+    expect(screen.queryByText('Masala Chai')).not.toBeInTheDocument();
+    expect(screen.queryByText('Veg Sandwich')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Veg' }));
+    expect(screen.getByText('Veg Sandwich')).toBeInTheDocument();
+    expect(screen.queryByText('Chicken Puff')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Any' }));
+    expect(screen.getByText('Chicken Puff')).toBeInTheDocument();
+  });
+
+  test('a category tab shows that section alone, and All brings the rest back', async () => {
+    const user = userEvent.setup();
+    await visit('T2');
+    const tabs = within(screen.getByRole('navigation', { name: 'Menu categories' }));
+    await user.click(tabs.getByRole('button', { name: 'Desserts' }));
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Desserts']);
+    expect(tabs.getByRole('button', { name: 'Desserts' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Masala Chai')).not.toBeInTheDocument();
+
+    // A tab and a search work together: Desserts, but only what matches.
+    await user.type(screen.getByRole('searchbox'), 'chai');
+    expect(screen.getByText('Nothing matches that.')).toBeInTheDocument();
+
+    // Clearing has to lift the tab too — otherwise "clear" leaves you on a
+    // section the search alone never chose.
+    await user.click(screen.getByRole('button', { name: /Clear search and filters/ }));
+    expect(screen.getByText('Masala Chai')).toBeInTheDocument();
+    expect(tabs.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('a menu item switched off while the phone was in a pocket disappears on return', async () => {
     await visit();
     expect(screen.getByText('Cold Coffee')).toBeInTheDocument();

@@ -1,9 +1,8 @@
 # Owner dashboard — design system
 
 *Applies to the staff/owner dashboard — every tab of it, as of the Recent migration. The
-customer-facing app (`web/src/styles.css`) is a separate, deliberately different
-design language (warm off-white/terracotta, Fraunces serif) and isn't covered here — see
-`ARCHITECTURE.md` §8 for why they're split.*
+customer-facing app has its own, deliberately different language — white and red, described
+under "The customer app" below — and shares only the veg mark and the traps with this one.*
 
 ## Where this actually lives today
 
@@ -112,6 +111,69 @@ The owner's catalog, and the only screen here with photography on it:
 - The veg/non-veg dot keeps `role="img"` and a real label. It is food-safety information, so
   it is announced, not merely seen — which is also why a test looking for "no photo here"
   has to ask for an `<img>` element rather than `queryByRole('img')`
+
+### The customer app (`/t/<token>`)
+
+What someone sees seconds after scanning a code at their table: hungry, slightly impatient,
+no login, no app. Built from an owner-supplied reference (a coloured header, a search bar with a
+filter icon, category tabs, a list of dish rows with a "+" on the right, a bar pinned to the
+bottom), on Tailwind's default utilities, in its own lazy chunk.
+
+- **One accent: red (`red-600`), on white.** It is the header pill, the active tab, the search
+  button, the outlined "+" on every row, and — as a solid fill — the one action per screen (View
+  order, Place order, Add · ₹X, View bill). Solid red is `-600` because white on it is 4.8:1,
+  which passes for small text too; `red-500` did not. Secondary actions are `red-50` with `red-700`
+  text. History, because it cost three rounds: the first version was a **mustard** frame with red
+  for the main action, and the owner found it "too bright"; a lavender page and deeper gold read
+  as "exactly the same"; on a white page, **gold did not suit** and red did. The reference
+  screenshot's own gold and coral are the exception that proves the rule — they work on its
+  lavender screens and not on white
+- **Red is for actions, green is for "it worked".** The order-placed tick is `green-600`: on
+  this palette a red circle with a tick reads as an error, which is the opposite of what someone
+  who has just ordered needs to feel. The buttons below it stay red — they are actions, not
+  status. Same rule as the dashboard's: colour that means a state is kept apart from colour that
+  means "tap here"
+- **Light is white, dark is near-black, and it follows the phone.** Owner feedback on the early
+  passes was "too bright", then — after a lavender page and a deeper yellow that read as "exactly
+  the same" — "make the background white, something close to Zomato or Swiggy, the user should
+  feel hungry". So light is a white page, cards lifted by a soft shadow rather than a border, a
+  plain white header with the table as a red pill, the search as a pill with a red circle holding
+  the icon (from the reference), and a soft `red-50` placeholder square. Dark mode was switched
+  off for that review (one `@custom-variant` line) and then **back on at the owner's request**,
+  through Tailwind's default `dark:` variant. It flips as a set — `stone-950` page, `stone-900`
+  cards with a border instead of a shadow (a shadow means nothing on black), red-tinted `red-950`
+  pills and tiles, outlined "+" buttons with no fill — and red stays the only accent. **The
+  `dark:` classes written for the mustard palette had to be revisited**: they still pointed at
+  colours that no longer existed. Every surface names its own background and text colour
+- **A row is: photo, name with the veg mark, one line of description, price, "+".** The photo is
+  a fixed `h-24 w-24` square so rows don't jump as images load. **No photo gets a soft `red-50`
+  square with a fork-and-knife icon, in the same place** — not a gap, and not an `<img>` (there
+  is nothing to announce and nothing to break). Nobody has uploaded a photo to the live café
+  yet, so today *every* row is the placeholder; it has to look intentional, not like a fault
+- **The "+" (an outlined red circle) still opens the item sheet** rather than adding straight to the cart. The sheet is
+  where the special-instructions note lives, and "less sugar" is the whole point of ordering
+  from your phone. One tap to add is a shortcut that would delete a requirement
+- **Search and the tabs are sticky together**, so nobody scrolls back to the top to look for
+  something else. The input is `text-base` (16px): iOS Safari zooms the whole page on focus for
+  anything smaller
+- **Tabs are a filter, not a scroll-to.** "Beverages" shows Beverages; "All" shows everything.
+  They compose with search and the veg filter, and *Clear search and filters* on the empty
+  state lifts all three — a clear that left you parked on a tab you never chose would look
+  broken. A section left empty by a filter disappears instead of showing a heading over nothing
+- **The filter icon is Veg / Non-veg / Any, because that is the one property every item has**
+  (`is_veg`). An item whose owner never said either way shows under Any and neither of the
+  others — it is not guessed into one. Not offered, for the usual reason: spice level, price
+  band, allergens and "popular" — there is no data behind any of them
+- **Tab icons are a hint from the category's name, never a dish illustration.** The reference
+  showed a flat illustration per dish; the owner names categories freely, so a burger icon on a
+  category called "Rolls" would sometimes be wrong. `categoryIcon.js` matches keywords and falls
+  back to the plain fork and knife rather than guess. Only the tabs and section headings carry
+  one, and always beside the label
+- **Every control keeps the name the tests and screen readers already knew** — `Add Masala
+  Chai`, `Increase quantity of …`, `Back to menu`. The "+" is an icon with an `aria-label`, and
+  Tailwind's text-free buttons (X, minus) keep theirs
+- **Loading it costs the customer only this.** It is a separate chunk, so the dashboard's and
+  the landing page's Tailwind never reach a phone at a table, and this one never reaches them
 
 ### The landing page (`/`)
 

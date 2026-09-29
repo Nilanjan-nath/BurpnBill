@@ -1,0 +1,12 @@
+/* Only ever imported from customer/CustomerApp.jsx, so it ships in the lazy
+   /t/<token> chunk only — the same scoping staff/tailwind.css and
+   landing/landing-tailwind.css use, and for the same reason: Tailwind's
+   preflight is global, so it must never load on a route that is not styled
+   for it. A café owner on / or /staff never downloads this, and a customer
+   at a table downloads neither of theirs. Default Tailwind, no config file. */
+@import "tailwindcss";
+
+/* Dark mode follows the phone (prefers-color-scheme), through Tailwind's default
+   `dark:` variant. The palette flips as a set — white/red becomes near-black/red
+   — and red stays the only accent; see docs/design.md, "The customer app". */
+:root { color-scheme: light dark; }

@@ -1164,6 +1164,58 @@ supplied B2B brief — Linear/Stripe-flavoured, neutral base, one accent.*
       POS floor with a table carrying a bill, and the dashboard. They need a signed-in
       session, so they are yours to take; drop the files in and fill the array
 
+## Step 8 — Customer app redesign
+
+**Slice 1 — the menu, the cart, the bill: white and red, on Tailwind** — done
+*Owner brief: a warm, mobile-first menu — coloured header, search with a filter icon, category
+tabs, dish rows with a "+" — from a supplied reference and a written prompt.*
+
+**Decided, with the owner:** Tailwind on the **whole** customer app rather than the menu alone
+(so the cart, sheet, confirmation and bill cannot look like a different product) · the
+prompt's "illustrated tile per dish" and "real dish photo" contradict each other, so **photo,
+with a fork-and-knife placeholder** · the filter icon does **Veg / Non-veg / Any**, the one
+filter the data can honestly back. Not taken: per-dish illustrations (a guess that would be
+wrong for a café's own categories), and anything with no schema behind it.
+
+- [x] `CustomerApp.jsx` is its own lazy chunk importing `customer/tailwind.css`, so Tailwind's
+      global preflight loads only on `/t/<token>`. Verified in a production build: the eager
+      stylesheet is ~2 kB with no Tailwind in it; the dashboard and landing chunks are untouched
+- [x] Menu: header, sticky search + tabs, veg filter popover, dish rows with a photo or
+      placeholder, a "+" per row, and a red bottom bar. Item sheet, stepper, cart, confirmation,
+      bill and banners all rebuilt in the same language; dark mode was kept at first and then switched off on the owner's request
+- [x] Category tabs now **filter** rather than scroll-to, and compose with search and the veg
+      filter; a clear action lifts all three
+- [x] Shared strings in `components/ui.js`; `BottomBar`, `PageHeader`, `StateScreen` and
+      `categoryIcon` are new
+- [x] `styles.css` cut to what the other routes still reach (Loading fallbacks, staff sign-in's
+      base type, `.veg-mark`), palette moved to the same colours; Fraunces/Inter dropped from
+      `index.html` (nothing outside the customer app used them), `theme-color` is red
+- [x] Tests: 28 web (was 24). New: placeholder instead of an `<img>`, search by name and by
+      description, veg and non-veg, tabs alone and combined with search. Mutation-checked 6 ways
+      — veg/non-veg swapped, description dropped from search, tab ignored, empty sections kept,
+      clear not lifting the tab (the first version of that test did not catch it; strengthened),
+      each verified as applied first
+- [x] Looked at in a real browser at 375px in **light and dark**: menu, item sheet, cart. Found
+      by looking: rows overflowed the phone because a grid child (`li`) doesn't shrink below its
+      content unless told `min-w-0`, so a long description pushed the "+" off-screen — the
+      tests were green throughout
+- [ ] **Not yet seen with real data:** the photo state (nobody has uploaded one), and the
+      confirmation and bill screens (they need a placed order; I do not place orders on the
+      live café). Worth one real order and one photo upload on the owner's side
+- [x] **Second and third owner passes:** "too bright" → deeper gold, lavender page, softer coral;
+      then "exactly the same" → white page, Zomato/Swiggy-like: shadowed cards, gradient header,
+      pill search, cream placeholder. the customer app was light-only for a while (see design.md)
+- [x] **Fourth owner pass: gold dropped.** "Gold doesn't suit on white, red does" — red is the
+      only accent now, header included. **Slip worth recording:** the edit script opened
+      `index.html` and `styles.css` for writing *before* reading them, truncating both to empty
+      and blanking the app; caught on the next screenshot and rebuilt. Read first, then write
+- [x] **Dark mode back on**, at the owner's request: follows the phone, `dark:` classes revisited for
+      the white-and-red palette. Checked at 375px: menu, item sheet, filter panel. Not seen in dark:
+      cart, confirmation, bill (they need a placed order). The pre-existing Settings flake failed
+      once in four full runs — the same test as the handover lists, not touched by this change
+- [ ] Item photos are `h-24 w-24` `object-cover`; a very wide photo will crop. Fine for dishes,
+      worth a look with the first real uploads
+
 ## Before first real cafe
 
 - [ ] Deploy: API on Render/Railway, web app on Vercel/Netlify
