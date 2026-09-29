@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler, notFoundHandler } from './errors.js';
-import { createRequireStaff } from './middleware/auth.js';
+import { createRequireStaff, createRequireAuthUser } from './middleware/auth.js';
 import { createRequireGuestSession, GUEST_SESSION_HEADER } from './middleware/guestSession.js';
 import { createOrderEventHub } from './orderStream.js';
 import { publicRoutes } from './routes/public.js';
@@ -55,10 +55,12 @@ export function createApp({
   });
 
   const requireStaff = createRequireStaff({ supabase, db });
+  // Signed in, but not yet anybody's staff — the state createRestaurant serves.
+  const requireAuthUser = createRequireAuthUser({ supabase });
   const requireGuestSession = createRequireGuestSession({ db, sessionTtlHours: config.guestSessionTtlHours });
 
   app.use('/api', publicRoutes({ db, config, requireGuestSession, hub }));
-  app.use('/api', staffRoutes({ db, requireStaff, hub, imageStore }));
+  app.use('/api', staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

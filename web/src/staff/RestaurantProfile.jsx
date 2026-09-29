@@ -11,7 +11,7 @@ const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
 // The currencies this is plausibly used in. The column takes any ISO 4217
 // code, so this list is a convenience rather than a constraint — it exists so
 // nobody has to remember that the code for dirhams is AED.
-const CURRENCIES = [
+export const CURRENCIES = [
   ['INR', 'Indian Rupee'],
   ['USD', 'US Dollar'],
   ['EUR', 'Euro'],

@@ -30,6 +30,7 @@ import {
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../services/itemImages.js';
 import { listTables, createTable, updateTable, deleteTable, getTableBill, checkoutTable } from '../services/tables.js';
 import { getRestaurantProfile, updateRestaurantProfile, updateOwnProfile } from '../services/restaurantProfile.js';
+import { createRestaurant } from '../services/signup.js';
 import { listStaff, inviteStaff, revokeInvite, updateStaffRole, removeStaff } from '../services/staffAdmin.js';
 import { notFound, HttpError } from '../errors.js';
 import {
@@ -48,6 +49,7 @@ import {
   createTableBody,
   updateTableBody,
   updateRestaurantBody,
+  createRestaurantBody,
   updateOwnProfileBody,
   checkoutTableBody,
   createStaffOrderBody,
@@ -63,13 +65,32 @@ import {
 // query is scoped to req.staff.restaurantId.
 //   owner: everything
 //   staff: work the order board, 86 items
-export function staffRoutes({ db, requireStaff, hub, imageStore }) {
+export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
   // POS, the floor and settling a table: owner or front-of-house staff, not
   // the kitchen. See middleware/auth.js for why this isn't owner-only.
   const till = [requireStaff, requireFrontOfHouse];
+
+  // Creating a café. The one route here that a signed-in person WITHOUT a café
+  // can call — everything else requires a staff_members row, which is exactly
+  // what this creates. Signing up makes an auth account and nothing more (an
+  // invite is a pre-authorised email, not an account — ARCHITECTURE §6), so
+  // without this a self-signup has nowhere to land.
+  router.post('/restaurants', [requireAuthUser], async (req, res) => {
+    const body = parse(createRestaurantBody, req.body);
+    const staff = await createRestaurant(db, req.authUser, {
+      ...body,
+      // Their own name, falling back to the email's local part — the same
+      // fallback the invite claim uses, so a person who skipped the field
+      // isn't listed as nothing on the team screen.
+      display_name: body.display_name ?? req.authUser.email?.split('@')[0] ?? null,
+    });
+    // Exactly the shape GET /me returns, read back out of the rows just
+    // written, so the dashboard can go straight in without a second request.
+    res.status(201).json({ staff });
+  });
 
   // Who am I, and which cafe — the dashboard calls this after sign-in.
   router.get('/me', staff, (req, res) => {

@@ -5,6 +5,7 @@ import { useBoard } from './useBoard.js';
 import { staffApi, StaffApiError } from './staffApi.js';
 import { SignInScreen } from './SignInScreen.jsx';
 import { Board } from './Board.jsx';
+import { CreateCafeScreen } from './CreateCafeScreen.jsx';
 import './staff.css';
 import './tailwind.css';
 
@@ -79,15 +80,12 @@ function SignedIn({ token, auth, onSignOut }) {
     );
   }
   if (identity === undefined) return <Centered>Loading…</Centered>;
+  // Signed in, but belonging to no café — either someone who signed up on their
+  // own, or an invitee whose invite has expired or been revoked. Both get the
+  // same offer: make a café of your own. It used to be a dead end telling them
+  // to ask an owner, which is no help to the person who IS the owner.
   if (identity === null) {
-    return (
-      <Centered>
-        <p>This login isn't linked to a café yet. Ask the owner to add you in Supabase.</p>
-        <button type="button" onClick={onSignOut}>
-          Sign out
-        </button>
-      </Centered>
-    );
+    return <CreateCafeScreen token={token} onCreated={setIdentity} onSignOut={onSignOut} />;
   }
   // setIdentity, so renaming yourself in Settings updates the sidebar too
   // rather than only the form you typed it into.

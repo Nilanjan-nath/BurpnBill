@@ -156,6 +156,14 @@ trigger enforces the same table as a backstop, in case the two ever drift apart.
   name and accepts nothing else — a role is not a field there at all, so no login can promote
   itself. A password change never reaches this API: the browser's own Supabase client holds the
   session and changes it directly, so no password is sent to, or logged by, a server we wrote.
+- **Creating a café (added, step 7):** signing up creates a Supabase account and nothing
+  else, so a person who arrives with no invite waiting belongs to no café. They are offered
+  one of their own — `POST /restaurants`, §7 — which is also why that screen replaced the
+  dead end that used to tell them to ask an owner. The café is created **after** the email
+  round trip rather than before it: with "Confirm email" on, `signUp` returns no session
+  until they click the link, so the alternative was parking a form in a table for someone
+  who may never come back. Signing up still grants access to **no existing café**; that
+  comes only from claiming an invite.
 - **Sign-up (added):** because an invite creates no login, `/staff` has a sign-up mode beside
   sign-in — otherwise an invited person has no way in at all. Anyone may create an account;
   that alone grants nothing, since access comes from claiming an invite. With Supabase's
@@ -191,6 +199,17 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 
 ### Private (staff/owner, authenticated + restaurant-scoped)
 
+- `POST /restaurants` — **create a café and become its owner** (step 7). The only route
+  here a signed-in person *without* a café may call, and the only write not scoped to a
+  café the caller already belongs to: `requireAuthUser` verifies the Supabase token and
+  nothing more. The restaurant, the owner's `staff_members` row and the tables asked for
+  are created in one transaction — a restaurant with no owner is a café nobody can open,
+  and an owner row pointing at nothing is a login that 403s forever. Already linked is a
+  409 naming the café they belong to, checked inside that transaction so two taps can't
+  both pass. Tables are placed six to a row (the layout migration's own convention) and
+  capped at 48, where the 12x8 plan stops holding them; zero is allowed. The response is
+  read back out of the rows written, in the shape `GET /me` returns, so the dashboard goes
+  straight in **(added, step 7)**
 - `GET /me` — the signed-in staff member and their restaurant, **including the café's name**:
   the dashboard's sidebar names the café you are signed in to, and the auth query already
   joins `restaurants` for its `is_active` check, so carrying the name costs nothing and saves
@@ -372,8 +391,10 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
    only), a today's-snapshot dashboard, staff invite/role management. Still 2 roles
    (owner/staff), so these are all owner-only surfaces — see `TASKS.md` step 7 for the
    decisions and slice breakdown
-7. **Landing page** — last, once there's a real flow to show. Real multi-restaurant signup
-   (name/owner/email) likely belongs here too, not step 6
+7. **Landing page and self-serve signup** — in progress. `POST /restaurants` and the
+   Create your café screen are done: nothing needed retrofitting for multi-tenancy, since
+   every query already scopes by the caller's own `restaurant_id` and no restaurant id is
+   hardcoded in either `server/src` or `web/src`. The landing page itself is next
 
 After v1: payments, invoices, a richer role set (cashier/waiter, so POS isn't owner-only),
 multi-restaurant self-serve signup (see §2).

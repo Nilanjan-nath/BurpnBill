@@ -104,6 +104,9 @@ export const staffApi = {
   createTable: (token, body) => request('POST', '/tables', { token, body }),
   updateTable: (token, tableId, body) => request('PATCH', `/tables/${tableId}`, { token, body }),
   deleteTable: (token, tableId) => request('DELETE', `/tables/${tableId}`, { token }),
+  // Signing up a café. The one call here made by someone who is signed in but
+  // not yet staff anywhere — it is what makes them staff.
+  createRestaurant: (token, body) => request('POST', '/restaurants', { token, body }),
   getRestaurant: (token) => request('GET', '/restaurant', { token }),
   updateRestaurant: (token, body) => request('PATCH', '/restaurant', { token, body }),
   updateOwnProfile: (token, body) => request('PATCH', '/me', { token, body }),

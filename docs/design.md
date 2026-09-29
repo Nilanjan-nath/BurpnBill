@@ -140,6 +140,25 @@ one that explains a till that doesn't balance:
   **Not taken**: its Clock In button (no schema, same rule as the menu's AI descriptions) and
   its blue
 
+### Create your café
+
+The first screen a new owner sees, and the only one in this system that stands alone rather
+than inside the dashboard shell. It is the Settings card pattern doing double duty — header
+strip, fields, actions pinned to a footer strip — because it *is* a settings form, just one
+filled in before there is anything to settle into.
+
+- **It asks how many tables**, and places them. A first open that is an empty grid and an
+  "Add table" button makes the owner do setup; one that is already a room makes them
+  arrange it. Same reasoning the layout migration used when it placed every existing table
+  rather than leaving them unplaced
+- The note about what happens to those tables sits **grouped with the tables field**, not
+  loose in the column — a hint at full width between two fields reads as a preamble to the
+  wrong one
+- **Sign out sits in the footer beside Create**, not hidden. Someone who signed in on the
+  wrong account should not have to create a café to get out of this screen
+- The menu is not seeded. Tables are generic and dishes are not, and example dishes in a
+  real café's records are the same fake capability as a status nothing records
+
 ### The order board
 
 The kitchen's own screen, so it is read from further away than anything else here and gets the

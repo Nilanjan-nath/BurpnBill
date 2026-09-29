@@ -64,6 +64,16 @@ async function place(table, itemName, note) {
   return res.body.order;
 }
 
+// Three tests below counted the whole approval QUEUE rather than looking for
+// their own order in it, and failed together, intermittently, against this
+// shared database — an unapproved order left anywhere else breaks all three at
+// once, and the first to fail leaves its own behind for the next two. (The
+// original source was never pinned down: the obvious suspect, the customer
+// suite placing orders it never approves, is ruled out because Vitest runs this
+// file first.) Clearing first makes each count its own order and nothing else,
+// which is the property those tests actually meant to assert.
+const clearApprovalQueue = () => sql("delete from orders where approved_at is null and status = 'placed'");
+
 // The same order, left waiting in the approval queue.
 async function placeUnapproved(table, itemName, note) {
   const order = await place(table, itemName, note);
@@ -148,12 +158,13 @@ describe('signing in', () => {
     expect(screen.getByRole('heading', { name: 'Staff sign in' })).toBeInTheDocument();
   });
 
-  test('a real login that isn\'t linked to any café is turned away, not shown a broken board', async () => {
+  test('a real login that belongs to no café is offered one of its own, not a broken board', async () => {
     const user = userEvent.setup();
     await signIn(user, NOT_LINKED_USER);
 
-    expect(await screen.findByText(/isn't linked to a café/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(await screen.findByRole('heading', { name: 'Create your café' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'View' })).not.toBeInTheDocument(); // no dashboard behind it
+    await user.click(screen.getByRole('button', { name: /Sign out/ }));
     expect(await screen.findByRole('heading', { name: 'Staff sign in' })).toBeInTheDocument();
   });
 
@@ -1552,6 +1563,7 @@ describe('the POS tab (step 7 slices 2-3)', () => {
 
   test('a QR order waits in the QR tab and only reaches the kitchen once approved', async () => {
     const user = userEvent.setup();
+    await clearApprovalQueue();
     const order = await placeUnapproved('T2', 'Masala Chai', 'less sugar');
     await openPOS(user);
 
@@ -1581,6 +1593,7 @@ describe('the POS tab (step 7 slices 2-3)', () => {
 
   test('rejecting a QR order cancels it instead of sending it to the kitchen', async () => {
     const user = userEvent.setup();
+    await clearApprovalQueue();
     const order = await placeUnapproved('T3', 'Filter Coffee');
     await openPOS(user);
 
@@ -1794,7 +1807,7 @@ describe('joining a café from an invite', () => {
     expect(n).toBe(0, 'the invite is spent');
   });
 
-  test('signing up without an invite is refused, not silently let in', async () => {
+  test('signing up without an invite joins no existing café — it offers a new one', async () => {
     const user = userEvent.setup();
     const stranger = '8c8c8c8c-8c8c-4c8c-8c8c-8c8c8c8c8c8c';
 
@@ -1805,9 +1818,57 @@ describe('joining a café from an invite', () => {
     await user.type(screen.getByLabelText('Password'), 'hunter22');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
 
-    expect(await screen.findByText(/isn't linked to a café/)).toBeInTheDocument();
+    // The security property is unchanged and is the point: creating an account
+    // links you to nobody. What changed is that the answer is now an offer to
+    // start your own café rather than a dead end.
+    expect(await screen.findByRole('heading', { name: 'Create your café' })).toBeInTheDocument();
     const [{ n }] = await sql('select count(*)::int as n from staff_members where user_id = $1', [stranger]);
-    expect(n).toBe(0);
+    expect(n).toBe(0, 'signing up alone links you to no café at all');
+  });
+
+  test('a signup with no invite creates its own café, and lands in a working dashboard', async () => {
+    const user = userEvent.setup();
+    const founder = '9d9d9d9d-9d9d-4d9d-8d9d-9d9d9d9d9d9d';
+    try {
+      render(<StaffApp auth={createFakeAuth(null, { signUpAs: founder })} />);
+      await screen.findByRole('heading', { name: 'Staff sign in' });
+      await user.click(screen.getByRole('button', { name: /Been invited/ }));
+      await user.type(screen.getByLabelText('Email'), 'founder@example.com');
+      await user.type(screen.getByLabelText('Password'), 'hunter22');
+      await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+      await screen.findByRole('heading', { name: 'Create your café' });
+      const create = screen.getByRole('button', { name: 'Create café' });
+      expect(create).toBeDisabled(); // a café has to have a name
+
+      await user.type(screen.getByLabelText('Café name'), 'Batarashi Brew');
+      const tables = screen.getByLabelText('How many tables');
+      await user.clear(tables);
+      await user.type(tables, '4');
+      await user.type(screen.getByLabelText('Your name'), 'Rupa');
+      await user.click(create);
+
+      // Straight into the dashboard, as its owner — no second sign-in.
+      expect(await screen.findByRole('heading', { name: 'Order board' })).toBeInTheDocument();
+      const sidebar = screen.getByRole('navigation', { name: 'View' });
+      expect(within(sidebar).getByText('Batarashi Brew')).toBeInTheDocument();
+      expect(within(sidebar).getByRole('button', { name: 'Staff' })).toBeInTheDocument(); // owner-only tab
+
+      // And the tables they said they had are already on the plan, so the first
+      // open of the seating plan is arranging rather than an empty grid.
+      await user.click(within(sidebar).getByRole('button', { name: 'Settings' }));
+      await user.click(await screen.findByRole('tab', { name: /Seating plan/ }));
+      const plan = await screen.findByTestId('floor-plan');
+      for (const label of ['T1', 'T2', 'T3', 'T4']) {
+        expect(within(plan).getByRole('button', { name: new RegExp(`^${label}, `) })).toBeInTheDocument();
+      }
+
+      // Their own café, not a second door onto the demo one's menu.
+      await user.click(within(sidebar).getByRole('button', { name: 'Menu' }));
+      expect(await screen.findByText(/0 items/)).toBeInTheDocument();
+    } finally {
+      await sql('delete from restaurants where name = $1', ['Batarashi Brew']);
+    }
   });
 
   test('when Supabase requires email confirmation, the screen says so instead of hanging', async () => {
@@ -1884,6 +1945,7 @@ describe('the dashboard (step 6 slice 4)', () => {
 
   test('a QR order waiting for approval shows as waiting, and is a way into POS', async () => {
     const user = userEvent.setup();
+    await clearApprovalQueue();
     await placeUnapproved('T3', 'Masala Chai');
     await openDashboard(user);
 

@@ -136,6 +136,28 @@ export const updateRestaurantBody = z
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
 
+// POST /restaurants — signing up a new café (step 7). The only body in this API
+// that isn't scoped to a café the caller already belongs to.
+//
+// `table_count` is capped at 48 because the floor plan is 12x8 and these are
+// placed six to a row: 48 is where the room stops fitting on the plan they are
+// about to open. Zero is allowed — a counter-service café that hasn't decided
+// on its tables yet is a real state, and tables can be added afterwards.
+export const createRestaurantBody = z.strictObject({
+  name: z.string().trim().min(1, 'Your café needs a name').max(120),
+  currency_code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Currency must be a three-letter code, like INR')
+    .optional()
+    .default('INR'),
+  table_count: z.coerce.number().int().min(0).max(48, 'The floor plan holds 48 tables').optional().default(0),
+  // Your own name, for the team list and the order timeline. Optional, because
+  // the invite path already has a fallback for someone who never gave one.
+  display_name: z.string().trim().min(1).max(80).optional(),
+});
+
 // PATCH /me — your own display name, and nothing else. A role is deliberately
 // not accepted here; that belongs to the owner's Staff tab.
 export const updateOwnProfileBody = z.strictObject({

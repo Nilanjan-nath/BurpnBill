@@ -1007,11 +1007,66 @@ Asking both ways in one request is a **400**, not one silently winning.
       table, own café, or a truncate) rather than chasing each symptom — note that six
       clean runs prove little at these rates, so measure before and after
 
-## Step 7 — Landing page
+## Step 7 — Landing page and self-serve signup
 
-- [ ] Built last, with real screenshots of the working flow
-- [ ] Real "create your restaurant" signup (name, owner name, email) likely belongs here too,
-      alongside the landing page, rather than as part of step 6 (see step 6's "Decided" note)
+**Slice 1 — Create your café** — done
+
+**Decided:** the café is created **after** the email round trip, not before it. With
+Supabase's "Confirm email" on — which the whole invite model's trust boundary depends
+on — `signUp` returns no session until they click the link, so anything typed before
+that would have to be parked somewhere. Holding it in a `pending_restaurants` table
+(mirroring `staff_invites`) was considered and dropped: it is a migration and a second
+claim path, to store a form for someone who may never come back. Instead the sign-up
+screen takes email and password only, and the **dead end becomes the offer** — the
+"this login isn't linked to a café, ask the owner to add you in Supabase" screen is now
+`CreateCafeScreen`, which is no help at all to the person who *is* the owner.
+
+- [x] Nothing had to be retrofitted for multi-tenancy: every query already scopes by the
+      `restaurant_id` on the caller's `staff_members` row, and no restaurant id is
+      hardcoded anywhere in `server/src` or `web/src` (the demo's UUID appears only in a
+      test fixture). A second café is two more rows, and the test asserts exactly that —
+      the new café cannot see the demo's tables or menu, or be seen by it
+- [x] `POST /restaurants` — the only route a signed-in person **without** a café may call,
+      and the only write not scoped to a café the caller already belongs to. New
+      `requireAuthUser` middleware: a verified Supabase user, no staff row required. The
+      id and email come off the verified token, never off the request, same rule the
+      invite claim follows
+- [x] The restaurant, its owner and its tables are created in **one transaction**. A
+      restaurant with no owner is a café nobody can open; an owner row pointing at nothing
+      is a login that 403s forever. The "are you already linked" check is inside that
+      transaction (`for update`), so two taps on a slow connection can't both pass — the
+      second gets a 409 naming the café they already belong to
+- [x] **The form asks how many tables**, and they are placed six to a row, matching the
+      layout migration's own backfill — so the first open of the seating plan is a room to
+      arrange rather than an empty grid and a button. Capped at 48: the plan is 12x8 and
+      that is where the room stops fitting on it. Zero is allowed and is a real answer
+- [x] **The menu starts empty.** Tables are generic; dishes are not, and seeded example
+      dishes would be fake data in a real café's records
+- [x] Found by mutation-checking: the route hand-built `role: 'owner'` in its response
+      while the service wrote the row, so the API could have claimed a role the database
+      didn't hold — breaking the insert to `kitchen` changed nothing any test could see.
+      The insert now returns the row it wrote and the response is built from that, and the
+      test proves the role by reaching an **owner-only route**, not by reading the reply
+- [x] Tests: 194 server (was 186) + 110 web (was 108). Mutation-checked 4 ways, all
+      caught after the fix above
+- [x] **Fixed a latent flake while here.** Three tests (two POS QR-approval, one Dashboard
+      tile) counted the whole approval queue rather than looking for their own order in
+      it, and failed together, intermittently, against the shared test database — the
+      first to fail leaves its own unapproved order behind for the next two. They now
+      clear the queue first. The original source was never pinned down; the obvious
+      suspect, the customer suite placing orders it never approves, is ruled out because
+      Vitest runs the staff file first
+
+- [ ] **Slice 2 — the landing page itself.** Warm customer palette (Fraunces/terracotta),
+      lazy-loaded like `/staff` so a customer scanning a table never downloads marketing
+      code, taking over `/` from today's "Scan your table's QR code" message (which keeps
+      a line in the footer for anyone who lands there by mistake). Five sections: hero,
+      the real flow drawn as a diagram including **the counter accepting the order**, real
+      screenshots of the staff screens, what it deliberately doesn't do (no gateway, no
+      tax, no stock, no waitlist), and Create your café. Structure taken from a
+      Petpooja-style reference; **not** taken: its trust-badge counts, named testimonials,
+      multi-product ecosystem, "book a demo", or its navy-and-red — we have one café, zero
+      years, no error metric, and red already means *occupied* here
 
 ## Before first real cafe
 

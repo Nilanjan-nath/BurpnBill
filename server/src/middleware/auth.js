@@ -84,6 +84,27 @@ async function claimInvite(db, user) {
   return rows;
 }
 
+// A verified Supabase user who may not belong to any café yet — the one state
+// requireStaff exists to reject. Signing up creates an auth account and nothing
+// else (see ARCHITECTURE §6: an invite is a pre-authorised email, not an
+// account), so the person who arrives with no invite waiting has to be able to
+// create a café of their own. That request is authenticated but not staffed.
+//
+// The user id and email come off the VERIFIED token, never off the request —
+// the same rule the invite claim follows, and for the same reason.
+export function createRequireAuthUser({ supabase }) {
+  return async function requireAuthUser(req, res, next) {
+    const [scheme, token] = (req.get('authorization') || '').split(' ');
+    if (scheme !== 'Bearer' || !token) throw unauthorized();
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) throw unauthorized('Session expired or invalid — sign in again');
+
+    req.authUser = { id: data.user.id, email: data.user.email ?? null };
+    next();
+  };
+}
+
 export function requireOwner(req, res, next) {
   if (req.staff?.role !== 'owner') throw forbidden('Only the owner can do this');
   next();
