@@ -1,0 +1,34 @@
+/* Only ever imported from landing/LandingPage.jsx, so it ships in the lazy
+   landing chunk only — same scoping trick staff/tailwind.css uses, and the
+   reason a customer scanning a table downloads neither this nor the dashboard.
+   Default Tailwind, no config file: no custom theme, no custom colours. */
+@import "tailwindcss";
+
+/* styles.css gives h1/h2 the Fraunces display face. This page is system-sans
+   throughout — it is a B2B page, and hierarchy comes from weight and size, not
+   from a serif. Tailwind has no font-family utility on those elements to
+   override it with, so reset the family once for the subtree rather than
+   remembering it on every heading someone adds later. Family only, and
+   unlayered on purpose: `font: inherit` here would also clobber the
+   `text-*`/`font-*` utilities, since unlayered rules outrank layered ones. */
+.lp :is(h1, h2, h3, h4) {
+  font-family: inherit;
+}
+
+/* styles.css paints <body> the customer app's colour, which is near-black under
+   prefers-color-scheme: dark. This page declares its own white background, so
+   the only place that shows is an overscroll bounce at the very top or bottom —
+   a flash of dark brown past the end of a white page. Scoped through :has, so
+   it can only ever apply while this page is actually mounted; a bare `body`
+   rule here would follow the customer app onto every other route. */
+:root:has(.lp) body {
+  background: #fff;
+}
+
+/* Anchors in the nav should glide, not jump — but only for people who have not
+   asked their machine to stop moving things. */
+@media (prefers-reduced-motion: no-preference) {
+  .lp {
+    scroll-behavior: smooth;
+  }
+}

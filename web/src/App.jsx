@@ -10,6 +10,9 @@ import { Message } from './components/Message.jsx';
 // Loaded only once someone actually opens /staff — a customer scanning a
 // table's QR code never downloads any of the staff dashboard's code.
 const StaffApp = lazy(() => import('./staff/StaffApp.jsx'));
+// Same rule the other way: the landing page is for café owners, and a customer
+// at a table should never pay for it either. Verified in the production build.
+const LandingPage = lazy(() => import('./landing/LandingPage.jsx'));
 
 // The QR code encodes {APP_BASE_URL}/t/{qr_token}.
 export function qrTokenFromPath(pathname) {
@@ -29,10 +32,13 @@ export default function App() {
 
   const qrToken = qrTokenFromPath(path);
   if (!qrToken) {
+    // The bare address is where a café owner arrives, not a customer — a
+    // customer arrives at /t/<token> with their camera. So / is the landing
+    // page now; the line the customer used to get lives in its footer.
     return (
-      <Message title="Scan your table's QR code">
-        Point your phone's camera at the QR code on your table to see the menu and order.
-      </Message>
+      <Suspense fallback={<Message title="Petuk">One moment.</Message>}>
+        <LandingPage />
+      </Suspense>
     );
   }
   return <Ordering key={qrToken} qrToken={qrToken} />;

@@ -120,11 +120,18 @@
   .chips button:hover { border-color: var(--accent); color: var(--accent); }
 }
 
-/* --- menu --- */
-main { padding: 10px 18px 28px; }
-main.with-bar { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
-section { scroll-margin-top: 68px; padding-top: 22px; }
-section h2 {
+/* --- menu ---
+   Scoped to .app, the customer screens' own wrapper, and NOT left as bare
+   element selectors. They were bare once and leaked: an unlayered `section h2`
+   is the menu's small grey uppercase category heading, and it beat every
+   heading style on the landing page — which lives in this same stylesheet's
+   reach — regardless of specificity. Same family as the cascade bug that made
+   the dashboard unreadable (docs/design.md). `.message`/`.confirmation` set
+   their own padding, so nothing outside .app ever depended on these. */
+.app main { padding: 10px 18px 28px; }
+.app main.with-bar { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+.app section { scroll-margin-top: 68px; padding-top: 22px; }
+.app section h2 {
   padding: 0 0 12px; font: 700 0.78rem/1 var(--font-body); color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.09em;
 }

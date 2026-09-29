@@ -1057,16 +1057,112 @@ screen takes email and password only, and the **dead end becomes the offer** —
       suspect, the customer suite placing orders it never approves, is ruled out because
       Vitest runs the staff file first
 
-- [ ] **Slice 2 — the landing page itself.** Warm customer palette (Fraunces/terracotta),
-      lazy-loaded like `/staff` so a customer scanning a table never downloads marketing
-      code, taking over `/` from today's "Scan your table's QR code" message (which keeps
-      a line in the footer for anyone who lands there by mistake). Five sections: hero,
-      the real flow drawn as a diagram including **the counter accepting the order**, real
-      screenshots of the staff screens, what it deliberately doesn't do (no gateway, no
-      tax, no stock, no waitlist), and Create your café. Structure taken from a
-      Petpooja-style reference; **not** taken: its trust-badge counts, named testimonials,
-      multi-product ecosystem, "book a demo", or its navy-and-red — we have one café, zero
-      years, no error metric, and red already means *occupied* here
+**Slice 2 — the landing page** — done, then **redesigned** after the owner saw it
+
+*First version was warm-palette plain CSS with a drawn diagram and no product
+imagery. The owner's verdict: bad taste, wrong colours, buttons that didn't feel
+like they worked, nothing to look at, doesn't feel interactive. Rebuilt to a
+supplied B2B brief — Linear/Stripe-flavoured, neutral base, one accent.*
+
+- [x] **Rebuilt in Tailwind on the dashboard's language**, not the customer app's: white
+      and charcoal with teal reserved for the things you can act on. The page's reader is
+      an owner deciding whether to trust this with their service, and the calm version is
+      the persuasive one. Tailwind rides in the landing chunk only, the same scoping
+      `staff/tailwind.css` uses
+- [x] Nine sections per the brief: sticky nav, hero with the product beside it, an honest
+      strip, problem cards, four alternating feature blocks, how-it-works, pricing, a
+      dark closing CTA, footer
+- [x] **The product is the hero visual.** `ProductMockups.jsx` draws the kitchen board,
+      the POS floor, the menu grid and the customer's phone in the real dashboard's own
+      design — same status palette, same card shapes. Mockups rather than screenshots
+      because a screenshot of the live café would carry a real café's orders; the frames
+      are sized so real screenshots can replace them one for one
+- [x] **Interaction it was missing:** hover and press states on every control, a nav that
+      only grows its border once you leave the top, smooth anchor scrolling, and sections
+      that fade up as you reach them
+- [x] **"The buttons don't work" was real, but not in the wiring** — every link resolved.
+      What was missing was feedback: nothing moved, nothing responded. A test now walks
+      every anchor on the page and fails if one points at a section that does not exist,
+      and asserts both CTAs and Sign in reach `/staff`
+- [x] **The honesty rule stays a test.** No "trusted by N", no years, no uptime figure, no
+      free trial with a clock nobody runs. The social-proof strip the brief allows says
+      what is true — built in Tripura, running live in its first café — rather than a
+      wall of invented logos. Pricing says ₹0 while in beta, which is the actual price
+- [x] **Root-caused the cascade trap instead of working around it.** `styles.css` styled
+      the customer app's furniture with bare `main`, `section` and `section h2` selectors —
+      `section h2` being the menu's small grey uppercase category heading — so every
+      heading on the first landing page came out shouting. They are now scoped to `.app`,
+      the customer screens' own wrapper. `.message`/`.confirmation` set their own padding,
+      so nothing outside `.app` ever depended on them; verified by diffing the customer
+      menu before and after
+- [x] **A reveal animation must never be able to hide the page.** The first version used
+      an IntersectionObserver, which only reports a *change* in intersection — sweeping
+      the page in steps left several sections sitting at `opacity: 0` with real content
+      inside them. It now re-checks position on scroll, so it cannot get stuck, and skips
+      itself entirely under `prefers-reduced-motion`. Verified by walking the whole page
+      in half-viewport steps and asserting no section is ever blank while on screen
+- [x] **Worth knowing for the next visual check:** the browser pane reported
+      `document.hidden === true` for this whole session, so its screenshots lagged and
+      `requestAnimationFrame` was throttled. Two of the "bugs" above were only visible by
+      measuring elements from JavaScript. If a screenshot looks wrong, measure before
+      believing it — and do not build behaviour on rAF
+- [x] **Second owner note: the page sold only the QR half.** It read as if Petuk were a QR
+      menu, when the same system also rings up walk-ins at the till, holds the floor plan
+      and adds up the day — each of those a reason an owner would choose it. The feature
+      showcase went from four blocks to seven, with three new mockups drawn from the real
+      screens: **POS order entry** (pick a table, tap through the menu, send it — no QR
+      code involved), the **seating plan** on its dotted grid, and the **dashboard** with
+      takings kept separate from money still owed and sales by hour. Plus a six-card grid
+      for the things that don't need a screenshot each: staff roles and invites, table
+      bills, printable QR sheets, order history, the live stream, the seven-day view
+- [x] The features heading is no longer "Four screens" but "One tool for the table, the
+      till and the kitchen", with a line under it saying QR ordering is where it starts
+      and not where it stops
+- [x] Tests: 194 server (unchanged) + 115 web (was 110). Mutation-checked 8 ways, all
+      caught: a dead nav anchor, CTAs pointing nowhere, a free-trial line, a trusted-by
+      count, and — after two misses on the first pass — the POS block losing its label and
+      each of the three new mockups being swapped for another. The first version of that
+      test asserted the *words* on the page but not that the right screens were **shown**,
+      which is the whole point of the section
+
+*Original slice 2 notes, superseded by the rebuild above:*
+
+- [x] `/` is the landing page, lazy-loaded exactly like `/staff`: a customer scanning a
+      table never downloads it. Verified in a production build — the landing chunk is
+      6.8 kB JS + 4.8 kB CSS and the customer bundle contains none of it
+- [x] Warm customer palette, built on the tokens already in `styles.css`, so the page and
+      the app a visitor is about to scan into cannot drift into two different browns. It
+      inherits dark mode for free, which is most of the argument for reusing them
+- [x] Five sections: hero, the flow **drawn** (`FlowDiagram.jsx`, inline SVG), why Petuk,
+      what it deliberately doesn't do, and Create your café. The approval step is the one
+      thing a café owner does not expect, so it is a box in the picture with the counter's
+      colour and a line under it — "nothing reaches the kitchen until someone says yes"
+- [x] **The honesty rule is a test, not a convention.** `App.test.jsx` asserts the page
+      carries no "trusted by N", no years-in-business, no uptime figure, no pricing and no
+      free-trial badge — there is one café and it is the owner's own. Mutation-checked
+      both ways: adding a free-trial line, or a "Trusted by 200+ cafés" reason, fails the
+      suite. Whoever edits the copy next gets told
+- [x] **A second instance of the cascade trap, in a new place.** `styles.css` styles the
+      customer app's own furniture with *unlayered element* rules — `main`, `section`, and
+      `section h2`, which is the menu's small grey uppercase category heading. This page is
+      customer-side and uses those same elements, so every section heading came out
+      shouting. A cascade layer can't help here (the page is inside that stylesheet's own
+      world); only out-specifying every property it sets does. Written up in `design.md`
+      beside the original
+- [x] Two layout bugs found by **measuring the real page in a browser**, neither visible in
+      a screenshot: `overflow-x: auto` on a section computes `overflow-y` to `auto` as
+      well, which turned the whole section into a scroll box and cut the diagram off; and
+      centring each section child as its own block meant any child with its own `margin`
+      shorthand silently un-centred itself, while a narrower child centred instead of
+      lining up under its heading. Both fixed by one measured column per section
+- [x] Tests: 194 server (unchanged) + 113 web (was 110). Mutation-checked 6 ways, all
+      caught
+- [ ] **Needs the owner: real screenshots.** `SCREENSHOTS` in `LandingPage.jsx` is an empty
+      array and that section renders nothing while it is — an empty frame captioned "your
+      dashboard here" is a promise, and a drawing of a screen is a picture of software
+      rather than the software. Three shots would do it: the kitchen board mid-service, the
+      POS floor with a table carrying a bill, and the dashboard. They need a signed-in
+      session, so they are yours to take; drop the files in and fill the array
 
 ## Before first real cafe
 

@@ -113,6 +113,31 @@ The owner's catalog, and the only screen here with photography on it:
   it is announced, not merely seen — which is also why a test looking for "no photo here"
   has to ask for an `<img>` element rather than `queryByRole('img')`
 
+### The landing page (`/`)
+
+Not part of this dashboard, but it borrows this system's language on purpose — white,
+charcoal, one teal accent — because the person reading it is an owner deciding whether to
+trust this with their service, and the calm version of that page is the persuasive one. The
+customer app's warm palette was tried first and read as a food blog rather than a tool.
+
+- **The software is the hero image.** `ProductMockups.jsx` draws the board, the POS order
+  panel, the floor, the seating plan, the dashboard and the customer's phone in this
+  system's own components and status colours, rather than showing a photograph of people
+  eating. Seven of them, because the page has to sell the till and the day's numbers as
+  well as the QR code — the first version led with QR ordering alone and read as if that
+  were the whole product. They are mockups, not screenshots, because a
+  screenshot of the live café would carry a real café's orders — and the frames are sized so
+  real screenshots can drop straight in
+- **Motion is decoration and must fail open.** Sections fade up as you reach them, but the
+  hook re-checks position on scroll rather than trusting one IntersectionObserver callback:
+  an observer reports only a *change* in intersection, so a section that is jumped past can
+  be left at `opacity: 0` with real content inside it. It also skips itself entirely under
+  `prefers-reduced-motion`. A decoration that can hide the page is not a decoration
+- **Every anchor has a target, and a test walks them.** "The buttons don't work" turned out
+  to mean "nothing responds when I press them" — the links all resolved. Hover, press
+  (`active:scale-[0.98]`) and a nav border that appears once you leave the top are what
+  fixed it
+
 ### Recent
 
 Orders the kitchen is done with, read a day at a time. The one screen here that is a **table**
@@ -259,7 +284,20 @@ text on the dashboard's white panels, on a Mac in dark mode, and no problem at a
 in light mode. `h1, h2 { font: … var(--font-display) }` beat the heading utilities the same way,
 which is why page titles rendered in Fraunces.
 
-The fix was to wrap those element rules in `@layer petuk-customer` (a no-op for the customer
+**It happened a second time, and the fix that time was to delete the cause.** The landing
+page at `/` is customer-side, and `styles.css` also dressed the customer app's own furniture
+with *bare element* rules: `main` took padding, `section` took padding-top, and `section h2`
+was the menu's category heading — small, grey, uppercase, letter-spaced. The landing page
+uses those same elements, so every one of its section headings came out shouting. A cascade
+layer is no help there, since the page lives inside that stylesheet's own world rather than
+a foreign design system. Out-specifying each property would have worked and would have had
+to be repeated by the next surface, so those three rules are now **scoped to `.app`**, the
+customer screens' own wrapper. `.message` and `.confirmation` set their own padding, so
+nothing outside `.app` ever depended on them. **The rule to take from both incidents: a bare
+element selector in `styles.css` reaches every surface this repo has. Scope it to the app it
+belongs to.**
+
+The original fix was to wrap those element rules in `@layer petuk-customer` (a no-op for the customer
 app, which has no layered CSS of its own) so the dashboard's utilities win. **If you add global
 element styles to `styles.css`, put them in that layer**, or they will leak into a design system
 that isn't theirs. Class-based rules there stay unlayered on purpose — `.veg-mark` is shared

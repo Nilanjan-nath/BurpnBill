@@ -136,9 +136,96 @@ describe('menu', () => {
       await sql("update restaurant_tables set is_active = true where label = 'T4'");
     }
 
+  });
+});
+
+describe('the landing page', () => {
+  // The bare address is where a café owner arrives; a customer arrives at
+  // /t/<token> with their camera. So / is the landing page now.
+  const openLanding = async () => {
     window.history.replaceState(null, '', '/');
     render(<App />);
-    expect(screen.getByRole('heading', { name: "Scan your table's QR code" })).toBeInTheDocument();
+    return screen.findByRole('heading', { level: 1, name: /can.t reach every table at 7pm/i });
+  };
+
+  test('/ is the landing page, and every link on it goes somewhere real', async () => {
+    await openLanding();
+
+    // Both CTAs and the sign-in link land on the one place a café owner can
+    // actually start: the staff app, which offers to create a café.
+    expect(screen.getAllByRole('link', { name: /Start free/ })[0]).toHaveAttribute('href', '/staff');
+    expect(screen.getAllByRole('link', { name: /Create your café/ })[0]).toHaveAttribute('href', '/staff');
+    expect(screen.getAllByRole('link', { name: 'Sign in' })[0]).toHaveAttribute('href', '/staff');
+
+    // Every in-page anchor has something to scroll to. A nav link that points
+    // at a section nobody added is the "button does nothing" bug.
+    const anchors = screen
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+      .filter((href) => href.startsWith('#'));
+    expect(anchors.length).toBeGreaterThan(3);
+    for (const href of anchors) {
+      expect(document.querySelector(href), `${href} has no target`).not.toBeNull();
+    }
+  });
+
+  test('it leads with the operational problem, and shows the product doing the work', async () => {
+    await openLanding();
+
+    expect(screen.getByText(/nobody could get to table nine/i)).toBeInTheDocument();
+    // The counter's approval is what makes this product not naive, so it is on
+    // the page rather than discovered after signing up.
+    expect(screen.getByRole('heading', { name: /Nothing reaches the kitchen until you accept it/ })).toBeInTheDocument();
+    // The software is the hero visual: the board mockup carries real columns.
+    expect(screen.getAllByText('Preparing').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ready').length).toBeGreaterThan(0);
+  });
+
+  test('it sells the whole product, not just the QR half', async () => {
+    await openLanding();
+
+    // The first version of this page read as if Petuk were only a QR menu. It
+    // is also the till, the floor plan and the day's numbers, and each of those
+    // is a reason an owner would choose it — so each is named here.
+    expect(screen.getByRole('heading', { name: /no QR code needed/i })).toBeInTheDocument();
+    expect(screen.getByText(/Ring up a walk-in without a QR code/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Arrange the room the way it actually is/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /when you were busy/ })).toBeInTheDocument();
+    expect(screen.getByText(/Sales by hour, so you can staff the rush/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Staff accounts and roles' })).toBeInTheDocument();
+
+    // And each is SHOWN, not just claimed — the mockups are the argument, so
+    // assert the ones that carry these three, by their own content.
+    expect(screen.getAllByText('POS').length).toBeGreaterThan(0);
+    expect(screen.getByText('Send to kitchen')).toBeInTheDocument(); // POS order entry
+    expect(screen.getByText(/Settings · Seating plan/)).toBeInTheDocument(); // the floor plan
+    expect(screen.getByText('Taken today')).toBeInTheDocument(); // the dashboard
+    expect(screen.getByText('Sales by hour')).toBeInTheDocument();
+  });
+
+  test('it promises nothing the product does not have', async () => {
+    await openLanding();
+
+    // There is one café live, zero years behind us and no error metric. A
+    // landing page is the easiest place in this product to claim otherwise, so
+    // it is asserted here rather than left to whoever edits the copy next.
+    const page = document.body.textContent;
+    expect(page).not.toMatch(/trusted by \d/i);
+    expect(page).not.toMatch(/\d[\d,]*\+\s*(cafés|cafes|restaurants|businesses)/i);
+    expect(page).not.toMatch(/free trial|no credit card|money.back guarantee/i);
+    expect(page).not.toMatch(/uptime|99\.\d\s*%/i);
+
+    // What it says instead is true, and checkable: free while in beta, and it
+    // says out loud what it will not do.
+    expect(screen.getAllByText(/Free while we.re in beta/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'No payment gateway' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No tax engine' })).toBeInTheDocument();
+  });
+
+  test('a customer who lands here by mistake still gets told what to do', async () => {
+    await openLanding();
+    // This page took over the address that used to carry that line.
+    expect(screen.getByText(/Point your phone.s camera at the QR code on your table/)).toBeInTheDocument();
   });
 });
 

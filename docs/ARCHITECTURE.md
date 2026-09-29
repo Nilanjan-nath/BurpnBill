@@ -348,7 +348,15 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   `@supabase/supabase-js` is used only to verify staff access tokens.
 - **Database**: Supabase (hosted Postgres 15+)
 - **Auth**: Supabase Auth, staff/owner only (email + password)
-- **Frontend**: React (Vite) — one web app for customers and staff, no native app. The staff
+- **Frontend**: React (Vite) — one web app for the landing page, customers and staff, no
+  native app. Both the staff dashboard (`/staff`) and the **landing page** (`/`) are
+  lazy-loaded, so a customer scanning a table downloads neither: verified in a production
+  build, where the landing chunk is its own ~6.8 kB JS and ~4.8 kB CSS. The landing page
+  is Tailwind on the **dashboard's** language — white, charcoal, one teal accent — because
+  its reader is an owner deciding whether to trust this with their service, not a diner.
+  Tailwind is imported from `landing/landing-tailwind.css`, reachable only from the landing
+  chunk, exactly as `staff/tailwind.css` is for the dashboard **(added, step 7;
+  redesigned after owner review)**. The staff
   dashboard (`/staff`) is lazy-loaded, so customers never download it. It signs in with its own
   Supabase Auth client, built from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in a separate
   `web/.env` — never the service-role key, which stays in the server's own `.env` **(decided)**
@@ -391,10 +399,13 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
    only), a today's-snapshot dashboard, staff invite/role management. Still 2 roles
    (owner/staff), so these are all owner-only surfaces — see `TASKS.md` step 7 for the
    decisions and slice breakdown
-7. **Landing page and self-serve signup** — in progress. `POST /restaurants` and the
-   Create your café screen are done: nothing needed retrofitting for multi-tenancy, since
-   every query already scopes by the caller's own `restaurant_id` and no restaurant id is
-   hardcoded in either `server/src` or `web/src`. The landing page itself is next
+7. **Landing page and self-serve signup** — done, bar real screenshots. `POST /restaurants`
+   and the Create your café screen came first (nothing needed retrofitting for
+   multi-tenancy: every query already scopes by the caller's own `restaurant_id`, and no
+   restaurant id is hardcoded in either `server/src` or `web/src`), then the page at `/`.
+   What the page may claim is enforced by a test rather than by convention — no
+   trusted-by counts, no pricing, no free-trial badge, because there is one café and it is
+   the owner's own
 
 After v1: payments, invoices, a richer role set (cashier/waiter, so POS isn't owner-only),
 multi-restaurant self-serve signup (see §2).
