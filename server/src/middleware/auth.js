@@ -4,7 +4,12 @@ import { unauthorized, forbidden } from '../errors.js';
 // restaurant this user works for. Every staff handler scopes its queries by
 // req.staff.restaurantId — never by an id taken from the request.
 //
-//   req.staff = { userId, restaurantId, role: 'owner' | 'staff' | 'kitchen', displayName }
+//   req.staff = { userId, restaurantId, restaurantName, role, displayName }
+//   role: 'owner' | 'staff' | 'kitchen'
+//
+// The café's NAME rides along with its id because the dashboard shows it as the
+// thing you are signed in to — see Sidebar.jsx. It costs nothing: the join onto
+// restaurants was already here for the is_active check.
 export function createRequireStaff({ supabase, db }) {
   return async function requireStaff(req, res, next) {
     const [scheme, token] = (req.get('authorization') || '').split(' ');
@@ -14,7 +19,7 @@ export function createRequireStaff({ supabase, db }) {
     if (error || !data?.user) throw unauthorized('Session expired or invalid — sign in again');
 
     let { rows } = await db.query(
-      `select sm.restaurant_id, sm.role, sm.display_name
+      `select sm.restaurant_id, sm.role, sm.display_name, r.name as restaurant_name
          from public.staff_members sm
          join public.restaurants r on r.id = sm.restaurant_id
         where sm.user_id = $1 and r.is_active`,
@@ -34,6 +39,7 @@ export function createRequireStaff({ supabase, db }) {
     req.staff = {
       userId: data.user.id,
       restaurantId: rows[0].restaurant_id,
+      restaurantName: rows[0].restaurant_name,
       role: rows[0].role,
       displayName: rows[0].display_name,
     };
@@ -70,7 +76,9 @@ async function claimInvite(db, user) {
           and exists (select 1 from linked)
        returning id
      )
-     select restaurant_id, role, display_name from linked`,
+     select l.restaurant_id, l.role, l.display_name, r.name as restaurant_name
+       from linked l
+       join public.restaurants r on r.id = l.restaurant_id`,
     [user.id, user.email, fallbackName],
   );
   return rows;

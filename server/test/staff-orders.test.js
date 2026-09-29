@@ -388,6 +388,98 @@ test('bad ?hours is a clear 400', async () => {
   }
 });
 
+// Backdates the finishing event to an exact instant, written as SQL so the
+// boundary can be expressed in a café's own zone rather than the runner's.
+async function finishedAt(orderId, sqlInstant) {
+  await db.query(
+    `update order_status_events set created_at = ${sqlInstant}
+      where id = (select id from order_status_events where order_id = $1 order by id desc limit 1)`,
+    [orderId],
+  );
+}
+
+const IST_MIDNIGHT = `(date_trunc('day', now() at time zone 'Asia/Kolkata') at time zone 'Asia/Kolkata')`;
+
+test('?day splits on the CAFÉ\'s midnight, not the database\'s', async () => {
+  const after = await place('T1', [{ name: 'Masala Chai' }]);
+  await setStatus(after.id, 'cancelled');
+  await finishedAt(after.id, `${IST_MIDNIGHT} + interval '1 minute'`);
+
+  const before = await place('T1', [{ name: 'Masala Chai' }]);
+  await setStatus(before.id, 'cancelled');
+  await finishedAt(before.id, `${IST_MIDNIGHT} - interval '1 minute'`);
+
+  const today = recentNumbers(await recent(STAFF, '?day=today&tz=Asia/Kolkata'));
+  assert.ok(today.includes(after.order_number), 'a minute into the café\'s day is today');
+  assert.ok(!today.includes(before.order_number), 'a minute before it is not');
+
+  const yesterday = recentNumbers(await recent(STAFF, '?day=yesterday&tz=Asia/Kolkata'));
+  assert.ok(yesterday.includes(before.order_number));
+  assert.ok(!yesterday.includes(after.order_number));
+
+  // The two orders are two minutes apart around 18:30 UTC, so UTC's own day
+  // boundary cannot fall between them: if the window were computed in the
+  // database's zone they would always land on the same side. That they were
+  // split above is the whole point of ?tz.
+  const utc = recentNumbers(await recent(STAFF, '?day=today&tz=UTC'));
+  assert.equal(
+    utc.includes(after.order_number),
+    utc.includes(before.order_number),
+    'in UTC the two sit in one day — so the split above came from the café\'s zone',
+  );
+});
+
+test('?day is a whole day, not a rolling window — an unknown zone falls back to UTC', async () => {
+  const order = await place('T2', [{ name: 'Masala Chai' }]);
+  await setStatus(order.id, 'cancelled');
+  // Just inside today wherever the caller is, but well outside the 4h default.
+  await finishedAt(order.id, `${IST_MIDNIGHT} + interval '1 minute'`);
+
+  assert.ok(recentNumbers(await recent(STAFF, '?day=today&tz=Asia/Kolkata')).includes(order.order_number));
+  // A nonsense zone degrades to UTC instead of erroring, same as the dashboard.
+  assert.equal((await recent(STAFF, '?day=today&tz=Mars/Olympus_Mons')).status, 200);
+});
+
+test('a row says who finished it and how it was paid', async () => {
+  const { rows: table } = await db.query(
+    `insert into restaurant_tables (restaurant_id, label, seats) values ($1, 'RC1', 4) returning id, qr_token`,
+    [RESTAURANT_ID],
+  );
+  tokens.RC1 = table[0].qr_token;
+
+  const order = await place('RC1', [{ name: 'Masala Chai' }]);
+  await moveStatus(STAFF, order.id, 'preparing'); // Ravi
+  await moveStatus(STAFF, order.id, 'ready');
+  await moveStatus(OWNER, order.id, 'served'); // Mita is the one who finished it
+
+  const row = async () =>
+    (await recent(STAFF)).body.orders.find((o) => o.order_number === order.order_number);
+
+  assert.equal((await row()).finished_by, 'Mita', 'the actor on the finishing event, not whoever touched it first');
+  assert.equal((await row()).payment_method, null, 'served, but nobody has paid at the counter yet');
+
+  const paid = await call('POST', `/api/tables/${table[0].id}/checkout`, {
+    as: OWNER,
+    body: { method: 'upi', idempotency_key: `recent-finished-by-${Date.now()}` },
+  });
+  assert.equal(paid.status, 200);
+  assert.equal((await row()).payment_method, 'upi');
+
+  // A cancelled order was never paid for, and null is the honest answer.
+  const scrapped = await place('RC1', [{ name: 'Masala Chai' }]);
+  await moveStatus(OWNER, scrapped.id, 'cancelled');
+  const scrappedRow = (await recent(STAFF)).body.orders.find((o) => o.order_number === scrapped.order_number);
+  assert.equal(scrappedRow.payment_method, null);
+  assert.equal(scrappedRow.finished_by, 'Mita');
+});
+
+test('asking for a day AND an hours window is refused, not silently resolved', async () => {
+  const res = await recent(STAFF, '?day=today&hours=4');
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error.code, 'bad_request');
+  assert.equal((await recent(STAFF, '?day=last-tuesday')).status, 400);
+});
+
 // --- PATCH /orders/:id/status -----------------------------------------------
 
 const moveStatus = (as, orderId, status) => call('PATCH', `/api/orders/${orderId}/status`, { as, body: { status } });

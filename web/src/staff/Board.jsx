@@ -99,18 +99,11 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
           </div>
         )}
 
-        {/* Everything but Recent is on the Tailwind design now; Recent is
-            still the old dark theme (see staff.css's header note) and is the
-            only tab that gets .staff-legacy, so the light panels aren't
-            nested inside a dark-background ancestor. Take a tab out of this
-            list as you migrate it. */}
-        <div
-          className={
-            ['board', 'pos', 'staff', 'dashboard', 'menu', 'settings'].includes(tab)
-              ? 'flex min-h-0 flex-1 flex-col'
-              : 'staff-legacy flex min-h-0 flex-1 flex-col'
-          }
-        >
+        {/* Every tab is on the Tailwind design system now. The per-tab
+            `.staff-legacy` wrapper that carried the old dark theme went with
+            Recent, the last tab to be migrated — the only legacy screen left
+            is sign-in, which renders outside this shell entirely. */}
+        <div className="flex min-h-0 flex-1 flex-col">
           {tab === 'board' && <ActiveColumns board={board} onOpenDetail={setDetailOrderId} />}
           {tab === 'recent' && <RecentOrders token={token} onOpenDetail={setDetailOrderId} />}
           {tab === 'menu' && <MenuTab isOwner={isOwner} token={token} />}

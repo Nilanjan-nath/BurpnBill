@@ -23,8 +23,9 @@ const fakeDb = {
       return { rows: [] };
     }
     if (text.includes('from public.staff_members')) {
-      if (params[0] === STAFF_USER) return { rows: [{ restaurant_id: 'r1', role: 'staff', display_name: 'Ravi' }] };
-      if (params[0] === OWNER_USER) return { rows: [{ restaurant_id: 'r1', role: 'owner', display_name: 'Mita' }] };
+      const cafe = { restaurant_id: 'r1', restaurant_name: 'Chai Point Cafe' };
+      if (params[0] === STAFF_USER) return { rows: [{ ...cafe, role: 'staff', display_name: 'Ravi' }] };
+      if (params[0] === OWNER_USER) return { rows: [{ ...cafe, role: 'owner', display_name: 'Mita' }] };
       return { rows: [] };
     }
     return { rows: [] };
@@ -143,7 +144,16 @@ test('a signed-in user with no restaurant link is forbidden', async () => {
 test('GET /api/me returns the staff member and their restaurant', async () => {
   const res = await call('GET', '/api/me', { headers: asUser(STAFF_USER) });
   assert.equal(res.status, 200);
-  assert.deepEqual(res.body.staff, { userId: STAFF_USER, restaurantId: 'r1', role: 'staff', displayName: 'Ravi' });
+  // The café's NAME rides along with its id: the dashboard's sidebar names the
+  // café you are signed in to, and a second request just for that would be one
+  // round trip on every load for a string the auth query already joins to.
+  assert.deepEqual(res.body.staff, {
+    userId: STAFF_USER,
+    restaurantId: 'r1',
+    restaurantName: 'Chai Point Cafe',
+    role: 'staff',
+    displayName: 'Ravi',
+  });
 });
 
 test('owner-only routes: staff get 403 before validation even runs; owner reaches real validation', async () => {

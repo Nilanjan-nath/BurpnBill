@@ -76,7 +76,18 @@ export const staffApi = {
   listOrders: (token) => request('GET', '/orders', { token }),
   updateStatus: (token, orderId, status) => request('PATCH', `/orders/${orderId}/status`, { token, body: { status } }),
   orderDetail: (token, orderId) => request('GET', `/orders/${orderId}`, { token }),
-  recentOrders: (token, hours) => request('GET', `/orders/recent${hours ? `?hours=${hours}` : ''}`, { token }),
+  // Either a whole café day ({ day: 'today' | 'yesterday' }, with the
+  // browser's own zone so the boundary is the café's) or a rolling window
+  // ({ hours }). The API refuses both at once, so this sends whichever it was
+  // given rather than filling in the other.
+  recentOrders: (token, { day, hours } = {}) => {
+    const query = day
+      ? `?day=${day}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`
+      : hours
+        ? `?hours=${hours}`
+        : '';
+    return request('GET', `/orders/recent${query}`, { token });
+  },
   listItems: (token) => request('GET', '/items', { token }),
   createItem: (token, body) => request('POST', '/items', { token, body }),
   updateItem: (token, itemId, body) => request('PATCH', `/items/${itemId}`, { token, body }),

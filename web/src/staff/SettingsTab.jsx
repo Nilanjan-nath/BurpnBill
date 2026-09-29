@@ -50,7 +50,13 @@ export function SettingsTab({ token, identity, auth, onIdentityChange }) {
           </div>
         )}
 
-        {view === 'profile' && isOwner && <RestaurantProfile token={token} isOwner={isOwner} />}
+        {view === 'profile' && isOwner && (
+          <RestaurantProfile
+            token={token}
+            isOwner={isOwner}
+            onRenamed={(restaurantName) => onIdentityChange({ ...identity, restaurantName })}
+          />
+        )}
         {view === 'seating' && isOwner && <SeatingPlan token={token} />}
         {view === 'account' && (
           <UserAccount token={token} identity={identity} auth={auth} onIdentityChange={onIdentityChange} />

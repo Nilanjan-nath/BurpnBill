@@ -933,6 +933,80 @@ no hint why, which reads as a bug rather than an answer.
       by 1.1 (the card drifted a cell from its own target); and the drag hint sat across the top
       row, covering the tables
 
+**Slice 11 — Recent on the design system, and a day at a time** — done
+*The last tab on the legacy dark theme. Built from an owner-supplied reference
+(an Orders screen with Today/Yesterday tabs, Completed/Cancelled pills, a
+search field and a staff/payment table); taken as structure, not
+feature-for-feature.*
+
+**Decided:** Recent reads a whole **café day** rather than a rolling window.
+`?hours=` stays (it is a different, still-useful question — "what just
+happened"), but the tab asks `?day=today|yesterday&tz=`, with the boundary
+computed in the browser's own zone exactly as `GET /dashboard/summary` does:
+Postgres runs in UTC, where the day rolls at 05:30 IST, mid-morning-shift.
+Asking both ways in one request is a **400**, not one silently winning.
+
+- [x] `GET /orders/recent` gained `?day` + `?tz`, and each row now carries
+      **who finished it** (the actor on the finishing status event, joined to
+      `staff_members`) and **how it was paid** (the *succeeded* `payments` row's
+      method). Both come from records that already existed — a wider select, no
+      new schema. Either can be null and that is a real answer: a cancelled
+      order was never paid for, so the column reads "—" rather than "Unpaid"
+- [x] The day is stepped back in **local** time and only then converted to an
+      instant, so a 23- or 25-hour day where the café is still reads as one day
+- [x] `RecentOrders.jsx` rebuilt in Tailwind: header card, Today/Yesterday tabs,
+      All/Served/Cancelled filter pills, a search over order number, table,
+      staff and dish, and a seven-column row (order + status, table, items,
+      time, staff, payment, amount). Rows are real `<button>`s laid out on a
+      grid rather than a `<table>`, so the whole row is one tab stop and its own
+      text reads out in column order
+- [x] **All** is the default filter, not Served: a cancelled order sitting
+      between two served ones is exactly what "why doesn't the till match" is
+      looking for, so splitting them by default would hide the thing being
+      looked for
+- [x] **Not taken from the reference**: its Clock In button (no schema — same
+      rule as the menu's AI descriptions), its blue, and its bare
+      Completed/Cancelled split
+- [x] `.staff-legacy` is gone from `Board.jsx` — **every tab is now on the
+      Tailwind system**, which closes the migration that had been open since
+      step 6 slice 3. `staff.css` is now reachable only by the sign-in screen
+      (`.staff-centered` / `.staff-signin`); the rest of that file is dead and
+      is worth pruning in its own pass
+- [x] Column widths are sized to fit a 1024px laptop once the sidebar has taken
+      its 256px — the first draft pushed the **amount** off the right edge
+      there, which is the one column nobody thinks to scroll for. Found by
+      looking at it, not by a test
+- [x] Tests: 186 server (was 182) + 108 web (was 105). Mutation-checked 11 ways
+      — the café-zone boundary, the finishing-event actor, a payment that never
+      succeeded, the day/hours refusal, the day tab reaching the server, the
+      status filter, the search, the unpaid flag, the staff cell, and the
+      Refresh button — all caught. Two needed a second pass: one mutation
+      landed on the error banner's Retry instead of Refresh, and one of my own
+      assertions was **vacuous** — it checked a row was absent while the screen
+      was still blanked to "Loading…", so it passed even with the day tab
+      wired to nothing. It now waits for the day to have actually loaded first
+- [x] **The sidebar names the café, not the owner.** Owner feedback on the finished
+      tab: that corner should say which café you are in, which is what every number on
+      every screen is scoped to — and on a shared till it is the question with a wrong
+      answer worth catching. `req.staff` now carries `restaurantName` (the auth query
+      already joined `restaurants` for its `is_active` check, so the name is free and no
+      screen fetches it separately), the invite-claiming path returns it too, and renaming
+      the café in Settings updates the sidebar without a reload, exactly as renaming
+      yourself already did. Who is signed in stays in Settings → User account, which is the
+      only place it can be changed. **Worth knowing:** nothing on the dashboard now names
+      the signed-in person outside that screen — fine for a single-owner café, worth
+      revisiting if a shared till ever needs "who is on this terminal" at a glance
+- [ ] **Known flake, worth chasing on its own.** The Settings test "owner can add a
+      table inline" fails roughly 1 run in 5, and **reproduces on a clean tree** — it
+      is not from this slice. Separately, a trio of QR-approval tests (two in POS, one
+      on the Dashboard) failed together twice during this slice's work and then did not
+      reappear in ~20 runs; I could not reproduce them on demand and so cannot attribute
+      them either way. Both have the same shape and probably the same root cause: a test
+      asserting an **exact count** against the one database every web test shares, so
+      anything another test leaves behind breaks it. The fix is per-test isolation (own
+      table, own café, or a truncate) rather than chasing each symptom — note that six
+      clean runs prove little at these rates, so measure before and after
+
 ## Step 7 — Landing page
 
 - [ ] Built last, with real screenshots of the working flow

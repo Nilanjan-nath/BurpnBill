@@ -191,7 +191,10 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 
 ### Private (staff/owner, authenticated + restaurant-scoped)
 
-- `GET /me` — the signed-in staff member and their restaurant **(added)**
+- `GET /me` — the signed-in staff member and their restaurant, **including the café's name**:
+  the dashboard's sidebar names the café you are signed in to, and the auth query already
+  joins `restaurants` for its `is_active` check, so carrying the name costs nothing and saves
+  a request per load **(added; extended, step 6)**
 - `PATCH /me` — your own `display_name`, and nothing else. Never a role **(added, step 6)**
 - `GET /restaurant` — any staff member; the café's name, address, phone and currency
 - `PATCH /restaurant` — owner only; partial. `address` and `phone` are clearable (an explicit
@@ -202,7 +205,14 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
 - `GET /orders/pending` — the QR approval queue, oldest first, with lines and totals **(added, step 6)**
 - `POST /orders/:orderId/approve` — hand a queued order to the kitchen. Locks the row first, so two people accepting at once can't both win; the loser gets a 409 like any lost race. Publishes `order_created` — this is the moment the kitchen hears about it **(added, step 6)**
 - `POST /orders/:orderId/reject` — turn one away. Cancels it through the same path as any other cancellation (timeline, actor), and refuses anything that has already left the queue **(added, step 6)**
-- `GET /orders/recent` — served/cancelled orders, newest-finished first; default 4h, `?hours=` up to a week **(added)**
+- `GET /orders/recent` — served/cancelled orders, newest-finished first. Either a rolling
+  window (`?hours=`, default 4, up to a week) or one whole **café day** (`?day=today|yesterday`
+  with `?tz=`, the same zone contract as `GET /dashboard/summary` — Postgres runs in UTC, where
+  the day rolls at 05:30 IST). Sending both is a 400: they are different questions, and a caller
+  asking both ways doesn't know which it wants. Each row also carries **who finished it** (the
+  actor on the finishing status event) and **how it was paid** (the succeeded payment's method,
+  null when nobody has paid yet) — both read off records that already existed, not new schema
+  **(added; extended, step 6)**
 - `GET /orders/:orderId` — lines, notes, totals and status timeline (who changed it, when) **(added)**
 - `PATCH /orders/:orderId/status` — validated against §5; 409 on an illegal or lost-race move
 - `GET /orders/stream` — SSE stream for the live board; scoped by the signed-in staff member and read with fetch + an Authorization header **(changed)**
@@ -335,11 +345,12 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   us: `styles.css` loads on every route (it's imported by `main.jsx`), so its global element
   rules also apply to `/staff`. They live in `@layer petuk-customer` for that reason — unlayered
   CSS outranks anything in a cascade layer, and Tailwind v4 puts all its utilities in one, so
-  left unlayered the customer reset silently won over every dashboard utility **(added, step 6)** The rest of the staff
-  dashboard (Board/Recent/Tables) still uses the older plain-CSS dark theme, scoped to
-  `.staff-legacy` — a known, temporary visual seam until those pages are migrated too. The Menu
-  tab joined the Tailwind system in step 6, with photo cards, a search field and its own
-  Categories view
+  left unlayered the customer reset silently won over every dashboard utility **(added, step 6)**
+  **Every tab of the dashboard is now on this system** — Recent was the last one, and the
+  `.staff-legacy` wrapper that carried the old plain-CSS dark theme has gone with it, closing a
+  seam that had been open since the POS redesign **(completed, step 6)**. What remains of
+  `staff.css` is reachable only from the sign-in screen, which renders outside the dashboard
+  shell; the rest of that file is now dead and awaits a pruning pass
 - **Item photos (added, step 6)**: a public `menu-images` bucket in Supabase Storage, created on
   demand by the API rather than as a setup step the owner has to remember. Public read because
   these are menu photos on a page anyone at a table can open — signing every URL would buy

@@ -1,7 +1,7 @@
 # Owner dashboard — design system
 
-*Applies to the staff/owner dashboard (sidebar, header, POS, and — over time — every other
-tab). The customer-facing app (`web/src/styles.css`) is a separate, deliberately different
+*Applies to the staff/owner dashboard — every tab of it, as of the Recent migration. The
+customer-facing app (`web/src/styles.css`) is a separate, deliberately different
 design language (warm off-white/terracotta, Fraunces serif) and isn't covered here — see
 `ARCHITECTURE.md` §8 for why they're split.*
 
@@ -15,12 +15,15 @@ production build.
 **Migrated to this system:** the sidebar (`Sidebar.jsx`), the shared header (`Board.jsx`), POS
 (`POS.jsx`), Staff (`StaffTab.jsx`), the order board (`ActiveColumns.jsx` / `OrderCard.jsx`),
 the order detail drawer (`OrderDetailDrawer.jsx`), the Dashboard (`DashboardHome.jsx`),
-the Menu (`MenuTab.jsx` / `ItemForm.jsx` / `CategoryForm.jsx`) and Settings
-(`SettingsTab.jsx` / `RestaurantProfile.jsx` / `SeatingPlan.jsx` / `UserAccount.jsx`).
-**Not yet migrated** — still the older plain-CSS dark theme (`staff.css`, scoped to
-`.staff-legacy`): Recent, and that is now the only one. A known, temporary seam, not a design
-decision. `Board.jsx` decides which tabs get `.staff-legacy`; take a tab out of that list when
-you migrate it.
+the Menu (`MenuTab.jsx` / `ItemForm.jsx` / `CategoryForm.jsx`), Settings
+(`SettingsTab.jsx` / `RestaurantProfile.jsx` / `SeatingPlan.jsx` / `UserAccount.jsx`) and
+Recent (`RecentOrders.jsx`).
+
+**That is all of them.** The `.staff-legacy` wrapper in `Board.jsx` is gone, and with it the
+seam this section used to track. `staff.css` is still imported, but the only rules anything
+reaches now are the sign-in screen's (`.staff-centered`, `.staff-signin`) — it renders outside
+the dashboard shell and has not been redesigned. The rest of that file is dead code; prune it
+in its own pass rather than in whatever slice notices.
 
 ### Settings
 
@@ -109,6 +112,33 @@ The owner's catalog, and the only screen here with photography on it:
 - The veg/non-veg dot keeps `role="img"` and a real label. It is food-safety information, so
   it is announced, not merely seen — which is also why a test looking for "no photo here"
   has to ask for an `<img>` element rather than `queryByRole('img')`
+
+### Recent
+
+Orders the kitchen is done with, read a day at a time. The one screen here that is a **table**
+rather than cards, because the question is comparative — thirty finished orders scanned for the
+one that explains a till that doesn't balance:
+
+- **Rows are `<button>`s on a CSS grid, not a `<table>`.** A row has to be clickable (it opens
+  the same detail drawer the board uses) and a table row cannot be a button. This way the whole
+  row is one tab stop and its own text reads out in column order; the column labels above are
+  `aria-hidden`, a scanning aid for the eye rather than a second thing to hear
+- **The row stays one line.** Items truncate rather than wrapping — the drawer has the full
+  list, and a grid where some rows are twice as tall stops being scannable
+- **Columns are sized to fit a 1024px laptop** once the sidebar has taken its `w-64`. The first
+  draft pushed **amount** off the right edge there, which is the worst column to lose: nobody
+  scrolls sideways to look for it, they conclude it isn't shown. Found by looking at it at that
+  width, not by a test
+- **All / Served / Cancelled, and All is the default.** A cancelled order sitting between two
+  served ones is exactly what "why doesn't the till match" is looking for, so a default that
+  split them would hide the thing being looked for. The active filter is a **solid fill in its
+  own status hue** — selection is always solid here, and the hue still says which status
+- **"Unpaid" is amber and only appears on a served order.** A cancelled one gets an em dash:
+  nothing is owed on an order that never happened, and "Unpaid" beside it would read as money
+  someone still has to collect
+- Taken from the reference: the day tabs, the status pills, the search field, the column set.
+  **Not taken**: its Clock In button (no schema, same rule as the menu's AI descriptions) and
+  its blue
 
 ### The order board
 
@@ -283,8 +313,14 @@ and size, not typeface:
 ## Layout pattern
 
 - **Sidebar**: fixed width (`w-64`), a brand mark at top (teal rounded-square monogram + the
-  wordmark), vertical nav (icon + label, active = solid `bg-teal-600 text-white`), identity
-  card pinned to the bottom in its own `bg-gray-50 rounded-2xl` block. Doesn't yet collapse for
+  wordmark), vertical nav (icon + label, active = solid `bg-teal-600 text-white`), and the
+  **café** pinned to the bottom in its own `bg-gray-50 rounded-2xl` block — its name and
+  initial, not the signed-in person's. What that corner answers is "which café am I looking
+  at", which is what every number on every tab is scoped to; on a shared till it is also the
+  question with a wrong answer worth catching. Who is signed in lives in Settings → User
+  account, which is the only place it can be changed anyway. The name wraps to two lines
+  rather than being cut down to something unrecognisable, and a rename in Settings updates it
+  without a reload (the name rides on `GET /me`, so nothing fetches it twice). Doesn't yet collapse for
   narrow screens — a known gap, not solved yet (this dashboard has been tablet/desktop-first
   since step 4)
 - **Header**: page title (changes per tab) + live-connection status as a pill on the left,

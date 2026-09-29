@@ -83,10 +83,38 @@ export async function listActiveOrders(db, restaurantId, { status, tableId } = {
 // up right after it's finally served, rather than aging out while it waited.
 // Newest first: the opposite of the board, where the longest-waiting order
 // matters most; here it's the opposite: what just happened.
-export async function getRecentOrders(db, restaurantId, { hours = 4 } = {}) {
+//
+// The window is either a rolling `hours` or one whole café day (`day` +
+// `timeZone`) — see recentOrdersQuery for why both are offered and why asking
+// for both at once is refused.
+//
+// Each row also carries WHO finished it and HOW it was paid. Both are read off
+// records that already exist (the status event's actor, a succeeded payment),
+// so this is a wider select, not new schema. Either can be null and that is a
+// real answer: a cancelled order was never paid, and an order finished by the
+// database's own backfill has no actor.
+export async function getRecentOrders(db, restaurantId, { hours = 4, day, timeZone } = {}) {
+  // null = use the rolling `hours` window instead. 0 = today, 1 = yesterday.
+  const dayOffset = day === 'today' ? 0 : day === 'yesterday' ? 1 : null;
+
   const { rows } = await db.query(
-    `select o.id, o.order_number, o.status, o.total_amount, o.placed_at,
+    `with zone as (
+       select coalesce((select name from pg_timezone_names where name = $3), 'UTC') as name
+     ),
+     bounds as (
+       -- The day is stepped back in LOCAL time and only then converted to an
+       -- instant, so a day that is 23 or 25 hours long where the café is still
+       -- reads as exactly one day.
+       select (date_trunc('day', now() at time zone z.name)
+                 - make_interval(days => $4::int)) at time zone z.name as day_start,
+              (date_trunc('day', now() at time zone z.name)
+                 - make_interval(days => $4::int) + interval '1 day') at time zone z.name as day_end
+         from zone z
+     )
+     select o.id, o.order_number, o.status, o.total_amount, o.placed_at,
             fin.finished_at,
+            sm.display_name as finished_by,
+            pay.method as payment_method,
             t.id as table_id, t.label as table_label,
             coalesce(
               (select json_agg(
@@ -107,17 +135,34 @@ export async function getRecentOrders(db, restaurantId, { hours = 4 } = {}) {
        -- served or cancelled. Same "newest by id" rule as the board query,
        -- computed once here so the filter and the sort agree with the value shown.
        join lateral (
-         select e.created_at as finished_at
+         select e.created_at as finished_at, e.changed_by
            from public.order_status_events e
           where e.order_id = o.id
           order by e.id desc
           limit 1
        ) fin on true
+       -- Who served or cancelled it: the actor on that same finishing event.
+       left join public.staff_members sm
+         on sm.user_id = fin.changed_by and sm.restaurant_id = o.restaurant_id
+       -- How it was paid. Only a succeeded payment took money; a pending or
+       -- failed one is not how this order was paid for. The schema allows at
+       -- most one success per order, so the limit is belt and braces.
+       left join lateral (
+         select p.method
+           from public.payments p
+          where p.order_id = o.id and p.status = 'succeeded'
+          order by p.created_at desc
+          limit 1
+       ) pay on true
+       cross join bounds b
       where o.restaurant_id = $1
         and o.status in ('served', 'cancelled')
-        and fin.finished_at >= now() - make_interval(hours => $2)
+        and case
+              when $4::int is null then fin.finished_at >= now() - make_interval(hours => $2)
+              else fin.finished_at >= b.day_start and fin.finished_at < b.day_end
+            end
       order by fin.finished_at desc, o.order_number desc`,
-    [restaurantId, hours],
+    [restaurantId, hours, timeZone ?? 'UTC', dayOffset],
   );
 
   return {

@@ -162,7 +162,11 @@ describe('signing in', () => {
     await signIn(user, STAFF_USER);
 
     expect(await screen.findByRole('heading', { name: 'Order board' })).toBeInTheDocument();
-    expect(screen.getByText('Mita')).toBeInTheDocument(); // display_name from GET /me
+    // The sidebar names the CAFÉ you are signed in to (from GET /me), not the
+    // person — who is signed in lives in Settings → User account.
+    const sidebar = screen.getByRole('navigation', { name: 'View' });
+    expect(within(sidebar).getByText('Chai Point Cafe')).toBeInTheDocument();
+    expect(within(sidebar).queryByText('Mita')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByRole('heading', { name: 'Staff sign in' })).toBeInTheDocument();
@@ -364,6 +368,34 @@ async function moveViaApi(orderId, status, as = STAFF_USER) {
   expect(res.status).toBe(200);
 }
 
+// Settles a table at the counter, the same way POS's checkout dialog does.
+async function checkoutViaApi(tableId, method, as = STAFF_USER) {
+  const res = await realFetch(`${base}/api/tables/${tableId}/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer valid-${as}` },
+    body: JSON.stringify({ method, idempotency_key: `web-recent-${Date.now()}-${Math.random()}` }),
+  });
+  expect(res.status).toBe(200);
+}
+
+// The seeded tables are shared, and other tests here clear them in bulk (POS's
+// merged-bill test cancels everything unpaid on T3, which a served order can't
+// legally do). So these tests bring their own table and take it away again —
+// a real delete, cascading its orders, since nothing else ever saw it.
+let recentTableSeq = 0;
+async function freshTable() {
+  const label = `RC${recentTableSeq++}`;
+  const [row] = await sql(
+    `insert into restaurant_tables (restaurant_id, label, seats)
+     select restaurant_id, $1, 4 from restaurant_tables where label = 'T1' limit 1
+     returning id, qr_token`,
+    [label],
+  );
+  tokens[label] = row.qr_token;
+  return { id: row.id, label };
+}
+const removeTable = (id) => sql('delete from restaurant_tables where id = $1', [id]);
+
 describe('order detail and Recent', () => {
   test('opening an order from the board shows its items, total and timeline', async () => {
     const user = userEvent.setup();
@@ -421,7 +453,7 @@ describe('order detail and Recent', () => {
     const user = userEvent.setup();
     await signIn(user, STAFF_USER);
     await user.click(await screen.findByRole('button', { name: 'Recent' }));
-    await screen.findByText('Last 4 hours');
+    await screen.findByRole('heading', { name: 'Finished orders' });
 
     const order = await place('T4', 'Masala Chai');
     await moveViaApi(order.id, 'cancelled');
@@ -429,6 +461,92 @@ describe('order detail and Recent', () => {
 
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await screen.findByRole('button', { name: new RegExp(`#${order.order_number}`) })).toBeInTheDocument();
+  });
+
+  test('a row says who finished it and how it was paid — and flags one that went out unpaid', async () => {
+    const user = userEvent.setup();
+    const table = await freshTable();
+    try {
+      const order = await place(table.label, 'Masala Chai');
+      await moveViaApi(order.id, 'preparing');
+      await moveViaApi(order.id, 'ready');
+      await moveViaApi(order.id, 'served', SECOND_STAFF); // Ravi finished it, not the signed-in Mita
+
+      await signIn(user, STAFF_USER);
+      await user.click(await screen.findByRole('button', { name: 'Recent' }));
+
+      const row = () => screen.findByRole('button', { name: new RegExp(`#${order.order_number}`) });
+      expect(within(await row()).getByText('Ravi')).toBeInTheDocument();
+      expect(within(await row()).getByText('Unpaid')).toBeInTheDocument();
+
+      await checkoutViaApi(table.id, 'cash');
+      await user.click(screen.getByRole('button', { name: 'Refresh' }));
+
+      await waitFor(async () => expect(within(await row()).getByText('Cash')).toBeInTheDocument());
+      expect(within(await row()).queryByText('Unpaid')).not.toBeInTheDocument();
+    } finally {
+      await removeTable(table.id);
+    }
+  });
+
+  test('Yesterday asks the server for a different day, rather than filtering what today already loaded', async () => {
+    const user = userEvent.setup();
+    const table = await freshTable();
+    try {
+      const order = await place(table.label, 'Masala Chai');
+      await moveViaApi(order.id, 'cancelled'); // finished just now, so: today
+
+      await signIn(user, STAFF_USER);
+      await user.click(await screen.findByRole('button', { name: 'Recent' }));
+      const number = new RegExp(`#${order.order_number}`);
+      expect(await screen.findByRole('button', { name: number })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: 'Yesterday' }));
+      // Wait for yesterday to have actually LOADED before asserting the row is
+      // gone: the screen blanks to "Loading…" between days, so an absence
+      // checked too early passes even if the day never reached the server.
+      await screen.findByText(/Nothing served or cancelled yesterday yet/);
+      expect(screen.queryByRole('button', { name: number })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: 'Today' }));
+      expect(await screen.findByRole('button', { name: number })).toBeInTheDocument();
+    } finally {
+      await removeTable(table.id);
+    }
+  });
+
+  test('the status filter and the search narrow the day without reloading it', async () => {
+    const user = userEvent.setup();
+    const table = await freshTable();
+    try {
+      const served = await place(table.label, 'Filter Coffee');
+      await moveViaApi(served.id, 'preparing');
+      await moveViaApi(served.id, 'ready');
+      await moveViaApi(served.id, 'served');
+      const cancelled = await place(table.label, 'Veg Sandwich');
+      await moveViaApi(cancelled.id, 'cancelled');
+
+      await signIn(user, STAFF_USER);
+      await user.click(await screen.findByRole('button', { name: 'Recent' }));
+      const servedRow = new RegExp(`#${served.order_number}`);
+      const cancelledRow = new RegExp(`#${cancelled.order_number}`);
+      expect(await screen.findByRole('button', { name: servedRow })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^Cancelled \(/ }));
+      expect(screen.queryByRole('button', { name: servedRow })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: cancelledRow })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^All \(/ }));
+      expect(screen.getByRole('button', { name: servedRow })).toBeInTheDocument();
+
+      // Searching by dish, because "what had the coffee on it" is how someone
+      // actually comes looking for a row they half-remember.
+      await user.type(screen.getByRole('searchbox', { name: 'Search recent orders' }), 'Filter Coffee');
+      expect(screen.getByRole('button', { name: servedRow })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: cancelledRow })).not.toBeInTheDocument();
+    } finally {
+      await removeTable(table.id);
+    }
   });
 });
 
@@ -797,6 +915,29 @@ describe('Settings', () => {
     expect(rows[0]).toEqual({ address: 'north tripura, batarashi road', phone: '8787368753' });
 
     await sql('update restaurants set address = null, phone = null where slug = $1', ['chai-point']);
+  });
+
+  test('renaming the café renames it in the sidebar too, not just in the form', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Restaurant profile/);
+
+    const sidebar = screen.getByRole('navigation', { name: 'View' });
+    expect(within(sidebar).getByText('Chai Point Cafe')).toBeInTheDocument();
+
+    try {
+      const name = await screen.findByLabelText('Restaurant name');
+      await user.clear(name);
+      await user.type(name, 'Chai Point Roasters');
+      await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
+      // Without this the sidebar keeps the name fetched at sign-in until
+      // someone reloads, and the café appears to have two names at once.
+      expect(await within(sidebar).findByText('Chai Point Roasters')).toBeInTheDocument();
+      expect(within(sidebar).queryByText('Chai Point Cafe')).not.toBeInTheDocument();
+    } finally {
+      await sql("update restaurants set name = 'Chai Point Cafe' where slug = 'chai-point'");
+    }
   });
 
   test('Save is only offered once something has actually changed', async () => {
@@ -1203,8 +1344,11 @@ describe('Settings', () => {
     await user.click(screen.getByRole('button', { name: 'Save name' }));
 
     expect(await screen.findByText('Saved')).toBeInTheDocument();
-    // The sidebar's identity card reads from the same record.
-    expect(within(screen.getByRole('navigation', { name: 'View' })).getByText('Ravi Kumar')).toBeInTheDocument();
+    // The name propagates back into the shell's identity, so the account card
+    // above the form reads the new name rather than the one signed in with.
+    // (The sidebar names the café, not the person — see the sign-in test.)
+    expect(await screen.findByText('Ravi Kumar')).toBeInTheDocument();
+    expect(screen.queryByText('Ravi', { exact: true })).not.toBeInTheDocument();
 
     await sql("update staff_members set display_name = 'Ravi' where user_id = $1", [SECOND_STAFF]);
   });
@@ -1639,11 +1783,13 @@ describe('joining a café from an invite', () => {
 
     // Joining happens by itself, on their very first authenticated request.
     expect(await screen.findByRole('heading', { name: 'Order board' })).toBeInTheDocument();
-    expect(screen.getByText('New Hire')).toBeInTheDocument();
+    // The sidebar names the café they have just joined — which also means the
+    // invite-claiming path carries the café's name back, not only its id.
+    expect(within(screen.getByRole('navigation', { name: 'View' })).getByText('Chai Point Cafe')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'POS' })).not.toBeInTheDocument(); // kitchen, not front of house
 
-    const [row] = await sql('select role from staff_members where user_id = $1', [NEWCOMER]);
-    expect(row.role).toBe('kitchen');
+    const [row] = await sql('select role, display_name from staff_members where user_id = $1', [NEWCOMER]);
+    expect(row).toEqual({ role: 'kitchen', display_name: 'New Hire' }); // the invite's own name was used
     const [{ n }] = await sql('select count(*)::int as n from staff_invites where accepted_at is null');
     expect(n).toBe(0, 'the invite is spent');
   });

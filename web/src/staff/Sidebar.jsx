@@ -24,7 +24,12 @@ const ICONS = {
 // every existing test — which queries by role/name, not by class — kept
 // passing untouched.
 export function Sidebar({ tabs, tab, onSelect, identity }) {
-  const who = identity.displayName ?? identity.role;
+  // The café, not the person. What this footer answers is "which café am I
+  // looking at" — the thing every number on every tab is scoped to — and on a
+  // shared till that is the question with a wrong answer worth catching. Who
+  // is signed in lives in Settings → User account, which is also the only
+  // place it can be changed.
+  const cafe = identity.restaurantName ?? '';
   return (
     <nav aria-label="View" className="flex w-64 flex-none flex-col border-r border-gray-200 bg-white print:hidden">
       <div className="flex items-center gap-2.5 px-5 py-5">
@@ -60,11 +65,13 @@ export function Sidebar({ tabs, tab, onSelect, identity }) {
 
       <div className="m-3 flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
         <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white">
-          {who.slice(0, 1).toUpperCase()}
+          {cafe.slice(0, 1).toUpperCase()}
         </div>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold text-gray-900">{who}</div>
-          <div className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{identity.role}</div>
+        <div className="min-w-0 text-sm font-bold text-gray-900">
+          {/* Two lines' worth of room for one line of name: a café called
+              "The Third Wave Coffee Roasters" wraps rather than being cut
+              down to something nobody would recognise. */}
+          <span className="line-clamp-2">{cafe}</span>
         </div>
       </div>
     </nav>

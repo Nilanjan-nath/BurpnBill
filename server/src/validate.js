@@ -36,11 +36,29 @@ export const cartItemParams = z.strictObject({ cartItemId: id });
 
 export const orderIdParams = z.strictObject({ orderId: id });
 
-// GET /orders/recent. Default 4 hours (a shift); capped at a week so a typo
-// like ?hours=99999 can't force a full-table scan of every order ever placed.
-export const recentOrdersQuery = z.strictObject({
-  hours: z.coerce.number().int().min(1).max(24 * 7).optional().default(4),
-});
+// GET /orders/recent. Two ways to ask for a window, and only one per request:
+//
+//   ?hours=  a rolling window ending now — default 4 (a shift), capped at a
+//            week so a typo like ?hours=99999 can't force a full-table scan of
+//            every order ever placed
+//   ?day=    a whole CAFÉ day, which is what the Recent tab's own Today /
+//            Yesterday tabs ask for. "Today" is the café's day, not the
+//            database's: Postgres runs in UTC, where the day rolls over at
+//            05:30 IST — mid-morning-shift — so ?tz carries the browser's IANA
+//            zone, the same contract GET /dashboard/summary already uses.
+//
+// Sending both is a 400 rather than one silently winning: they are different
+// questions ("what just happened" vs "how did today go") and a caller that
+// asks both ways doesn't know which it wants.
+export const recentOrdersQuery = z
+  .strictObject({
+    hours: z.coerce.number().int().min(1).max(24 * 7).optional(),
+    day: z.enum(['today', 'yesterday']).optional(),
+    tz: z.string().min(1).max(64).optional(),
+  })
+  .refine((q) => !(q.day !== undefined && q.hours !== undefined), {
+    message: 'Ask for either ?day or ?hours, not both',
+  });
 
 // PATCH /orders/:id/status. 'placed' is never a valid target — it's set once,
 // automatically, when the customer's order is created.

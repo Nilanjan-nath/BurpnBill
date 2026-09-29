@@ -106,8 +106,8 @@ export function staffRoutes({ db, requireStaff, hub, imageStore }) {
   });
   // Registered before /orders/:orderId — otherwise "recent" would be read as an order id.
   router.get('/orders/recent', staff, async (req, res) => {
-    const { hours } = parse(recentOrdersQuery, req.query);
-    res.json(await getRecentOrders(db, req.staff.restaurantId, { hours }));
+    const { hours, day, tz } = parse(recentOrdersQuery, req.query);
+    res.json(await getRecentOrders(db, req.staff.restaurantId, { hours, day, timeZone: tz }));
   });
   // Registered before /orders/:orderId, same reason as /orders/recent above
   // — otherwise "stream" would be read as an order id.

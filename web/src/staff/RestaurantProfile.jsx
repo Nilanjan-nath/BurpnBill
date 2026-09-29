@@ -23,7 +23,7 @@ const CURRENCIES = [
   ['BDT', 'Bangladeshi Taka'],
 ];
 
-export function RestaurantProfile({ token, isOwner }) {
+export function RestaurantProfile({ token, isOwner, onRenamed }) {
   const profile = useRestaurantProfile(token);
   const [form, setForm] = useState(null);
 
@@ -52,12 +52,18 @@ export function RestaurantProfile({ token, isOwner }) {
     // Every field, every time — this form is a full replace, not a patch. A
     // blank address or phone is a cleared one: validate.js turns "" into null,
     // so one place decides what empty means rather than two disagreeing.
-    await profile.save({
-      name: form.name.trim(),
+    const name = form.name.trim();
+    const saved = await profile.save({
+      name,
       address: form.address.trim(),
       phone: form.phone.trim(),
       currency_code: form.currency_code,
     });
+    // The sidebar names the café you are signed in to, and it reads that from
+    // the identity fetched at sign-in — so a rename has to reach it, or the
+    // screen keeps showing the old name until someone reloads. Same reason
+    // renaming yourself updates it (UserAccount).
+    if (saved) onRenamed?.(name);
   };
 
   const changed =
