@@ -133,6 +133,9 @@ export const updateRestaurantBody = z
       .toUpperCase()
       .regex(/^[A-Z]{3}$/, 'Currency must be a three-letter code, like INR')
       .optional(),
+    // How food reaches the customer. Only changes the wording of "Ready" on the
+    // customer's phone — see orderStatus.js.
+    service_mode: z.enum(['table', 'counter']).optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
 

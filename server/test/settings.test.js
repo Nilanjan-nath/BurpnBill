@@ -102,9 +102,24 @@ test('changing the café profile is owner only, and validates the input', async 
     { currency_code: 'IN' },
     { phone: 'x'.repeat(41) },
     { tax_rate: 18 }, // not a field here — tax is not built (ARCHITECTURE §2)
+    { service_mode: 'drive-through' }, // only the two the wording is written for
+    { service_mode: '' },
   ]) {
     assert.equal((await call('PATCH', '/api/restaurant', { as: OWNER, body })).status, 400, JSON.stringify(body));
   }
+});
+
+test('the owner sets how food reaches the customer, and it starts as table service', async () => {
+  assert.equal((await call('GET', '/api/restaurant', { as: KITCHEN })).body.restaurant.service_mode, 'table');
+
+  const set = await call('PATCH', '/api/restaurant', { as: OWNER, body: { service_mode: 'counter' } });
+  assert.equal(set.status, 200);
+  assert.equal(set.body.restaurant.service_mode, 'counter');
+  assert.equal(set.body.restaurant.name, 'Chai Point Cafe', 'and nothing else changed');
+  // Every role can read it — it changes what their own screens tell a customer.
+  assert.equal((await call('GET', '/api/restaurant', { as: STAFF })).body.restaurant.service_mode, 'counter');
+
+  await call('PATCH', '/api/restaurant', { as: OWNER, body: { service_mode: 'table' } });
 });
 
 test('the owner can fill in the profile, and only the fields sent change', async () => {

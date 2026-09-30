@@ -54,5 +54,6 @@ export const api = {
   updateItem: (session, lineId, changes) => request('PATCH', `/cart/items/${lineId}`, { session, body: changes }),
   removeItem: (session, lineId) => request('DELETE', `/cart/items/${lineId}`, { session }),
   getBill: (session) => request('GET', '/bill', { session }),
+  getOrderStatus: (session) => request('GET', '/orders/status', { session }),
   placeOrder: (session, cartId) => request('POST', '/orders', { session, body: { cart_id: cartId } }),
 };

@@ -1,15 +1,18 @@
 import { useEffect } from 'react';
+import { OrderStatus } from './OrderStatus.jsx';
 import { PageHeader } from './PageHeader.jsx';
 import { card, muted, primary, secondary } from './ui.js';
 import { formatDateTime, formatMoney, formatTime } from '../format.js';
+import { useOrderStatus } from '../useOrderStatus.js';
 
 // A read-only summary of everything this phone has ordered, to show the
 // cashier before paying at the counter. Fetched fresh every time it opens, so
 // an order the staff cancelled is already reflected.
-export function BillScreen({ bill, error, onLoad, onBack, onOrderMore }) {
+export function BillScreen({ bill, error, fetchStatus, onLoad, onBack, onOrderMore }) {
   useEffect(() => {
     onLoad();
   }, [onLoad]);
+  const orderStatus = useOrderStatus(fetchStatus);
 
   return (
     <>
@@ -27,14 +30,15 @@ export function BillScreen({ bill, error, onLoad, onBack, onOrderMore }) {
           </div>
         )}
         {!bill && !error && <p className={`py-16 text-center ${muted}`}>Loading your bill…</p>}
-        {bill && <BillBody bill={bill} onOrderMore={onOrderMore} onRefresh={onLoad} />}
+        {bill && <BillBody bill={bill} orderStatus={orderStatus} onOrderMore={onOrderMore} onRefresh={onLoad} />}
       </main>
     </>
   );
 }
 
-function BillBody({ bill, onOrderMore, onRefresh }) {
+function BillBody({ bill, orderStatus, onOrderMore, onRefresh }) {
   const currency = bill.restaurant.currency_code;
+  const stageOf = (id) => orderStatus.status?.orders.find((o) => o.id === id)?.stage;
 
   if (bill.orders.length === 0) {
     return (
@@ -61,6 +65,13 @@ function BillBody({ bill, onOrderMore, onRefresh }) {
                 </span>
               )}
             </div>
+            {/* Cancelled already has its own badge above, and "not charged" is what
+                a bill has to say about it — a status line would say it twice. */}
+            {!order.cancelled && stageOf(order.id) && (
+              <div className="mb-3">
+                <OrderStatus stage={stageOf(order.id)} serviceMode={orderStatus.status.service_mode} showSteps={false} />
+              </div>
+            )}
             <ul className={`grid gap-1.5 ${order.cancelled ? 'line-through opacity-60' : ''}`} aria-label={`Items in order ${order.order_number}`}>
               {order.items.map((item, i) => (
                 <li key={i} className="flex justify-between gap-3 tabular-nums">
@@ -93,7 +104,7 @@ function BillBody({ bill, onOrderMore, onRefresh }) {
       <p className={`text-center text-sm ${muted}`}>Show this screen at the counter to pay. This is a summary of your orders, not a tax invoice.</p>
 
       <div className="grid grid-cols-2 gap-3">
-        <button type="button" className={secondary} onClick={onRefresh}>Refresh</button>
+        <button type="button" className={secondary} onClick={() => { onRefresh(); orderStatus.refresh(); }}>Refresh</button>
         <button type="button" className={primary} onClick={onOrderMore}>Order more</button>
       </div>
     </>

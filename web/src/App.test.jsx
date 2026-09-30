@@ -562,3 +562,84 @@ describe('the bill', () => {
     expect(screen.queryByText('Total to pay')).not.toBeInTheDocument();
   });
 });
+
+describe('order status', () => {
+  async function orderAndWait(user, table = 'T2', item = 'Masala Chai') {
+    await visit(table);
+    await addToCart(user, item);
+    await openCart(user);
+    await user.click(await screen.findByRole('button', { name: /^Place order/ }));
+    await screen.findByRole('heading', { name: 'Order placed!' });
+    return (await sql('select id, order_number from orders order by placed_at desc, order_number desc limit 1'))[0];
+  }
+  const advance = (id, sqlText) => sql(sqlText, [id]);
+
+  test('the confirmation tells the truth at each stage, and Refresh brings the change in', async () => {
+    const user = userEvent.setup();
+    const order = await orderAndWait(user);
+
+    // Not "the kitchen has your order": it is waiting for the counter.
+    expect(await screen.findByText('Waiting for the counter to accept your order')).toBeInTheDocument();
+    expect(screen.queryByText(/kitchen has your order/i)).not.toBeInTheDocument();
+
+    await advance(order.id, 'update orders set approved_at = now() where id = $1');
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+    expect(await screen.findByText('Accepted — the kitchen will start soon')).toBeInTheDocument();
+
+    await advance(order.id, "update orders set status = 'preparing' where id = $1");
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+    expect(await screen.findByText('Being prepared')).toBeInTheDocument();
+
+    await advance(order.id, "update orders set status = 'ready' where id = $1");
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+    // The default café brings food to the table.
+    expect(await screen.findByText('Ready — on its way to your table')).toBeInTheDocument();
+  });
+
+  test('"ready" says collect it at the counter in a self-service café — never promises a delivery', async () => {
+    await sql("update restaurants set service_mode = 'counter'");
+    try {
+      const user = userEvent.setup();
+      const order = await orderAndWait(user, 'T3');
+      await advance(order.id, 'update orders set approved_at = now() where id = $1');
+      await advance(order.id, "update orders set status = 'preparing' where id = $1");
+      await advance(order.id, "update orders set status = 'ready' where id = $1");
+      await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+
+      expect(await screen.findByText('Ready — please collect it from the counter')).toBeInTheDocument();
+      expect(screen.queryByText(/on its way/i)).not.toBeInTheDocument();
+    } finally {
+      await sql("update restaurants set service_mode = 'table'");
+    }
+  });
+
+  test('an order the counter turned away says so instead of staying "waiting"', async () => {
+    const user = userEvent.setup();
+    const order = await orderAndWait(user);
+    await advance(order.id, "update orders set status = 'cancelled' where id = $1");
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+
+    expect(await screen.findByText(/^Cancelled — please ask at the counter/)).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for the counter to accept your order')).not.toBeInTheDocument();
+  });
+
+  test('the bill shows each order\'s status, and leaves a cancelled one to its "not charged" badge', async () => {
+    const user = userEvent.setup();
+    const first = await orderAndWait(user, 'T4', 'Masala Chai');
+    await advance(first.id, 'update orders set approved_at = now() where id = $1');
+    await advance(first.id, "update orders set status = 'preparing' where id = $1");
+    await user.click(screen.getByRole('button', { name: 'Order something else' }));
+    await addToCart(user, 'Filter Coffee');
+    await openCart(user);
+    await user.click(await screen.findByRole('button', { name: /^Place order/ }));
+    await screen.findByRole('heading', { name: 'Order placed!' });
+    const second = (await sql('select id from orders order by placed_at desc, order_number desc limit 1'))[0];
+    await advance(second.id, "update orders set status = 'cancelled' where id = $1");
+
+    await user.click(screen.getByRole('button', { name: 'View bill' }));
+    await screen.findByText('Total to pay');
+    expect(await screen.findByText('Being prepared')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled · not charged')).toBeInTheDocument();
+    expect(screen.queryByText(/^Cancelled — please ask/)).not.toBeInTheDocument(); // not said twice
+  });
+});

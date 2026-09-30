@@ -5,7 +5,7 @@
 // member (the currency alone decides how every price on their screen is
 // formatted); only the owner writes.
 
-const PROFILE_COLUMNS = 'id, name, address, phone, currency_code';
+const PROFILE_COLUMNS = 'id, name, address, phone, currency_code, service_mode';
 
 export async function getRestaurantProfile(db, restaurantId) {
   const { rows } = await db.query(
@@ -26,7 +26,8 @@ export async function updateRestaurantProfile(db, restaurantId, input) {
         set name          = coalesce($2, name),
             address       = case when $3::boolean then $4 else address end,
             phone         = case when $5::boolean then $6 else phone end,
-            currency_code = coalesce($7, currency_code)
+            currency_code = coalesce($7, currency_code),
+            service_mode  = coalesce($8, service_mode)
       where id = $1
       returning ${PROFILE_COLUMNS}`,
     [
@@ -37,6 +38,7 @@ export async function updateRestaurantProfile(db, restaurantId, input) {
       'phone' in input,
       input.phone ?? null,
       input.currency_code ?? null,
+      input.service_mode ?? null,
     ],
   );
   return rows[0] ?? null;

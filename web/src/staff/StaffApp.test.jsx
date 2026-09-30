@@ -998,6 +998,24 @@ describe('Settings', () => {
     await sql("update restaurants set currency_code = 'INR' where slug = 'chai-point'");
   });
 
+  test('the owner says how food reaches the customer, and it changes what their phone is told', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Restaurant profile/);
+
+    const mode = await screen.findByLabelText('How does food reach the customer?');
+    expect(mode).toHaveValue('table'); // the default is what every café had before this existed
+    try {
+      await user.selectOptions(mode, 'counter');
+      await user.click(screen.getByRole('button', { name: 'Save profile' }));
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
+
+      const [{ service_mode }] = await sql("select service_mode from restaurants where slug = 'chai-point'");
+      expect(service_mode).toBe('counter');
+    } finally {
+      await sql("update restaurants set service_mode = 'table' where slug = 'chai-point'");
+    }
+  });
+
   // --- Seating plan ---------------------------------------------------------
 
   test('the floor plan shows every table where the owner put it, coloured by what it is doing', async () => {

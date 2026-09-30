@@ -175,6 +175,23 @@ bottom), on Tailwind's default utilities, in its own lazy chunk.
 - **Loading it costs the customer only this.** It is a separate chunk, so the dashboard's and
   the landing page's Tailwind never reach a phone at a table, and this one never reaches them
 
+#### Order status on the customer's phone
+
+- **The one line is the point, the four-step bar is the reassurance.** A tinted sentence says
+  where the order is; under it Placed → Accepted → Preparing → Ready fills in red. The colours
+  are status colours, not the brand: neutral while waiting, amber while being prepared, green
+  when ready or served, red only for cancelled. The bill shows the sentence alone — its
+  cancelled orders already carry a "not charged" badge, and saying it twice would be noise
+- **It leads with the counter, not the kitchen.** Until the counter accepts a QR order nobody is
+  cooking it, so "Waiting for the counter to accept your order" is the first thing said. The
+  confirmation used to say "the kitchen has your order", which was untrue for that stretch
+- **"Ready" is worded by the café's service mode** — "on its way to your table" or "please
+  collect it from the counter" — because promising a delivery nobody makes is worse than saying
+  nothing. It is a setting in Settings → Restaurant profile, defaulting to table service
+- **No estimate, ever.** Nothing records how long anything takes, and a wrong "8 min" is worse
+  than none. The text is `aria-live="polite"`: it changes while someone is looking at their
+  phone's other half, and a screen reader should hear that it did
+
 ### The landing page (`/`)
 
 Not part of this dashboard, but it borrows this system's language on purpose — white,

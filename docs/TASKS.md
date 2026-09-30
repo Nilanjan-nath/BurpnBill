@@ -1239,6 +1239,35 @@ could not be paid, and still held its table occupied.
 - [ ] **Live data:** #1063 itself is still `preparing` with no approval and needs a decision — approve it
       (it is billable, then checkout clears T4) or cancel it. Not repaired by code on purpose
 
+## Step 9 — Customer-facing order status
+
+**Decided, with the owner:** the customer's phone shows where their order is. Honest about the risk:
+a status is only as good as the kitchen's taps, so a stage nobody moves is worse than none — the
+wording is written to be true at every stage, and there is **no time estimate**. **Polling, not a
+live stream**, after checking what the free tier actually limits: not Supabase "API calls" (these
+hit our own server) but the 5-connection pool and the host. Hybrid rules: poll only while a status
+screen is showing and something is unfinished, 15s then 30s, paused while hidden, plus Refresh.
+"Ready" is worded by a per-café **service mode** (table vs counter).
+
+- [ ] **Migration `20260930120000_service_mode.sql` — NOT YET APPLIED to the live database.** The
+      sandbox refused `scripts/db.sh migrate` against production, so it has to be run by the owner.
+      **Until it is, `GET /restaurant` (Settings) and `GET /orders/status` return 500 on the live
+      database** — the same failure an unapplied migration has caused twice before
+- [x] `GET /orders/status`, `restaurants.service_mode`, `PATCH /restaurant` taking it, and the Settings
+      control
+- [x] Customer: `useOrderStatus` (the polling rules), `OrderStatus` (sentence + step bar), on the
+      confirmation and the bill; the confirmation no longer says "the kitchen has your order"
+- [x] Tests: server 203 (was 195) + web 135 (was 120). The polling rules are pinned on fake timers —
+      15s, slowing to 30s, stopping when finished or empty, pausing while hidden, Refresh restarting,
+      a dropped connection keeping the last answer, an expired session ending it, unmount. End to
+      end against the real API: every stage's wording, both service modes, a turned-away order, the
+      bill. Mutation-checked 6 ways (wording swap, hidden pause, never stops, never slows, the
+      "awaiting" stage, session scoping) — all caught
+- [x] Looked at in a browser, light and dark, all six stages and both "ready" wordings (a throwaway
+      page — the live database can't serve the endpoint until the migration is applied)
+- [ ] **Not yet seen for real:** the whole flow with a live order, and the Settings control. Both need
+      the migration first
+
 ## Before first real cafe
 
 - [ ] Deploy: API on Render/Railway, web app on Vercel/Netlify

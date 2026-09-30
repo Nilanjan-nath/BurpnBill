@@ -199,8 +199,12 @@ export function useOrdering(qrToken) {
     }
   }, [qrToken, sync]);
 
+  // Where this session's orders are in the kitchen. A stable function reading the
+  // session ref, so useOrderStatus's effect isn't restarted by every render.
+  const fetchStatus = useCallback(() => api.getOrderStatus(session.current), []);
+
   return {
-    phase, menu, cart, order, hasOrders, bill, billError, notice, problem, busy,
+    phase, menu, cart, order, hasOrders, bill, billError, notice, problem, busy, fetchStatus,
     addItem, setQuantity, setNote, removeLine, removeUnavailable, placeOrder, startNewOrder, loadBill,
     retryLoad: () => sync({ initial: true }),
     dismissNotice: () => setNotice(null),

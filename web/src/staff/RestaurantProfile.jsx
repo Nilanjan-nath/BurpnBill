@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Coins, MapPin, Phone, Save, Store } from 'lucide-react';
+import { Check, Coins, ConciergeBell, MapPin, Phone, Save, Store } from 'lucide-react';
 import { useRestaurantProfile } from './useRestaurantProfile.js';
 
 const FIELD =
@@ -36,6 +36,7 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
         address: profile.restaurant.address ?? '',
         phone: profile.restaurant.phone ?? '',
         currency_code: profile.restaurant.currency_code ?? 'INR',
+        service_mode: profile.restaurant.service_mode ?? 'table',
       });
     }
   }, [profile.restaurant, form]);
@@ -58,6 +59,7 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
       address: form.address.trim(),
       phone: form.phone.trim(),
       currency_code: form.currency_code,
+      service_mode: form.service_mode,
     });
     // The sidebar names the café you are signed in to, and it reads that from
     // the identity fetched at sign-in — so a rename has to reach it, or the
@@ -70,7 +72,8 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
     form.name !== (profile.restaurant.name ?? '') ||
     form.address !== (profile.restaurant.address ?? '') ||
     form.phone !== (profile.restaurant.phone ?? '') ||
-    form.currency_code !== profile.restaurant.currency_code;
+    form.currency_code !== profile.restaurant.currency_code ||
+    form.service_mode !== profile.restaurant.service_mode;
 
   return (
     <form onSubmit={submit} className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -137,6 +140,19 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
               ))}
             </select>
           </Field>
+        </div>
+
+        <div>
+          <Field id="cafe-service" label="How does food reach the customer?" Icon={ConciergeBell}>
+            <select id="cafe-service" value={form.service_mode} onChange={set('service_mode')} disabled={!isOwner} className={FIELD}>
+              <option value="table">Brought to the table</option>
+              <option value="counter">Collected at the counter</option>
+            </select>
+          </Field>
+          <p className="mt-1.5 text-xs font-semibold text-gray-600">
+            Decides what a customer's phone says when their order is ready — "on its way to your table" or "please
+            collect it from the counter". Pick the one that is true; a promise nobody keeps is worse than none.
+          </p>
         </div>
 
         <p className="text-xs font-semibold text-gray-600">

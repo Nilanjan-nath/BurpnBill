@@ -4,6 +4,7 @@ import { openMenu } from '../services/menu.js';
 import * as cart from '../services/cart.js';
 import { placeOrder } from '../services/orders.js';
 import { getBill } from '../services/bill.js';
+import { getOrderStatus } from '../services/orderStatus.js';
 // publishBoardCard lives with the staff order queries, but a placed order is
 // the one event the customer side ever needs to push to a staff dashboard.
 import { publishBoardCard } from '../services/staffOrders.js';
@@ -58,6 +59,14 @@ export function publicRoutes({ db, config, requireGuestSession, hub }) {
     // Not 'order_created': the kitchen board must not show this until staff
     // accept it. Approving publishes order_created — see approveOrder.
     if (created) publishBoardCard(hub, db, req.guest.restaurantId, order.id, 'qr_order_pending');
+  });
+
+  // Where this guest session's orders are in the kitchen — polled by the phone
+  // while the status is on screen. Registered as its own path, not folded into
+  // /bill: the bill is fetched once to show at the counter, this is fetched
+  // repeatedly and should stay as small as a few rows.
+  router.get('/orders/status', requireGuestSession, async (req, res) => {
+    res.json(await getOrderStatus(db, req.guest));
   });
 
   // Read-only summary of this guest session's orders, to show at the counter.

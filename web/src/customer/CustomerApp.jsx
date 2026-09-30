@@ -79,12 +79,13 @@ export default function CustomerApp({ qrToken }) {
   let screen;
   if (nav.page === 'bill') {
     screen = (
-      <BillScreen bill={o.bill} error={o.billError} onLoad={o.loadBill} onBack={nav.back} onOrderMore={orderMore} />
+      <BillScreen bill={o.bill} error={o.billError} fetchStatus={o.fetchStatus} onLoad={o.loadBill} onBack={nav.back} onOrderMore={orderMore} />
     );
   } else if (o.order) {
     screen = (
       <Confirmation
         order={o.order}
+        fetchStatus={o.fetchStatus}
         currency={o.menu.restaurant.currency_code}
         onViewBill={() => nav.open('bill')}
         onNewOrder={orderMore}

@@ -55,6 +55,11 @@ live order data. Everything below already works and is covered by
 only one success. A succeeding payment sets `orders.paid_at` by trigger — that's
 the denormalised flag the dashboard and the `order_payment_updated` SSE event read.
 
+**`restaurants.service_mode` is `'table'` or `'counter'`** (a check constraint, not an enum type, so a
+third mode is a one-line change rather than an `ALTER TYPE` on a live database). It exists so the
+customer's "Ready" can be true: at a table-service café someone carries it out, at a self-service
+one the customer collects it. Default `'table'`, which is what every café did before it existed.
+
 **The café's own details live on `restaurants`.** `name` and `currency_code` shipped with the
 first migration; `address` and `phone` arrived with Settings and are nullable free text — a
 café that hasn't filled them in is a normal state, not an incomplete record, and nothing

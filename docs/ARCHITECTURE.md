@@ -49,8 +49,10 @@ and place an order directly — which appears instantly on a live kitchen/recept
   work, not a settings field **(decided, step 6)**. Each is its own piece of work; the checkout
   screen deliberately stops at "what's owed, and how was it paid" **(decided, step 6)**
 - **Invoices** (email/SMS) — planned for after v1 **(decided)**
-- Customer-facing live order-status tracking, including polling an order's status **(decided)**.
-  The bill lists what was ordered; it does not show whether the kitchen has started on it.
+- ~~Customer-facing order-status tracking~~ **Reversed (step 8):** the customer's phone now shows
+  where each order is — waiting for the counter, accepted, being prepared, ready, served or
+  cancelled — by polling `GET /orders/status`. Still out: a time estimate (nothing records
+  one), push notifications, and any live connection to a customer (see §7).
 - Customer login / OTP-based authentication
 - Stock-count auto-decrementing (boolean availability only)
 - Structured order modifiers (size/spice/add-ons) — free-text notes only
@@ -189,6 +191,19 @@ All routes are under `/api`. Errors are always `{ "error": { "code", "message", 
 - `POST /cart/items` — `{ menu_item_id, quantity, special_instructions }`
 - `PATCH /cart/items/:cartItemId` — change quantity/notes **(added)**
 - `DELETE /cart/items/:cartItemId` — remove a line **(added)**
+- `GET /orders/status` — where each of this guest session's orders is, for the phone to poll
+  while the status is on screen **(added, step 8)**. Returns a `stage` per order rather than the
+  raw `status`: `awaiting` (placed, not yet accepted — `approved_at`, a separate column, which
+  the raw status cannot express), `accepted`, `preparing`, `ready`, `served`, `cancelled`; plus
+  the café's `service_mode`. Scoped to the session, never the table, like the bill. Ids, numbers
+  and times only — no items, prices or estimate. **Polled, not pushed:** the API's live
+  connections are an in-memory hub on one instance for the staff, and a customer phone locks,
+  drops and reconnects constantly; a poll of a few indexed rows every 15–30s is cheaper to run
+  and to reason about. The phone-side rules (`useOrderStatus.js`): only while a status screen
+  is mounted, 15s then 30s after five minutes, paused while the tab is hidden and checked on
+  return, stopped once everything is served or cancelled, restarted by Refresh. The request
+  passes through `requireGuestSession`, so each poll also renews the session — acceptable
+  because polling itself stops when the customer is done
 - `GET /bill` — read-only summary of this session's orders: items, notes, per-order and grand
   totals. Cancelled orders are listed but not charged. Scoped to the guest session, never the
   table, so other guests' orders stay private **(added)**
@@ -215,7 +230,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   joins `restaurants` for its `is_active` check, so carrying the name costs nothing and saves
   a request per load **(added; extended, step 6)**
 - `PATCH /me` — your own `display_name`, and nothing else. Never a role **(added, step 6)**
-- `GET /restaurant` — any staff member; the café's name, address, phone and currency
+- `GET /restaurant` — any staff member; the café's name, address, phone, currency and **service mode** (`table` — staff bring the food — or `counter` — the customer collects it; it changes only the wording of "Ready" on the customer's phone) **(extended, step 8)**
 - `PATCH /restaurant` — owner only; partial. `address` and `phone` are clearable (an explicit
   null differs from omitting the field); `name` and `currency_code` are not. The currency is
   normalised to upper case and validated as three letters here, since the column's own check
