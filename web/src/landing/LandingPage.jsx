@@ -26,6 +26,7 @@ import {
   DashboardMock,
 } from './ProductMockups.jsx';
 import { Logo } from '../brand/Logo.jsx';
+import { HeroStage, HeroStrip } from './HeroMotion.jsx';
 import { useReveal } from './useReveal.js';
 import './landing-tailwind.css';
 
@@ -52,6 +53,10 @@ import './landing-tailwind.css';
 // as a floor-plan state nothing records.
 
 const CTA = '/staff';
+
+// The sticky bar's height (h-[4.5rem]); the hero sits under it, and the bar turns
+// solid once the hero's bottom edge reaches it.
+const NAV_HEIGHT = 72;
 
 const PAINS = [
   {
@@ -231,8 +236,16 @@ export default function LandingPage() {
     // index.html's title belongs to the customer app, which shares the shell.
     document.title = 'BurpnBill — the table, the till and the kitchen';
   }, []);
+  // The bar is part of the hero until you scroll past it: transparent over the
+  // crimson, butter wordmark, white links — so the two read as one band — and
+  // only then does it become the cream bar with a rule under it that stays with
+  // you down the page.
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const onScroll = () => {
+      const hero = document.getElementById('hero');
+      const past = hero ? hero.offsetHeight - NAV_HEIGHT : 8;
+      setScrolled(window.scrollY > past);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -240,18 +253,25 @@ export default function LandingPage() {
 
   return (
     <div className="lp brand-surface min-h-dvh bg-canvas text-ink-900 antialiased">
+      {/* -mb pulls the hero up under the bar, so the crimson starts at the very top. */}
       <header
-        className={`sticky top-0 z-30 transition-colors duration-200 ${
-          scrolled ? 'border-b border-ink-200 bg-canvas/90 backdrop-blur' : 'border-b border-transparent bg-canvas'
+        className={`sticky top-0 z-30 -mb-[4.5rem] h-[4.5rem] transition-colors duration-200 ${
+          scrolled ? 'border-b border-ink-200 bg-canvas/90 backdrop-blur' : 'border-b border-transparent bg-transparent'
         }`}
       >
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3.5 sm:px-8">
+        <div className="mx-auto flex h-full max-w-6xl items-center gap-4 px-5 sm:px-8">
           <a href="#top" aria-label="BurpnBill, back to the top" className="flex-none">
-            <Logo variant="white" width={112} />
+            <Logo variant={scrolled ? 'white' : 'ink'} width={112} />
           </a>
           <nav className="ml-4 hidden items-center gap-6 md:flex" aria-label="Sections">
             {NAV.map(([href, label]) => (
-              <a key={href} href={href} className="text-sm font-bold text-ink-600 transition-colors hover:text-ink-900">
+              <a
+                key={href}
+                href={href}
+                className={`text-sm font-bold transition-colors ${
+                  scrolled ? 'text-ink-600 hover:text-ink-900' : 'text-white/85 hover:text-white'
+                }`}
+              >
                 {label}
               </a>
             ))}
@@ -259,13 +279,19 @@ export default function LandingPage() {
           <div className="ml-auto flex items-center gap-1 sm:gap-3">
             <a
               href={CTA}
-              className="rounded-input px-3 py-2 text-sm font-bold text-ink-700 transition-colors hover:text-ink-900"
+              className={`rounded-input px-3 py-2 text-sm font-bold transition-colors ${
+                scrolled ? 'text-ink-700 hover:text-ink-900' : 'text-white hover:text-butter-300'
+              }`}
             >
               Sign in
             </a>
             <a
               href={CTA}
-              className="rounded-card bg-brand px-4 py-2.5 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98]"
+              className={`rounded-card px-4 py-2.5 text-sm font-bold transition duration-150 ease-tap active:scale-[0.98] ${
+                scrolled
+                  ? 'bg-brand text-white hover:bg-brand-700'
+                  : 'bg-butter-300 text-ink-900 hover:bg-butter-100'
+              }`}
             >
               Start free
             </a>
@@ -275,51 +301,64 @@ export default function LandingPage() {
 
       <main id="top">
         {/* Hero ------------------------------------------------------------ */}
-        {/* The brand cover: a full crimson band with the 32px grid laid faintly
-            over it. Text on it is white or butter only. */}
-        <div
-          className="relative overflow-hidden bg-brand text-white [background-image:linear-gradient(rgba(255,255,255,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.07)_1px,transparent_1px)] [background-size:32px_32px]"
-        >
-          <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-14 sm:px-8 sm:pb-24 sm:pt-20">
-            <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr]">
-              <div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-bold text-white">
-                  <span className="h-1.5 w-1.5 rounded-full bg-butter-300" aria-hidden="true" />
-                  The table, the till and the kitchen, in one tool for cafés
-                </span>
-                <h1 className="mt-5 text-4xl font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
-                  Your staff can’t reach every table at 7pm.
-                  <span className="block text-butter-300">The tables can order themselves.</span>
-                </h1>
-                <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/90">
-                  Put a QR code on every table. Customers read your live menu and order from their own phone. The
-                  order waits at your counter for you to accept, then goes straight to the kitchen board — and you
-                  take the money the way you always have.
-                </p>
-                <div className="mt-8 flex flex-wrap items-center gap-3">
-                  <a
-                    href={CTA}
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-card bg-butter-300 px-6 py-3 text-base font-bold text-ink-900 transition duration-150 ease-tap hover:bg-butter-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98]"
-                  >
-                    Start free <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </a>
-                  <a
-                    href="#how"
-                    className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-card border-2 border-white/70 px-5 py-3 text-base font-bold text-white transition duration-150 ease-tap hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98]"
-                  >
-                    See how it works
-                  </a>
-                </div>
-                <p className="mt-5 text-sm font-semibold text-white/90">
-                  Free for 14 days. No card, no commission, no payment gateway to sign up for.
-                </p>
-              </div>
+        {/* The brand cover, moving: a full crimson band with the 32px grid
+            drifting under two soft blobs, the headline rising line by line, and
+            a small scene on the right that plays an order's whole life (see
+            HeroMotion.jsx — from the owner's motion template). Text on it is
+            white or butter only. Everything below this band is unchanged. */}
+        <div id="hero" className="hm-hero relative isolate flex min-h-dvh flex-col overflow-hidden bg-brand pt-[4.5rem] text-white">
+          <div className="hm-grid" aria-hidden="true" />
+          <i className="hm-blob hm-b1" aria-hidden="true" />
+          <i className="hm-blob hm-b2" aria-hidden="true" />
 
-              <div className="lg:pl-4">
-                <KitchenBoardMock />
+          <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-8 px-5 py-12 sm:px-8 xl:grid-cols-[minmax(0,1fr)_540px] [&>*]:min-w-0">
+            <div>
+              <span className="hm-eye inline-flex items-center gap-2 rounded-full bg-butter-300/15 px-3.5 py-1 font-mono text-xs font-bold uppercase tracking-[0.08em] text-butter-300">
+                <i className="h-2 w-2 rounded-full bg-butter-300" aria-hidden="true" />
+                QR ordering + POS for cafés
+              </span>
+              <h1 className="hm-h1 mb-5 mt-5 text-[clamp(44px,6.6vw,84px)] font-extrabold leading-[0.98] tracking-[-0.035em] text-white">
+                <span className="hm-l">
+                  <span>Order fast.</span>
+                </span>{' '}
+                <span className="hm-l">
+                  <span>Settle easy.</span>
+                </span>
+              </h1>
+              <p className="hm-sub max-w-[46ch] text-lg leading-relaxed text-white/90 sm:text-[19px]">
+                Guests scan, order and go. You approve, cook and settle from one live board. No app to download, no
+                shouting across the room.
+              </p>
+              <div className="hm-cta mb-6 mt-7 flex flex-wrap items-center gap-3">
+                <a
+                  href={CTA}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-card border-2 border-butter-300 bg-butter-300 px-6 text-base font-bold text-ink-900 transition duration-150 ease-tap hover:-translate-y-0.5 hover:bg-butter-100 hover:shadow-pop focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:translate-y-0 active:scale-[0.98]"
+                >
+                  Start free <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+                <a
+                  href="#how"
+                  className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-card border-2 border-butter-300 px-6 text-base font-bold text-butter-300 transition duration-150 ease-tap hover:-translate-y-0.5 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:translate-y-0 active:scale-[0.98]"
+                >
+                  See how it works
+                </a>
               </div>
+              <ul className="hm-chips flex flex-wrap gap-2 text-[13px]">
+                {['No login for guests', 'You approve every QR order', 'Cash, card or UPI'].map((chip) => (
+                  <li key={chip} className="rounded-full border border-butter-300/35 px-3.5 py-1.5 text-butter-300">
+                    {chip}
+                  </li>
+                ))}
+              </ul>
+              <p className="hm-chips mt-4 text-sm font-semibold text-white/90">
+                Free for 14 days. No card, no commission, no payment gateway to sign up for.
+              </p>
             </div>
+
+            <HeroStage />
           </div>
+
+          <HeroStrip />
         </div>
 
         {/* An honest strip. One café is live and it is the owner's own, so it

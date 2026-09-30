@@ -1470,6 +1470,23 @@ liked. Rules and rationale: `docs/design.md`, "The BurpnBill brand system".*
 - [x] Checked in a browser against the real API on an in-memory database (a throwaway harness,
       not committed): landing at 1440 / 375, every dashboard tab at 1440, Recent at 1024, sign-in
       at 375; a dark-mode OS still gets the light brand pages
+- [x] **Hero motion** (branch `feat/hero-motion`): the landing hero now follows the owner's
+      "BurpnBill motion" template — headline rising line by line ("Order fast. / Settle easy."), a
+      drifting grid and two soft blobs, and a looping scene of a phone scanning a QR code, the order
+      being approved and moving Placed → Preparing → Ready on a board, and the bill settling to ₹140,
+      with a status ticker along the bottom. `landing/HeroMotion.jsx` + `.hm-*` in
+      `landing-tailwind.css`, driven by one number (`data-s`). **Only the hero changed**; the nav and
+      every section below are as they were. Departures from the template, on purpose: the phone is
+      drawn in the customer app's own red (one variable, `--hm-customer`), the copy keeps the "Start
+      free" / "See how it works" buttons and the "Free for 14 days" line the tests and honesty rules
+      rely on, and the two-column layout starts at 1280px (the 540px scene does not fit beside the
+      headline below that; it stacks and centres instead). Reduced motion holds on the finished scene;
+      the total counts on timers, not animation frames, so a hidden tab cannot strand it at ₹0.
+      The nav is now part of the hero: transparent over the crimson with the butter wordmark and white
+      links, turning into the cream bar only once the hero has scrolled past.
+      Tests: web 155 → 161 (`HeroMotion.test.jsx`; mutation-checked). The old hero headline ("Your
+      staff can't reach every table at 7pm") is gone from the page; the landing test now opens on
+      the new one. Checked at 1440 / 1024 / 375
 - [ ] **Not checked:** printing (receipt, QR sheet) — unchanged code, but the new fonts are not
       loaded in a print context I can drive; and a real signed-in session (no staff passwords here)
 - [ ] **Light only.** The brand sheet defines dark tokens; adopting them for the landing page and

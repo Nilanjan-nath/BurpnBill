@@ -13,3 +13,144 @@
     scroll-behavior: smooth;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The hero's motion (HeroMotion.jsx). Ported from the owner's "BurpnBill
+   motion" template: a phone scans a table's QR code and places an order, the
+   order is approved and walks across a board, and the table's bill is settled.
+   Everything is driven by ONE attribute, `data-s` (0..4), which React steps on
+   a timer — so the whole choreography is these selectors, and there is no
+   animation state anywhere else. Colours are the brand tokens (var(--color-*)),
+   not the template's literals.
+
+   Two deliberate departures from the template:
+   - The phone is drawn in the CUSTOMER app's own red, not the brand crimson,
+     because that is what a guest's phone actually shows (the same reason
+     ProductMockups' PhoneMock does). It is one variable: --hm-customer.
+   - The hero has no nav of its own; the page's sticky nav sits above it.
+   ------------------------------------------------------------------------- */
+.hm-hero {
+  --hm-customer: #dc2626;
+}
+.hm-grid {
+  position: absolute;
+  inset: -64px;
+  z-index: -2;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 32px 32px;
+  animation: hm-drift 12s linear infinite;
+}
+.hm-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: -1;
+  opacity: 0.5;
+  animation: hm-float 9s ease-in-out infinite;
+}
+.hm-b1 {
+  width: 420px;
+  height: 420px;
+  background: var(--color-brand-400);
+  top: -140px;
+  right: -100px;
+}
+.hm-b2 {
+  width: 340px;
+  height: 340px;
+  background: var(--color-brand-800);
+  bottom: -120px;
+  left: -80px;
+  animation-delay: -4s;
+}
+@keyframes hm-drift { to { transform: translate(32px, 32px); } }
+@keyframes hm-float { 50% { transform: translate(30px, 24px) scale(1.08); } }
+@keyframes hm-fade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes hm-up { to { transform: none; } }
+@keyframes hm-pulse { 0% { box-shadow: 0 0 0 0 rgba(244, 240, 169, 0.6); } 50% { box-shadow: 0 0 0 8px rgba(244, 240, 169, 0); } }
+@keyframes hm-bob { 50% { translate: 0 -8px; } }
+@keyframes hm-scan { to { top: 150px; } }
+@keyframes hm-tap { 40% { transform: scale(0.93); } }
+@keyframes hm-mq { to { transform: translateX(-50%); } }
+
+.hm-eye { animation: hm-fade 0.8s 0.1s both; }
+.hm-eye i { animation: hm-pulse 1.6s infinite; }
+.hm-h1 .hm-l { display: block; overflow: hidden; padding-bottom: 0.1em; }
+.hm-h1 .hm-l > span { display: inline-block; transform: translateY(105%); animation: hm-up 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) forwards; }
+.hm-h1 .hm-l:nth-child(1) > span { animation-delay: 0.25s; }
+.hm-h1 .hm-l:nth-child(2) > span { animation-delay: 0.45s; color: var(--color-butter-300); }
+.hm-sub { opacity: 0; animation: hm-fade 0.8s 0.8s forwards; }
+.hm-cta { opacity: 0; animation: hm-fade 0.8s 1s forwards; }
+.hm-chips { opacity: 0; animation: hm-fade 0.8s 1.2s forwards; }
+.hm-wrap { display: flex; flex-direction: column; align-items: center; opacity: 0; animation: hm-fade 1s 0.5s forwards; }
+.hm-strip { animation: hm-fade 1s 1.4s both; }
+.hm-strip > div { display: inline-block; animation: hm-mq 26s linear infinite; }
+
+/* The stage: three cards on a 540x440 canvas. */
+.hm-stage { position: relative; width: 540px; height: 440px; perspective: 1000px; transition: transform 0.2s ease-out; }
+.hm-card { position: absolute; background: var(--color-paper); color: var(--color-ink-900); border-radius: 20px; box-shadow: 0 24px 60px rgba(30, 20, 24, 0.35); }
+.hm-phone { left: 0; top: 20px; width: 200px; height: 400px; border: 8px solid var(--color-ink-900); border-radius: 36px; overflow: hidden; z-index: 3; animation: hm-bob 6s ease-in-out infinite; }
+.hm-ph-h { background: var(--hm-customer); color: #fff; padding: 14px 16px; font: 800 14px var(--font-display); }
+.hm-scr { position: absolute; inset: 48px 0 0; padding: 16px; transition: opacity 0.4s, transform 0.4s; }
+.hm-qr { position: relative; width: 148px; height: 148px; margin: 20px auto 12px; display: grid; grid-template-columns: repeat(11, 1fr); gap: 2px; padding: 8px; border: 3px solid var(--color-ink-900); border-radius: 12px; overflow: hidden; }
+.hm-qr i { background: var(--color-ink-900); border-radius: 1px; }
+.hm-qr i.o { background: transparent; }
+.hm-qr::after { content: ""; position: absolute; left: 0; right: 0; height: 26px; top: -30px; background: linear-gradient(transparent, rgba(220, 38, 38, 0.5)); border-bottom: 2px solid var(--hm-customer); animation: hm-scan 1.6s ease-in-out infinite; }
+.hm-cap { text-align: center; font: 700 12px var(--font-mono); color: var(--color-ink-500); }
+.hm-it { display: flex; justify-content: space-between; font-size: 13px; padding: 10px 0; border-bottom: 1px dashed var(--color-ink-200); }
+.hm-it b { font-family: var(--font-mono); }
+.hm-pb { margin-top: 16px; height: 46px; border-radius: 12px; background: var(--hm-customer); color: #fff; display: flex; align-items: center; justify-content: center; font: 700 14px var(--font-sans); transition: background 0.3s, transform 0.2s; }
+.hm-stage[data-s="0"] .hm-s1,
+.hm-stage:not([data-s="0"]) .hm-s0 { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.hm-stage[data-s="1"] .hm-pb { animation: hm-tap 0.5s 0.9s both; }
+.hm-stage:not([data-s="0"]):not([data-s="1"]) .hm-pb { background: var(--color-ready-ink); }
+.hm-pb .a, .hm-pb .b { display: none; }
+.hm-pb .a { display: inline; }
+.hm-stage:not([data-s="0"]):not([data-s="1"]) .hm-pb .a { display: none; }
+.hm-stage:not([data-s="0"]):not([data-s="1"]) .hm-pb .b { display: inline; }
+
+.hm-board { left: 190px; top: 20px; width: 350px; height: 240px; padding: 14px 12px; background: var(--color-canvas); }
+.hm-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font: 700 10px var(--font-mono); letter-spacing: 0.08em; color: var(--color-ink-500); }
+.hm-cols div { padding-bottom: 8px; border-bottom: 2px solid var(--color-ink-200); }
+.hm-tk { position: absolute; top: 56px; left: 12px; width: 102px; background: var(--color-paper); border: 1px solid var(--color-ink-200); border-left: 5px solid var(--color-placed-ink); border-radius: 10px; padding: 10px; font-size: 12px; line-height: 1.35; box-shadow: 0 8px 20px rgba(30, 20, 24, 0.15); opacity: 0; transform: translateX(-190px) scale(0.7); transition: transform 0.8s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.4s, border-color 0.4s; }
+.hm-tk b { font: 800 15px var(--font-display); }
+.hm-tk small { display: block; color: var(--color-ink-500); }
+.hm-pill { display: none; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font: 700 10px var(--font-mono); }
+.hm-stage[data-s="1"] .hm-tk { opacity: 1; transform: none; }
+.hm-stage[data-s="1"] .hm-p1 { display: inline-block; background: var(--color-placed); color: var(--color-placed-ink); }
+.hm-stage[data-s="2"] .hm-tk { opacity: 1; transform: translateX(108px); border-left-color: var(--color-prep-ink); }
+.hm-stage[data-s="2"] .hm-p2 { display: inline-block; background: var(--color-prep); color: var(--color-prep-ink); }
+.hm-stage[data-s="3"] .hm-tk,
+.hm-stage[data-s="4"] .hm-tk { opacity: 1; transform: translateX(216px); border-left-color: var(--color-ready-ink); }
+.hm-stage[data-s="3"] .hm-p3,
+.hm-stage[data-s="4"] .hm-p3 { display: inline-block; background: var(--color-ready); color: var(--color-ready-ink); }
+.hm-stage[data-s="4"] .hm-tk { transform: translateX(216px) scale(0.96); }
+
+.hm-bill { left: 240px; top: 276px; width: 290px; padding: 16px 18px; z-index: 2; opacity: 0; transform: translateY(30px) rotate(2deg); transition: opacity 0.5s, transform 0.7s cubic-bezier(0.3, 1.3, 0.4, 1); }
+.hm-stage[data-s="4"] .hm-bill { opacity: 1; transform: rotate(-1.5deg); }
+.hm-bill .r { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; color: var(--color-ink-600); }
+.hm-bill .t { display: flex; justify-content: space-between; align-items: baseline; font: 700 26px var(--font-mono); margin-top: 6px; border-top: 2px dashed var(--color-ink-200); padding-top: 8px; }
+.hm-stamp { position: absolute; right: 14px; top: -16px; padding: 4px 14px; border-radius: 8px; background: var(--color-butter-300); color: var(--color-ink-900); font: 800 13px var(--font-display); transform: rotate(6deg) scale(0); transition: transform 0.5s 0.6s cubic-bezier(0.3, 1.8, 0.4, 1); box-shadow: 0 6px 16px rgba(30, 20, 24, 0.25); }
+.hm-stage[data-s="4"] .hm-stamp { transform: rotate(6deg) scale(1); }
+
+.hm-steps { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 12px; font: 700 11px var(--font-mono); }
+.hm-steps span { padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.78); transition: background 0.3s, color 0.3s; }
+.hm-steps span.on { background: var(--color-butter-300); color: var(--color-ink-900); }
+
+/* Phones: the 540px stage is scaled down and centred rather than reflowed,
+   because its three cards only make sense in their arrangement. */
+@media (max-width: 560px) {
+  .hm-wrap { width: 100%; overflow: hidden; height: 390px; align-items: flex-start; }
+  .hm-stage { transform-origin: top left; scale: 0.62; margin-left: calc((100vw - 48px - 335px) / 2); flex: none; }
+  .hm-steps { margin-top: -70px; }
+}
+
+/* Reduced motion: no movement anywhere, and the page shows the finished scene
+   (HeroMotion.jsx sets data-s to 4 for the same reason). */
+@media (prefers-reduced-motion: reduce) {
+  .hm-hero *, .hm-hero *::before, .hm-hero *::after { animation: none !important; transition: none !important; }
+  .hm-h1 .hm-l > span { transform: none; }
+  .hm-sub, .hm-cta, .hm-chips, .hm-wrap, .hm-eye, .hm-strip { opacity: 1; }
+}

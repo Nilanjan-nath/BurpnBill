@@ -216,7 +216,7 @@ describe('the landing page', () => {
   const openLanding = async () => {
     window.history.replaceState(null, '', '/');
     render(<App />);
-    return screen.findByRole('heading', { level: 1, name: /can.t reach every table at 7pm/i });
+    return screen.findByRole('heading', { level: 1, name: /Order fast\. Settle easy\./i });
   };
 
   test('/ is the landing page, and every link on it goes somewhere real', async () => {
