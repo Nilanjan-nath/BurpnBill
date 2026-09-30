@@ -1296,26 +1296,28 @@ screen is showing and something is unfinished, 15s then 30s, paused while hidden
 domain and settled on a free host. Decisions are marked **(decided)**; recommendations are marked
 **(recommended)** and are open until the owner answers.*
 
-### 11a. The rename: Petuk → BurpNBill **(decided)**
+### 11a. The rename: Petuk → BurpnBill **(decided; done on `chore/rename-burpnbill`)**
+
+*Casing settled as "BurpnBill", per the brand sheet. Done: every visible string, the customer page title, package names, `burpnbill.session.<token>`, `@layer bnb-customer`, `bnbPage`, the docs, README. Left on purpose: the first comment line of the init migration (an applied migration is not edited for a comment) and the historical entries in this file. Still open in this section: the name-clash search, and the domain.*
 
 The product name changes before the first real café sees it. It is small — about 40 mentions in
 ~22 files — and cheaper now than after there are printed QR sheets and a public page.
 
-- [ ] **Confirm the exact spelling and casing** — "BurpNBill" as one word, as written by the owner —
+- [x] **Confirm the exact spelling and casing** — "BurpNBill" as one word, as written by the owner —
       and the domain it goes on. Every string below is derived from that one decision
 - [ ] **A quick name check before printing anything:** search the name and the domain/app-store/social
       handles for a clash with an existing food or billing product. (Not legal advice; it is a
       five-minute search that is very expensive to skip.)
-- [ ] User-visible: the landing page (nav wordmark, the monogram — currently "P" — hero, footer, page
+- [x] User-visible: the landing page (nav wordmark, the monogram — currently "P" — hero, footer, page
       `<title>`), the customer app's `<title>`, the dashboard sidebar brand mark, Create-your-café
       copy, sign-in screen, printed QR sheet header, the checkout receipt
-- [ ] The landing test asserts some brand text (nav, footer); update it with the copy so the
+- [x] The landing test asserts some brand text (nav, footer); update it with the copy so the
       "honest claims" tests still run against the real page
-- [ ] Internal identifiers, renamed for consistency while it is cheap: `petuk.session.<token>` (the
+- [x] Internal identifiers, renamed for consistency while it is cheap: `petuk.session.<token>` (the
       customer's stored guest session — renaming it means anyone mid-order re-scans once, harmless
       before launch), `@layer petuk-customer` in `styles.css`, `.petuk-print-receipt`, the
       `petukPage` history-state key, and the three `package.json` names
-- [ ] Docs: `README.md`, `ARCHITECTURE.md`, `design.md`, `schema.md`, this file, and the SQL comment
+- [x] Docs: `README.md`, `ARCHITECTURE.md`, `design.md`, `schema.md`, this file, and the SQL comment
       that names it. Leave old entries in this file as they are — they are history, and were true
       when written
 - [ ] Not renamed on purpose: git history, and the repo folder `qr-cafe-ordering` (the folder name is

@@ -51,6 +51,6 @@ if (!window.AudioContext) {
 // here decodes an image. Same category of gap as no layout and no Web Audio.
 if (!URL.createObjectURL || String(URL.createObjectURL).includes('makeCompatBlob')) {
   let n = 0;
-  URL.createObjectURL = () => `blob:petuk-test/${++n}`;
+  URL.createObjectURL = () => `blob:burpnbill-test/${++n}`;
   URL.revokeObjectURL = () => {};
 }

@@ -1,4 +1,4 @@
-// Thin client for the Petuk API. Every failure — including "the phone has no
+// Thin client for the BurpnBill API. Every failure — including "the phone has no
 // signal" — surfaces as an ApiError, so screens handle one kind of error.
 //   status 0  = the request never reached the server (safe to retry)
 //   code      = the API's error code, e.g. 'items_unavailable'

@@ -1,8 +1,8 @@
 {
-  "name": "petuk-server",
+  "name": "burpnbill-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Petuk API — Express backend for QR table ordering",
+  "description": "BurpnBill API — Express backend for QR table ordering",
   "type": "module",
   "main": "src/index.js",
   "engines": {

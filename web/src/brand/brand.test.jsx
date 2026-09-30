@@ -98,15 +98,24 @@ describe('the branded surfaces', () => {
     expect([...hexes]).toEqual(['bg-[#dc2626]']);
   });
 
-  test('carry the new name, and nothing of the old one', () => {
-    const old = sources.flatMap(({ file, text }) =>
-      text
+  test('carry the new name, and nothing of the old one — anywhere in the web app', () => {
+    // Every source file, the customer app included: the rename is finished, so a
+    // "Petuk" (or a `petuk.` storage key) creeping back in is a regression.
+    const walk = (dir) =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) return e.name === 'test' ? [] : walk(full);
+        return /\.(jsx?|css)$/.test(e.name) && !/\.test\./.test(e.name) ? [full] : [];
+      });
+    const old = walk(src).flatMap((file) =>
+      fs
+        .readFileSync(file, 'utf8')
         .split('\n')
-        .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*') && !l.trim().startsWith('/*'))
         .filter((l) => /petuk/i.test(l))
-        .map((l) => `${file}: ${l.trim()}`),
+        .map((l) => `${path.relative(src, file)}: ${l.trim()}`),
     );
     expect(old).toEqual([]);
+    expect(fs.readFileSync(path.join(src, '..', 'index.html'), 'utf8')).toMatch(/<title>BurpnBill/);
   });
 
   test('load the brand fonts here and nowhere near the customer app', () => {

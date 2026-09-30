@@ -1,6 +1,6 @@
-# Petuk
+# BurpnBill
 
-*পেটুক — Bengali for one who loves their food.*
+*QR table ordering, a till and a kitchen board for cafés.*
 
 Customers scan a QR code at their table, browse the live menu, and place an order
 that lands instantly on the kitchen/reception dashboard.

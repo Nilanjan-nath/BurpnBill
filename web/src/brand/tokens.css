@@ -112,7 +112,7 @@
 
 /* Type. Headings get the display face; everything else Manrope; prices,
    table numbers and order ids opt in to `font-mono` so digits align.
-   In `base` (a later layer than styles.css's `petuk-customer`, earlier than
+   In `base` (a later layer than styles.css's `bnb-customer`, earlier than
    utilities) so a `font-*` utility on a heading still wins. */
 @layer base {
   html {

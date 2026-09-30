@@ -23,7 +23,7 @@ const checks = {
 const app = createApp({ config, db, supabase, checks, hub });
 
 const server = app.listen(config.port, () => {
-  console.log(`Petuk API listening on http://localhost:${config.port}`);
+  console.log(`BurpnBill API listening on http://localhost:${config.port}`);
 });
 
 // Close every open SSE stream FIRST — one never "completes" on its own, and

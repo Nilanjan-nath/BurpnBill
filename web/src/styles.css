@@ -58,7 +58,7 @@
    only stops these leaking into a design system that isn't theirs. The
    class-based rules below stay unlayered deliberately — `.veg-mark` is shared
    with the dashboard on purpose. */
-@layer petuk-customer {
+@layer bnb-customer {
   * { box-sizing: border-box; }
 
   body {

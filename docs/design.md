@@ -421,7 +421,7 @@ never seen the reference?" — if not, change it.
 
 ### Worked example: the "DineFlow" POS reference
 
-The owner brought a second reference (a POS called DineFlow) and asked for Petuk to look like
+The owner brought a second reference (a POS called DineFlow) and asked for BurpnBill to look like
 it. What that turned into, as a record of how this rule gets applied in practice:
 
 **Taken** (structure and emphasis): a solid-filled active nav item; a brand monogram beside the
@@ -431,7 +431,7 @@ filled header bar on the cart panel; a boxed total above the CTA; and — most i
 much heavier type and stronger contrast throughout.
 
 **Not taken**: its blue (we keep teal, for the reason above); its per-category pastel item-card
-tints (see "what color is *not* for"); and every feature Petuk doesn't have — Waitlist, Merge
+tints (see "what color is *not* for"); and every feature BurpnBill doesn't have — Waitlist, Merge
 Tables, Clock In, Dine-in/Take-away, order priority, VIP flags,
 Inventory/Customers/Reports nav. Drawing UI for features that don't exist would be faking
 capability, which is worse than looking plainer.
@@ -509,7 +509,7 @@ nothing outside `.app` ever depended on them. **The rule to take from both incid
 element selector in `styles.css` reaches every surface this repo has. Scope it to the app it
 belongs to.**
 
-The original fix was to wrap those element rules in `@layer petuk-customer` (a no-op for the customer
+The original fix was to wrap those element rules in `@layer bnb-customer` (a no-op for the customer
 app, which has no layered CSS of its own) so the dashboard's utilities win. **If you add global
 element styles to `styles.css`, put them in that layer**, or they will leak into a design system
 that isn't theirs. Class-based rules there stay unlayered on purpose — `.veg-mark` is shared

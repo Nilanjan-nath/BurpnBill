@@ -255,7 +255,7 @@ describe('the landing page', () => {
   test('it sells the whole product, not just the QR half', async () => {
     await openLanding();
 
-    // The first version of this page read as if Petuk were only a QR menu. It
+    // The first version of this page read as if BurpnBill were only a QR menu. It
     // is also the till, the floor plan and the day's numbers, and each of those
     // is a reason an owner would choose it — so each is named here.
     expect(screen.getByRole('heading', { name: /no QR code needed/i })).toBeInTheDocument();
@@ -384,7 +384,7 @@ describe('cart', () => {
     await visit();
     await addToCart(user, 'Masala Chai');
 
-    const { id } = JSON.parse(localStorage.getItem(`petuk.session.${tokens.T1}`));
+    const { id } = JSON.parse(localStorage.getItem(`burpnbill.session.${tokens.T1}`));
     await sql("update guest_sessions set expires_at = now() - interval '1 minute' where id = $1", [id]);
 
     await addToCart(user, 'Filter Coffee').catch(() => {}); // the sheet closes even though the session was lost

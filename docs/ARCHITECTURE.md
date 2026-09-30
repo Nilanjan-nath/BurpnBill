@@ -1,4 +1,4 @@
-# Petuk — Architecture & Build Plan
+# BurpnBill — Architecture & Build Plan
 
 *Source of truth for what v1 is. Decisions made after the original design doc are
 marked **(decided)**. Open work lives in [TASKS.md](TASKS.md); schema detail in
@@ -8,7 +8,7 @@ marked **(decided)**. Open work lives in [TASKS.md](TASKS.md); schema detail in
 
 Small cafes/restaurants (especially in tier-2/3 towns) struggle with table service during
 rush hours — waitstaff can't reach every table in time to take orders, causing delays and
-missed orders. Petuk lets customers scan a QR code at their table, browse the menu,
+missed orders. BurpnBill lets customers scan a QR code at their table, browse the menu,
 and place an order directly — which appears instantly on a live kitchen/reception dashboard.
 
 ## 2. Functional requirements (v1)
@@ -405,7 +405,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   `staff/tailwind.css`, itself only reachable via `StaffApp.jsx`), verified with a production
   build to never reach the customer bundle. The reverse direction is **not** automatic, and bit
   us: `styles.css` loads on every route (it's imported by `main.jsx`), so its global element
-  rules also apply to `/staff`. They live in `@layer petuk-customer` for that reason — unlayered
+  rules also apply to `/staff`. They live in `@layer bnb-customer` for that reason — unlayered
   CSS outranks anything in a cascade layer, and Tailwind v4 puts all its utilities in one, so
   left unlayered the customer reset silently won over every dashboard utility **(added, step 6)**
   **Every tab of the dashboard is now on this system** — Recent was the last one, and the

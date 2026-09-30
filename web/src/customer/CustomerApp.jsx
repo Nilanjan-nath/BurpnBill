@@ -23,7 +23,7 @@ function usePage() {
   }, []);
 
   const open = (name) => {
-    window.history.pushState({ petukPage: name }, '', `#${name}`);
+    window.history.pushState({ bnbPage: name }, '', `#${name}`);
     setPage(name);
   };
 
@@ -34,7 +34,7 @@ function usePage() {
   }, []);
 
   const back = () => {
-    if (window.history.state?.petukPage) window.history.back(); // popstate flips the page
+    if (window.history.state?.bnbPage) window.history.back(); // popstate flips the page
     else showMenu(); // e.g. the page was reloaded while on #cart
   };
 

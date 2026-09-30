@@ -3,7 +3,7 @@
 // settings), so every access is guarded and the app works without it — you
 // just lose the "survives a refresh" convenience.
 
-const sessionKey = (qrToken) => `petuk.session.${qrToken}`;
+const sessionKey = (qrToken) => `burpnbill.session.${qrToken}`;
 
 function read(key) {
   try {
