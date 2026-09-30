@@ -289,7 +289,7 @@ describe('going live', () => {
     const user = userEvent.setup();
     await signIn(user, STAFF_USER);
     await screen.findByText('Live');
-    document.title = 'Petuk staff — Order board';
+    document.title = 'BurpnBill staff — Order board';
 
     // A QR order reaches the kitchen only when staff accept it, so THAT is what
     // pushes order_created live — place it in the queue, then approve through
@@ -300,7 +300,7 @@ describe('going live', () => {
 
     await waitFor(() => expect(document.title).toMatch(/^\(1\) New order/));
     window.dispatchEvent(new Event('focus'));
-    await waitFor(() => expect(document.title).toBe('Petuk staff — Order board'));
+    await waitFor(() => expect(document.title).toBe('BurpnBill staff — Order board'));
   });
 
   test('a QR order waiting for the counter never appears on the live board, so it cannot be started', async () => {
@@ -1168,7 +1168,7 @@ describe('Settings', () => {
 
     await user.click(card);
     expect(within(plan).getByRole('button', { name: /^T4, / })).toHaveAttribute('aria-pressed', 'true');
-    expect(await listRow('T4')).toHaveClass('bg-teal-50');
+    expect(await listRow('T4')).toHaveClass('bg-brand-50');
 
     // And back the other way — the row's name finds it on the plan.
     await user.click(within(await listRow('T4')).getByRole('button', { name: 'Find T4 on the plan' }));
@@ -1217,7 +1217,7 @@ describe('Settings', () => {
 
     // Seeded two-by-two, so the till's grid is two columns and each card sits
     // in the cell the owner put it in.
-    const cardFor = async (label) => (await screen.findByText(label)).closest('div.rounded-2xl');
+    const cardFor = async (label) => (await screen.findByText(label)).closest('div.rounded-card');
     expect(await cardFor('T1')).toHaveStyle({ gridColumn: '1', gridRow: '1' });
     // A second COLUMN, not just a second row: without one, a layout collapsed
     // to a single column would satisfy every other assertion here.
@@ -1413,7 +1413,7 @@ describe('Settings', () => {
     expect(screen.queryByRole('combobox', { name: /role/i })).not.toBeInTheDocument();
   });
 
-  test("a password change goes to the login provider, never through Petuk's API", async () => {
+  test("a password change goes to the login provider, never through BurpnBill's API", async () => {
     const user = userEvent.setup();
     await openSettings(user, STAFF_USER, /User account/);
 

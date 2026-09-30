@@ -13,11 +13,13 @@ import { Sidebar } from './Sidebar.jsx';
 
 const TITLES = { board: 'Order board', recent: 'Recent orders', menu: 'Menu', settings: 'Settings', dashboard: 'Dashboard', pos: 'POS', staff: 'Staff' };
 const LIVE_LABEL = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' };
-const LIVE_DOT = { live: 'bg-emerald-500', connecting: 'bg-gray-400', reconnecting: 'bg-amber-500 animate-pulse' };
+// The connection indicator borrows the status pairs: green when live, amber
+// while it retries, grey while it has not tried yet. It always says the word.
+const LIVE_DOT = { live: 'bg-ready-ink', connecting: 'bg-ink-400', reconnecting: 'bg-placed-ink animate-pulse' };
 const LIVE_PILL = {
-  live: 'bg-emerald-50 text-emerald-700',
-  connecting: 'bg-gray-100 text-gray-700',
-  reconnecting: 'bg-amber-50 text-amber-800',
+  live: 'bg-ready text-ready-ink',
+  connecting: 'bg-served text-served-ink',
+  reconnecting: 'bg-placed text-placed-ink',
 };
 
 const TABS = [
@@ -50,14 +52,14 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
   const [detailOrderId, setDetailOrderId] = useState(null);
 
   return (
-    <div className="staff-app flex min-h-dvh bg-gray-50">
+    <div className="staff-app brand-surface flex min-h-dvh bg-canvas">
       <Sidebar tabs={tabs} tab={tab} onSelect={setTab} identity={identity} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4 print:hidden">
+        <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-paper px-6 py-4 print:hidden">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">{TITLES[tab]}</h1>
-            <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${LIVE_PILL[board.liveStatus]}`}>
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">{TITLES[tab]}</h1>
+            <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-xs font-bold ${LIVE_PILL[board.liveStatus]}`}>
               <span className={`h-2 w-2 rounded-full ${LIVE_DOT[board.liveStatus]}`} aria-hidden="true" />
               {LIVE_LABEL[board.liveStatus]}
             </span>
@@ -67,7 +69,7 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
               <button
                 type="button"
                 onClick={alerts.enableSound}
-                className="flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                className="flex min-h-11 items-center gap-1.5 rounded-card border-2 border-ink-300 px-3 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
               >
                 <Bell className="h-4 w-4" aria-hidden="true" /> Turn on sound
               </button>
@@ -75,7 +77,7 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
             <button
               type="button"
               onClick={onSignOut}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+              className="flex min-h-11 items-center gap-1.5 rounded-card border-2 border-ink-300 px-3 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
             >
               <LogOut className="h-4 w-4" aria-hidden="true" /> Sign out
             </button>
@@ -83,7 +85,7 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
         </header>
 
         {board.conflict && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900" role="alert">
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-card border border-butter-500 bg-butter-100 px-4 py-2.5 text-sm font-semibold text-ink-900" role="alert">
             <span>{board.conflict}</span>
             <button type="button" onClick={board.dismissConflict} aria-label="Dismiss" className="text-lg leading-none">
               ×
@@ -91,7 +93,7 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
           </div>
         )}
         {board.error && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800" role="alert">
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
             <span>{board.error}</span>
             <button type="button" onClick={board.refresh} className="font-semibold">
               Retry

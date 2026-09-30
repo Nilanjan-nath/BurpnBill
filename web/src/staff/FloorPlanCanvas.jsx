@@ -11,9 +11,10 @@ export const GRID_ROWS = 8;
 // occupied come from real orders (GET /floor), paused is a real column. There
 // is no "dirty", "waiting" or "reserved" — nothing records them.
 const STATUS = {
-  free: { ring: 'border-emerald-500 bg-emerald-50', text: 'text-emerald-800', label: 'Available' },
-  occupied: { ring: 'border-red-500 bg-red-50', text: 'text-red-800', label: 'Occupied' },
-  paused: { ring: 'border-gray-400 bg-gray-100', text: 'text-gray-700', label: 'Paused' },
+  free: { ring: 'border-ready-ink/40 bg-ready', text: 'text-ready-ink', label: 'Available' },
+  // A crimson tint, the same as POS's floor: a busy table is not the brand's danger red.
+  occupied: { ring: 'border-brand-300 bg-brand-50', text: 'text-brand-700', label: 'Occupied' },
+  paused: { ring: 'border-ink-400 bg-ink-100', text: 'text-ink-700', label: 'Paused' },
 };
 
 export const statusOf = (table) => (!table.is_active ? 'paused' : table.status === 'occupied' ? 'occupied' : 'free');
@@ -111,12 +112,12 @@ export function FloorPlanCanvas({ tables, busyId, selectedId, onSelect, onMove }
       <div
         ref={gridRef}
         data-testid="floor-plan"
-        className="relative w-full min-w-[48rem] select-none rounded-2xl border border-gray-200 bg-gray-50 p-0"
+        className="relative w-full min-w-[48rem] select-none rounded-card border border-ink-200 bg-ink-50 p-0"
         style={{
           aspectRatio: `${GRID_COLS} / ${GRID_ROWS}`,
           // The dotted grid is the affordance: it says "things go on squares"
           // without a legend explaining it.
-          backgroundImage: 'radial-gradient(circle, rgb(203 213 225) 1px, transparent 1px)',
+          backgroundImage: 'radial-gradient(circle, rgb(201 190 195) 1px, transparent 1px)',
           backgroundSize: `${100 / GRID_COLS}% ${100 / GRID_ROWS}%`,
           backgroundPosition: `${50 / GRID_COLS}% ${50 / GRID_ROWS}%`,
         }}
@@ -129,8 +130,8 @@ export function FloorPlanCanvas({ tables, busyId, selectedId, onSelect, onMove }
             data-testid="drop-target"
             data-blocked={dropBlocked ? 'true' : 'false'}
             aria-hidden="true"
-            className={`pointer-events-none absolute rounded-xl border-2 border-dashed transition-colors ${
-              dropBlocked ? 'border-red-500 bg-red-100/70' : 'border-teal-600 bg-teal-100/60'
+            className={`pointer-events-none absolute rounded-card border-2 border-dashed transition-colors ${
+              dropBlocked ? 'border-danger-500 bg-danger-100/70' : 'border-brand bg-brand-100/60'
             }`}
             style={{
               left: pct(drag.x / GRID_COLS),
@@ -162,16 +163,16 @@ export function FloorPlanCanvas({ tables, busyId, selectedId, onSelect, onMove }
               onKeyDown={(e) => onKeyDown(e, table)}
               onClick={() => onSelect?.(table.id)}
               disabled={busyId === table.id}
-              className={`absolute flex touch-none flex-col items-center justify-center rounded-xl border-2 p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 disabled:opacity-60 ${s.ring} ${
+              className={`absolute flex touch-none flex-col items-center justify-center rounded-card border-2 p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:opacity-60 ${s.ring} ${
                 lifted
                   ? // The lift's scale lives in the inline transform below, NOT in a
                     // `scale-110` class: Tailwind v4 compiles that to the standalone
                     // `scale` property, which composes AFTER `transform` and so
                     // multiplies the drag translation by 1.1 — the card drifts away
                     // from the square it says it is going to land on.
-                    'z-20 cursor-grabbing shadow-lg'
-                  : 'cursor-grab shadow-sm transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md'
-              } ${selectedId === table.id ? 'ring-2 ring-teal-600 ring-offset-2' : ''}`}
+                    'z-20 cursor-grabbing '
+                  : 'cursor-grab  transition-[transform,box-shadow] hover:-translate-y-0.5 '
+              } ${selectedId === table.id ? 'ring-2 ring-brand ring-offset-2' : ''}`}
               style={{
                 left: pct(x / GRID_COLS),
                 top: pct(y / GRID_ROWS),
@@ -196,7 +197,7 @@ export function FloorPlanCanvas({ tables, busyId, selectedId, onSelect, onMove }
             // Pinned to the BOTTOM of the plan: a room fills from the top, so a
             // banner across the top row sits on top of the tables you are
             // trying to look at.
-            className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-gray-900/85 px-3 py-1 text-xs font-bold text-white"
+            className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-ink-900/85 px-3 py-1 text-xs font-bold text-white"
             role="status"
           >
             {dropBlocked ? 'That square is taken' : `Drop in row ${drag.y + 1}, column ${drag.x + 1}`} · Esc to cancel
@@ -204,7 +205,7 @@ export function FloorPlanCanvas({ tables, busyId, selectedId, onSelect, onMove }
         )}
 
         {tables.length === 0 && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-600">
+          <p className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-ink-600">
             Add a table and it appears here.
           </p>
         )}
@@ -219,12 +220,12 @@ const pct = (fraction) => `${(fraction * 100).toFixed(4)}%`;
 
 export function FloorPlanLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-gray-700">
+    <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-ink-700">
       {['free', 'occupied', 'paused'].map((key) => (
         <span key={key} className="flex items-center gap-1.5">
           <span
             className={`h-2.5 w-2.5 rounded-full ${
-              key === 'free' ? 'bg-emerald-500' : key === 'occupied' ? 'bg-red-500' : 'bg-gray-400'
+              key === 'free' ? 'bg-ready-ink' : key === 'occupied' ? 'bg-brand-400' : 'bg-ink-400'
             }`}
             aria-hidden="true"
           />

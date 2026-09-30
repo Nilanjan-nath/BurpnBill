@@ -6,7 +6,7 @@ import { staffApi, StaffApiError } from './staffApi.js';
 import { SignInScreen } from './SignInScreen.jsx';
 import { Board } from './Board.jsx';
 import { CreateCafeScreen } from './CreateCafeScreen.jsx';
-import './staff.css';
+import { AuthShell } from './AuthShell.jsx';
 import './tailwind.css';
 
 // The real Supabase Auth client is only ever constructed once this component
@@ -73,7 +73,11 @@ function SignedIn({ token, auth, onSignOut }) {
     return (
       <Centered>
         <p>{error}</p>
-        <button type="button" onClick={onSignOut}>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="min-h-12 rounded-card border-2 border-brand px-5 text-base font-bold text-brand transition duration-150 ease-tap hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand active:scale-[0.98]"
+        >
           Sign out and try again
         </button>
       </Centered>
@@ -103,8 +107,8 @@ function SignedIn({ token, auth, onSignOut }) {
 
 function Centered({ children }) {
   return (
-    <main className="staff-centered">
-      <p>{children}</p>
-    </main>
+    <AuthShell>
+      <div className="flex flex-col items-center gap-4 text-center text-base font-semibold text-ink-700">{children}</div>
+    </AuthShell>
   );
 }

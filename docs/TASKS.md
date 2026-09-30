@@ -1436,6 +1436,53 @@ Ordered by how badly each one hurts if it is missing on a Saturday.
 4. Oracle home region at signup — Mumbai (recommended) or Hyderabad
 5. Which SMTP sender to use for Auth mail
 
+## Step 12 — BurpnBill brand system (branch `feat/brand-system`, not merged)
+
+*The owner supplied the logo (`bnb.svg`) and the brand sheet, and asked for everything except the
+customer app to follow it — on a branch, so `master` keeps the teal design if the result isn't
+liked. Rules and rationale: `docs/design.md`, "The BurpnBill brand system".*
+
+- [x] **Tokens, fonts, logo.** `web/src/brand/tokens.css` (Tailwind v4 `@theme`: crimson, butter,
+      ink, status pairs, danger, veg, radii, the one shadow), self-hosted Bricolage Grotesque /
+      Manrope / JetBrains Mono (`@fontsource-variable/*`, three new dependencies), `Logo.jsx`
+      (the supplied mark, four approved colourways), `status.js` + `StatusPill.jsx`. Imported by
+      the landing and dashboard chunks only; the customer bundle contains none of it (production
+      build checked)
+- [x] **Landing page** — crimson hero band with the brand's grid, cream canvas, white cards,
+      butter CTAs, ink closing band; mockups redrawn in the brand's status pairs; the phone mockup
+      keeps the customer app's own red on purpose. Copy unchanged apart from the name, so the honesty
+      tests still hold
+- [x] **Sign-in, sign-up, create-your-café, loading/error** on `staff/AuthShell.jsx`;
+      **`staff.css` deleted** (closes the "prune the dead CSS" item)
+- [x] **Dashboard shell** — dark ink sidebar with the butter wordmark, board, cards, detail drawer
+- [x] **POS, checkout, receipt, QR dialog**; **Dashboard, Recent, Menu, Settings, Staff**
+- [x] **Visible "Petuk" → "BurpnBill"** on the branded surfaces (landing, dashboard, tab titles,
+      account copy). *Not renamed:* the customer app, and the internal names
+      (`petuk.session.*`, `@layer petuk-customer`, `petukPage`, `package.json` names) — those stay
+      with Step 11a
+- [x] **Tests:** web 135 → 155 (`brand/brand.test.jsx`: contrast of every status pair, no default
+      palette class under `staff/` or `landing/`, no hex-in-class, no "Petuk", the logo's
+      colourways and unique ids, fonts kept out of the customer files). Two existing tests asserted
+      a colour class (`bg-teal-50`, `rounded-2xl`) and were updated. Mutation-checked: a stray
+      `text-teal-600` and a wrong logo colour are both caught
+- [x] Checked in a browser against the real API on an in-memory database (a throwaway harness,
+      not committed): landing at 1440 / 375, every dashboard tab at 1440, Recent at 1024, sign-in
+      at 375; a dark-mode OS still gets the light brand pages
+- [ ] **Not checked:** printing (receipt, QR sheet) — unchanged code, but the new fonts are not
+      loaded in a print context I can drive; and a real signed-in session (no staff passwords here)
+- [ ] **Light only.** The brand sheet defines dark tokens; adopting them for the landing page and
+      dashboard is its own piece of work (the tokens make it a variable swap, but every surface
+      needs looking at)
+- [ ] **No favicon / app icon.** The mark is a wordmark and the sheet forbids altering it. Does the
+      owner have a square mark? `index.html` (shared with the customer app) is untouched, so the
+      tab icon and `theme-color` are as they were
+- [ ] **Customer app** still teal-free red-and-white and still says "Petuk" in its page title —
+      decision for the owner whether it joins the brand system
+- [ ] Deviations from the sheet, recorded in `design.md`: `cancelled-ink` darkened for AA; the
+      sheet's "8.6:1" for white-on-crimson measures 7.7:1; a labelled sidebar instead of a 64px rail
+- [ ] Known and unchanged: the sidebar is a fixed `w-64` (no phone layout for the dashboard), and
+      POS wants ~1400px of width
+
 ## Before first real cafe
 
 *Superseded by Step 11 above — the deploy line and the two items that used to be here now live in

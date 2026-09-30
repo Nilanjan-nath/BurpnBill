@@ -4,12 +4,12 @@ import { X } from 'lucide-react';
 // Same two traps as every other dialog here: m-auto, because Tailwind's
 // preflight kills the margin a modal <dialog> centres itself with, and an
 // explicit bg/text so it can't fall back to the UA's dark canvas colour.
-const PANEL = 'm-auto w-[min(26rem,92vw)] rounded-2xl bg-white p-0 text-gray-900 shadow-sm backdrop:bg-gray-900/50';
+const PANEL = 'm-auto w-[min(26rem,92vw)] rounded-card bg-paper p-0 text-ink-900 shadow-pop backdrop:bg-ink-900/50';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600';
-const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper px-3 py-2.5 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30';
+const LABEL = 'mb-1.5 block text-sm font-bold text-ink-900';
 
 // Add or rename a table. Editing changes the label and the seat count only —
 // never the QR token, which is printed on something physical and would turn
@@ -41,8 +41,8 @@ export function TableForm({ table, busy, error, onSave, onClose }) {
       <form className="p-6" onSubmit={submit}>
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{table ? 'Edit table' : 'Add table'}</h2>
-            <p className="text-sm font-semibold text-gray-600">
+            <h2 className="text-xl font-extrabold text-ink-900">{table ? 'Edit table' : 'Add table'}</h2>
+            <p className="text-sm font-semibold text-ink-600">
               {table ? 'The printed QR code keeps working — only the name changes.' : 'It gets its own QR code straight away.'}
             </p>
           </div>
@@ -50,7 +50,7 @@ export function TableForm({ table, busy, error, onSave, onClose }) {
             type="button"
             onClick={() => dialog.current.close()}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -75,7 +75,7 @@ export function TableForm({ table, busy, error, onSave, onClose }) {
 
         <div className="mb-5">
           <label className={LABEL} htmlFor="table-seats">
-            Seats <span className="font-semibold text-gray-600">(optional)</span>
+            Seats <span className="font-semibold text-ink-600">(optional)</span>
           </label>
           <input
             id="table-seats"
@@ -90,7 +90,7 @@ export function TableForm({ table, busy, error, onSave, onClose }) {
         </div>
 
         {error && (
-          <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800" role="alert">
+          <p className="mb-3 rounded-card border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700" role="alert">
             {error}
           </p>
         )}
@@ -98,7 +98,7 @@ export function TableForm({ table, busy, error, onSave, onClose }) {
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-xl bg-teal-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+          className="w-full min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? 'Saving…' : table ? 'Save changes' : 'Add table'}
         </button>

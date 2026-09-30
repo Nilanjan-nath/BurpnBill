@@ -367,7 +367,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   native app. Both the staff dashboard (`/staff`) and the **landing page** (`/`) are
   lazy-loaded, so a customer scanning a table downloads neither: verified in a production
   build, where the landing chunk is its own ~6.8 kB JS and ~4.8 kB CSS. The landing page
-  is Tailwind on the **dashboard's** language — white, charcoal, one teal accent — because
+  is Tailwind on the **dashboard's** language — the BurpnBill brand system, below — because
   its reader is an owner deciding whether to trust this with their service, not a diner.
   Tailwind is imported from `landing/landing-tailwind.css`, reachable only from the landing
   chunk, exactly as `staff/tailwind.css` is for the dashboard **(added, step 7;
@@ -375,6 +375,18 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   dashboard (`/staff`) is lazy-loaded, so customers never download it. It signs in with its own
   Supabase Auth client, built from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in a separate
   `web/.env` — never the service-role key, which stays in the server's own `.env` **(decided)**
+- **Brand system (added, `feat/brand-system`)**: the landing page, the sign-in and
+  create-your-café screens and every dashboard tab wear the BurpnBill brand system — crimson
+  `#A70045` for the one primary action, butter `#F4F0A9`, warm ink neutrals on a cream canvas,
+  Bricolage Grotesque / Manrope / JetBrains Mono (self-hosted variable fonts), 12/8px radii,
+  borders before shadows. It is Tailwind v4 theme tokens in `web/src/brand/tokens.css`
+  (`@theme`, no config file), imported only by `staff/tailwind.css` and
+  `landing/landing-tailwind.css`, so it ships in those two lazy chunks and **not** in the customer
+  bundle (verified in a production build). The wordmark is `brand/Logo.jsx`; order-status colours
+  live once in `brand/status.js`. Light only for now. Rules, the four approved logo colourways,
+  the old-class → new-token table and the deviations from the brand sheet are in
+  `docs/design.md`; `brand/brand.test.jsx` holds them (contrast, no default-palette classes, the
+  mark itself). The customer app is deliberately untouched.
 - **Customer app styling (changed)**: the customer app (`/t/<token>`) is Tailwind too now, in
   its own lazy chunk (`customer/CustomerApp.jsx`, importing `customer/tailwind.css`) — the same
   scoping the dashboard and landing page use, and for the same reason: Tailwind's preflight is
@@ -382,7 +394,8 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   eagerly loaded stylesheet is ~2 kB with no Tailwind in it. Palette is **white with red as the single accent** (it began as mustard and red; owner
   feedback removed the mustard) — see `docs/design.md`, "The customer app". `styles.css` shrank to what the non-customer routes still reach (the Loading fallbacks
   in `App.jsx`, the staff sign-in's base type, `.veg-mark`).
-- **Dashboard styling**: the staff dashboard's sidebar,
+- **Dashboard styling** *(the teal palette described here is superseded by the brand system above; the
+  scoping and cascade-layer reasoning still holds)*: the staff dashboard's sidebar,
   header and POS page are Tailwind CSS v4 (`@tailwindcss/vite`, no config file) plus
   `lucide-react` for icons **(added, step 7)** — a deliberate "premium SaaS" look distinct from
   the customer app's warm palette, per direct owner design feedback. Rules and palette (teal

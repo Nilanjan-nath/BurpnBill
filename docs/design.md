@@ -1,8 +1,142 @@
-# Owner dashboard — design system
+# BurpnBill — design system
 
-*Applies to the staff/owner dashboard — every tab of it, as of the Recent migration. The
-customer-facing app has its own, deliberately different language — white and red, described
-under "The customer app" below — and shares only the veg mark and the traps with this one.*
+*Two systems live in this repo. **The BurpnBill brand system** (below) governs the landing page
+(`/`), the sign-in and create-your-café screens, and every tab of the staff dashboard
+(`/staff`). **The customer app** (`/t/<token>`) has its own, deliberately different language —
+white and red, described under "The customer app" — and is untouched by the brand system until
+the owner decides otherwise.*
+
+*Everything from "Where this actually lives today" down was written for the earlier teal
+palette. The traps, the "what colour is not for" reasoning and the worked examples still hold;
+where a section names `teal`, `gray-*` or a specific Tailwind colour, read it as the brand token
+in the mapping table below. The palette, type and shape sections lower down are marked
+superseded.*
+
+## The BurpnBill brand system
+
+Source: the owner's *BurpnBill — Brand System* sheet and the `bnb.svg` logo. Implemented as
+Tailwind v4 theme tokens in `web/src/brand/tokens.css`, imported by `staff/tailwind.css` and
+`landing/landing-tailwind.css` and by nothing else — so, like Tailwind itself, it ships in those
+two lazy chunks only and the customer bundle contains none of it (verified in a production
+build).
+
+### The logo
+
+`web/src/brand/Logo.jsx`, drawn from `bnb.svg` and otherwise unaltered. Four colourways, and only
+these four:
+
+| Variant | Letters on ground | Use |
+|---|---|---|
+| `white` | crimson on nothing | the default, on white or the cream canvas |
+| `cream` | crimson on butter | a butter tile |
+| `crimson` | white on nothing | on a crimson band |
+| `ink` | butter on nothing | on warm ink — the sidebar, the closing band |
+
+Clear space is the height of the "b" on every side; minimum width on screen is 72px. There is
+**no square icon**: the brand has none, and inventing a monogram would be altering the mark, so
+the dashboard uses the wordmark alone and there is no favicon of it yet. Each instance prefixes
+its clip-path ids (`useId`), so a nav and a footer on one page do not share them.
+
+### Colour (`tokens.css`)
+
+- **Crimson** `brand-50…900`, `#A70045` = 600. *Crimson means "do this"* — primary actions, the
+  active nav item, selection. It is never used for a number, an error or a status. One primary
+  button per view (the board's per-card forward buttons are the exception: each card is its own
+  view).
+- **Butter** `butter-50…900`, `#F4F0A9` = 300. Highlight and accent: role chips, monograms,
+  "Bill & checkout", warnings. Never a text colour on white.
+- **Ground:** `canvas` `#FFFCF0` (the page) and `paper` white (cards). **Ink** `ink-50…900`
+  replaces Tailwind's cold `gray`; `ink-500` is the lightest text allowed.
+- **Status pairs** (`placed`, `prep`, `ready`, `served`, `cancelled`, each with `-ink`): amber,
+  blue, green, grey, and muted-with-strikethrough. Defined once in `brand/status.js`, drawn by
+  `brand/StatusPill.jsx` (a dot **and** the word — colour is never the only signal). Contrast is
+  asserted in `brand/brand.test.jsx`.
+- **Danger** `danger-*`, `#D92D20`: errors and destructive actions only. Deliberately not crimson.
+- **Veg / non-veg** `veg`, `nonveg`: the food-safety marks, the same greens and reds as the
+  customer app's veg mark.
+
+**Deviations from the sheet, on purpose:**
+
+1. `cancelled-ink` is `#5C4C54` (ink-600), not the sheet's `#7A6A72`. On its tint the sheet's pair
+   measures 4.43:1 — just under AA for text this small — and the test suite holds every status
+   pair to 4.5:1.
+2. The sheet says white on crimson is 8.6:1; measured, it is 7.7:1 (still AAA). The test asserts
+   the measured value.
+3. The sheet defines only the base danger colour; the 50/100/200/600/700 steps are this repo's own
+   ramp, so a danger banner has the same recipe as every other banner.
+4. The sheet describes a 64px icon rail. The dashboard keeps its 256px labelled sidebar (a rail
+   of icons alone is a worse way to find "Recent") and takes the rail's *colours*: warm ink ground,
+   butter wordmark, crimson active item.
+
+### Type
+
+Self-hosted variable fonts (`@fontsource-variable/*`, imported in `tokens.css`, so no third-party
+request and nothing for a customer's phone to download): **Bricolage Grotesque** for headings
+(`h1`–`h4`, applied in `@layer base`, weight 800 for h1/h2), **Manrope** for everything else,
+**JetBrains Mono** for prices, table numbers, order ids, times and the small uppercase labels
+(`font-mono text-xs font-bold uppercase tracking-[0.08em]`). Money and counts are always mono so
+digits align and totals do not jitter.
+
+### Shape, depth, motion
+
+`rounded-card` (12px) for cards, buttons and panels; `rounded-input` (8px) for fields and small
+controls; `rounded-full` for status pills. **Borders first, shadow second:** the only elevation is
+`shadow-pop` (`0 8px 24px rgb(30 20 24 / .12)`), on dialogs and the drawer. Taps use
+`duration-150 ease-tap` and `active:scale-[0.98]`.
+
+### Targets
+
+Primary actions are **48px** (`min-h-12`): the board's forward and cancel buttons, POS, checkout,
+sign-in, tabs. Dense admin lists (seating list, staff list, menu cards' small controls) keep
+smaller controls, never below 36–40px. This was a deliberate split: 48px everywhere would have
+meant re-laying-out those screens.
+
+### Occupied is not danger
+
+POS's floor map and the seating plan draw **occupied as a crimson tint** and **free as the
+"ready" green**; the selected table is solid crimson. A busy table is not an error, and the brand
+keeps danger and crimson apart. (The owner's earlier ask — "red when busy, green when available"
+— is kept in spirit: the tint is red-leaning.)
+
+### Light only, for now
+
+Neither surface has dark styles. `tokens.css` declares `color-scheme: light` for anything inside
+`.brand-surface` (scoped through `:has`, so it can never follow the customer app onto its own
+route) and paints `body` in the canvas, so a Mac in dark mode gets the same page a light one does.
+The sheet defines dark tokens; adopting them is a separate piece of work, not a side effect of
+this one.
+
+### Old class → new token
+
+| Was | Now |
+|---|---|
+| `teal-*` (accent) | `brand-*` |
+| `gray-*` | `ink-*` (`text-gray-400` → `ink-500`) |
+| `bg-white` | `bg-paper` (page: `bg-canvas`) |
+| `amber-*` (waiting) | `placed` / `placed-ink`; warnings: `butter-100` + ink text |
+| Preparing `teal` | `prep` / `prep-ink` (blue) |
+| `emerald-*` | `ready` / `ready-ink` |
+| `red-*` | `danger-*` (errors), `brand-*` tint (occupied), `cancelled` (cancelled) |
+| `rounded-xl`, `rounded-2xl` / `rounded-lg` | `rounded-card` / `rounded-input` |
+| `shadow-sm`, `shadow-md` | none (borders); dialogs `shadow-pop` |
+
+`brand/brand.test.jsx` fails if a class from Tailwind's default palette reappears under `staff/`
+or `landing/`, so this table stays true.
+
+### Traps found doing this
+
+- **A `border-l-*` colour and a `border-*` colour on one element** are both `border-color`-family
+  utilities; the left edge only wins because Tailwind emits `border-l-*` later. The order card
+  relies on it, and its stuck highlight (`border-placed-ink`, all four sides) deliberately
+  overrides it.
+- **Tests that assert a colour class** (`toHaveClass('bg-teal-50')`) break on a re-skin without
+  the feature having changed. Two did; they now assert the brand class. Prefer a `data-*` hook
+  (the stuck highlight already has one).
+- **The brand sheet's own numbers are worth measuring.** Two were slightly off (above).
+- **`staff.css` is gone.** Sign-in, create-your-café and StaffApp's loading/error states share
+  `staff/AuthShell.jsx`, which closed the last surface on plain CSS.
+
+---
 
 ## Where this actually lives today
 
@@ -18,11 +152,8 @@ the Menu (`MenuTab.jsx` / `ItemForm.jsx` / `CategoryForm.jsx`), Settings
 (`SettingsTab.jsx` / `RestaurantProfile.jsx` / `SeatingPlan.jsx` / `UserAccount.jsx`) and
 Recent (`RecentOrders.jsx`).
 
-**That is all of them.** The `.staff-legacy` wrapper in `Board.jsx` is gone, and with it the
-seam this section used to track. `staff.css` is still imported, but the only rules anything
-reaches now are the sign-in screen's (`.staff-centered`, `.staff-signin`) — it renders outside
-the dashboard shell and has not been redesigned. The rest of that file is dead code; prune it
-in its own pass rather than in whatever slice notices.
+**That is all of them, and the sign-in / create-your-café screens too.** `staff.css` has been
+deleted; `staff/AuthShell.jsx` is the frame those screens share.
 
 ### Settings
 
@@ -330,6 +461,8 @@ background above: the reset takes something the UA was providing for free.
 
 ## Color
 
+*Superseded by "The BurpnBill brand system" at the top of this file; kept for the reasoning.*
+
 **Base** — white/off-white, not brand-colored:
 - Page background: `bg-gray-50`
 - Cards/panels/sidebar/header: `bg-white`
@@ -419,6 +552,8 @@ elevation (shadow) or the veg dot, not a new color.
 
 ## Typography
 
+*Superseded by "The BurpnBill brand system" at the top of this file; kept for the reasoning.*
+
 System sans throughout (Tailwind's default stack) — no display/serif font here, unlike the
 customer app's Fraunces. This is a work tool, not a brand moment; hierarchy comes from weight
 and size, not typeface:
@@ -438,6 +573,8 @@ and size, not typeface:
 
 ## Shape, elevation, spacing
 
+*Superseded by "The BurpnBill brand system" at the top of this file; kept for the reasoning.*
+
 - Radius: `rounded-xl` (buttons, inputs, small cards), `rounded-2xl` (item/table cards),
   `rounded-full` (pills, badges, avatars)
 - Elevation: `shadow-sm` at rest on interactive cards, `hover:shadow-md` — never more than
@@ -447,6 +584,8 @@ and size, not typeface:
 - Grid gaps: `gap-3` (dense card grids), `gap-4` (looser layouts)
 
 ## Layout pattern
+
+*Superseded by "The BurpnBill brand system" at the top of this file; kept for the reasoning.*
 
 - **Sidebar**: fixed width (`w-64`), a brand mark at top (teal rounded-square monogram + the
   wordmark), vertical nav (icon + label, active = solid `bg-teal-600 text-white`), and the

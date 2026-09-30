@@ -7,6 +7,7 @@ import {
   Users,
   Settings,
 } from 'lucide-react';
+import { Logo } from '../brand/Logo.jsx';
 
 const ICONS = {
   board: ClipboardList,
@@ -18,11 +19,10 @@ const ICONS = {
   settings: Settings,
 };
 
-// Tailwind, replacing the old plain-CSS sidebar (staff.css's .staff-sidebar)
-// — see TASKS.md step 7 slice 3's redesign note for why. Same tab state/ids
-// as before (Board.jsx owns `tab`/`setTab`), just a different chrome, so
-// every existing test — which queries by role/name, not by class — kept
-// passing untouched.
+// The brand system's dark ink rail (docs/design.md, "The dashboard shell"):
+// warm ink ground, the wordmark in its butter colourway, crimson for the one
+// active view. Same tab state/ids as ever (Board.jsx owns `tab`/`setTab`), so
+// tests — which query by role/name, not by class — are unaffected.
 export function Sidebar({ tabs, tab, onSelect, identity }) {
   // The café, not the person. What this footer answers is "which café am I
   // looking at" — the thing every number on every tab is scoped to — and on a
@@ -31,15 +31,9 @@ export function Sidebar({ tabs, tab, onSelect, identity }) {
   // place it can be changed.
   const cafe = identity.restaurantName ?? '';
   return (
-    <nav aria-label="View" className="flex w-64 flex-none flex-col border-r border-gray-200 bg-white print:hidden">
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <span
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-teal-600 text-base font-bold text-white"
-          aria-hidden="true"
-        >
-          P
-        </span>
-        <span className="text-xl font-bold tracking-tight text-teal-700">Petuk</span>
+    <nav aria-label="View" className="flex w-64 flex-none flex-col bg-ink-900 print:hidden">
+      <div className="px-5 py-6">
+        <Logo variant="ink" width={128} />
       </div>
 
       <div className="flex-1 space-y-1 overflow-y-auto px-3">
@@ -52,8 +46,8 @@ export function Sidebar({ tabs, tab, onSelect, identity }) {
               type="button"
               aria-current={active}
               onClick={() => onSelect(t.id)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-colors ${
-                active ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+              className={`flex min-h-12 w-full items-center gap-3 rounded-card px-3 text-[15px] font-bold transition-colors duration-150 ease-tap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-butter-300 ${
+                active ? 'bg-brand text-white' : 'text-ink-300 hover:bg-ink-800 hover:text-white'
               }`}
             >
               <Icon className="h-5 w-5 flex-none" strokeWidth={2.25} aria-hidden="true" />
@@ -63,11 +57,11 @@ export function Sidebar({ tabs, tab, onSelect, identity }) {
         })}
       </div>
 
-      <div className="m-3 flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
-        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white">
+      <div className="m-3 flex items-center gap-3 rounded-card bg-ink-800 p-3">
+        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-butter-300 font-display text-base font-extrabold text-ink-900">
           {cafe.slice(0, 1).toUpperCase()}
         </div>
-        <div className="min-w-0 text-sm font-bold text-gray-900">
+        <div className="min-w-0 text-sm font-bold text-white">
           {/* Two lines' worth of room for one line of name: a café called
               "The Third Wave Coffee Roasters" wraps rather than being cut
               down to something nobody would recognise. */}

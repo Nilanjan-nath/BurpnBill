@@ -4,26 +4,27 @@ import { BarChart, SplitBar, Delta } from './DashboardCharts.jsx';
 import { formatMoney } from '../format.js';
 
 // Today at a glance, for the owner. Deliberately plain: white tiles with dark
-// numbers, and colour only where it means something — money still owed, a
-// queue waiting on someone, a cancellation. A wall of pastel tiles (as in the
+// mono numbers, and colour only where it means something — money still owed, a
+// queue waiting on someone, a cancellation. (Never crimson for a number: in the
+// brand system crimson means "do this", and nothing here is asking to be done.) A wall of pastel tiles (as in the
 // reference) reads as decoration, and this screen exists to be scanned in
 // five seconds. See docs/design.md's "what color is not for".
 function Tile({ label, value, sub, tone = 'plain', Icon, footer }) {
   const TONE = {
-    plain: 'text-gray-900',
-    accent: 'text-teal-700',
-    warn: 'text-amber-700',
-    bad: 'text-red-700',
-    good: 'text-emerald-700',
+    plain: 'text-ink-900',
+    accent: 'text-ink-900',
+    warn: 'text-placed-ink',
+    bad: 'text-danger-700',
+    good: 'text-ready-ink',
   };
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+    <div className="rounded-card border border-ink-200 bg-paper p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-600">{label}</p>
-        {Icon && <Icon className="h-4 w-4 flex-none text-gray-400" aria-hidden="true" />}
+        <p className="font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">{label}</p>
+        {Icon && <Icon className="h-4 w-4 flex-none text-ink-500" aria-hidden="true" />}
       </div>
-      <p className={`mt-2 text-2xl font-bold tabular-nums ${TONE[tone]}`}>{value}</p>
-      {sub && <p className="mt-0.5 text-xs font-semibold text-gray-600">{sub}</p>}
+      <p className={`mt-2 font-mono text-2xl font-bold tabular-nums ${TONE[tone]}`}>{value}</p>
+      {sub && <p className="mt-0.5 text-xs font-semibold text-ink-600">{sub}</p>}
       {footer && <div className="mt-2">{footer}</div>}
     </div>
   );
@@ -32,19 +33,19 @@ function Tile({ label, value, sub, tone = 'plain', Icon, footer }) {
 // A count that is also a way in — tapping it goes where the work is.
 function QueueTile({ label, count, tone, onClick }) {
   const TONE = {
-    warn: 'border-amber-300 bg-amber-50 text-amber-900',
-    accent: 'border-teal-300 bg-teal-50 text-teal-800',
-    good: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-    plain: 'border-gray-200 bg-white text-gray-900',
+    warn: 'border-placed-ink/30 bg-placed text-placed-ink',
+    accent: 'border-prep-ink/30 bg-prep text-prep-ink',
+    good: 'border-ready-ink/30 bg-ready text-ready-ink',
+    plain: 'border-ink-200 bg-paper text-ink-900',
   };
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl border p-4 text-left transition-shadow hover:shadow-md ${count > 0 ? TONE[tone] : TONE.plain}`}
+      className={`rounded-card border p-4 text-left transition duration-150 ease-tap active:scale-[0.98] ${count > 0 ? TONE[tone] : TONE.plain}`}
     >
-      <p className="text-xs font-bold uppercase tracking-wide">{label}</p>
-      <p className="mt-2 text-2xl font-bold tabular-nums">{count}</p>
+      <p className="font-mono text-xs font-bold uppercase tracking-[0.08em]">{label}</p>
+      <p className="mt-2 font-mono text-2xl font-bold tabular-nums">{count}</p>
     </button>
   );
 }
@@ -55,13 +56,13 @@ export function DashboardHome({ token, onNavigate }) {
   if (error) {
     return (
       <div className="p-6">
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800" role="alert">
+        <p className="rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
           {error}
         </p>
       </div>
     );
   }
-  if (!summary) return <p className="p-10 text-center text-sm font-semibold text-gray-700">Loading today…</p>;
+  if (!summary) return <p className="p-10 text-center text-sm font-semibold text-ink-700">Loading today…</p>;
 
   const {
     money,
@@ -101,28 +102,29 @@ export function DashboardHome({ token, onNavigate }) {
     orders: d.orders,
   }));
 
-  const METHOD_COLOR = { cash: 'bg-emerald-500', card: 'bg-teal-600', upi: 'bg-amber-500' };
+  // Categorical, so three distinct hues from the brand: ink, crimson, butter.
+  const METHOD_COLOR = { cash: 'bg-ink-700', card: 'bg-brand', upi: 'bg-butter-500' };
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-6">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-gray-900">{restaurant.name}</h2>
-            <p className="text-sm font-semibold text-gray-600">{today}</p>
+            <h2 className="text-2xl font-extrabold tracking-tight text-ink-900">{restaurant.name}</h2>
+            <p className="text-sm font-semibold text-ink-600">{today}</p>
           </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => onNavigate('pos')}
-              className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+              className="flex min-h-12 items-center gap-1.5 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98]"
             >
               <ShoppingCart className="h-4 w-4" aria-hidden="true" /> Open POS
             </button>
             <button
               type="button"
               onClick={() => onNavigate('board')}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-800 hover:bg-gray-50"
+              className="flex min-h-12 items-center gap-1.5 rounded-card border-2 border-ink-300 px-4 text-sm font-bold text-ink-800 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
             >
               <ClipboardList className="h-4 w-4" aria-hidden="true" /> Order board
             </button>
@@ -161,7 +163,7 @@ export function DashboardHome({ token, onNavigate }) {
         </div>
 
         <div>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-600">Right now</h3>
+          <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Right now</h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <QueueTile label="Awaiting approval" count={kitchen.awaiting_approval} tone="warn" onClick={() => onNavigate('pos')} />
             <QueueTile label="New" count={kitchen.placed} tone="warn" onClick={() => onNavigate('board')} />
@@ -172,9 +174,9 @@ export function DashboardHome({ token, onNavigate }) {
 
         <div>
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">Sales by hour</h3>
+            <h3 className="font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Sales by hour</h3>
             {Number(busiest?.value ?? 0) > 0 && (
-              <p className="text-xs font-semibold text-gray-600">
+              <p className="text-xs font-semibold text-ink-600">
                 Busiest {busiest.hour}:00 — {formatMoney(busiest.value)}
               </p>
             )}
@@ -183,23 +185,23 @@ export function DashboardHome({ token, onNavigate }) {
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-600">How people paid</h3>
+          <div className="rounded-card border border-ink-200 bg-paper p-4">
+            <h3 className="mb-3 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">How people paid</h3>
             <SplitBar
               segments={paymentMix.map((m) => ({
                 label: m.method,
                 value: m.amount,
-                color: METHOD_COLOR[m.method] ?? 'bg-gray-400',
+                color: METHOD_COLOR[m.method] ?? 'bg-ink-400',
               }))}
               emptyLabel="Nothing settled yet today."
             />
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-600">Where orders came from</h3>
+          <div className="rounded-card border border-ink-200 bg-paper p-4">
+            <h3 className="mb-3 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Where orders came from</h3>
             <SplitBar
               segments={[
-                { label: `QR (${channel.qr_orders})`, value: channel.qr_value, color: 'bg-teal-600' },
-                { label: `Counter (${channel.counter_orders})`, value: channel.counter_value, color: 'bg-amber-500' },
+                { label: `QR (${channel.qr_orders})`, value: channel.qr_value, color: 'bg-brand' },
+                { label: `Counter (${channel.counter_orders})`, value: channel.counter_value, color: 'bg-ink-700' },
               ]}
               emptyLabel="No orders yet today."
             />
@@ -207,7 +209,7 @@ export function DashboardHome({ token, onNavigate }) {
         </div>
 
         <div>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-600">Last 7 days</h3>
+          <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Last 7 days</h3>
           <BarChart bars={weekBars} highlightKey={weekBars.at(-1)?.key} emptyLabel="No orders in the last week." />
         </div>
 
@@ -236,18 +238,18 @@ export function DashboardHome({ token, onNavigate }) {
         </div>
 
         <div>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-600">Selling today</h3>
-          <div className="rounded-2xl border border-gray-200 bg-white">
+          <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Selling today</h3>
+          <div className="rounded-card border border-ink-200 bg-paper">
             {best.length === 0 ? (
-              <p className="p-4 text-sm font-semibold text-gray-700">Nothing ordered yet today.</p>
+              <p className="p-4 text-sm font-semibold text-ink-700">Nothing ordered yet today.</p>
             ) : (
               best.map((item, i) => (
-                <div key={item.name} className="flex items-center gap-3 border-b border-gray-200 p-4 last:border-b-0">
-                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-teal-50 text-sm font-bold text-teal-700">
+                <div key={item.name} className="flex items-center gap-3 border-b border-ink-200 p-4 last:border-b-0">
+                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-butter-300 font-mono text-sm font-bold text-ink-900">
                     {i + 1}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{item.name}</span>
-                  <span className="flex-none text-sm font-bold text-gray-700 tabular-nums">× {item.quantity}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-900">{item.name}</span>
+                  <span className="flex-none font-mono text-sm font-bold text-ink-700 tabular-nums">× {item.quantity}</span>
                 </div>
               ))
             )}

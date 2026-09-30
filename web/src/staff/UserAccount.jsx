@@ -3,15 +3,15 @@ import { Check, ChefHat, Crown, KeyRound, Mail, User } from 'lucide-react';
 import { staffApi, StaffApiError } from './staffApi.js';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 ' +
-  'disabled:bg-gray-50 disabled:text-gray-700';
-const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper py-2.5 pl-10 pr-3 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 ' +
+  'disabled:bg-ink-50 disabled:text-ink-700';
+const LABEL = 'mb-1.5 block text-sm font-bold text-ink-900';
 
 const ROLES = {
-  owner: { label: 'Owner', Icon: Crown, chip: 'bg-amber-100 text-amber-900', blurb: 'Everything, including the menu, tables and settings' },
-  staff: { label: 'Staff', Icon: User, chip: 'bg-teal-100 text-teal-800', blurb: 'Order board, 86 items, and the till' },
-  kitchen: { label: 'Kitchen', Icon: ChefHat, chip: 'bg-gray-200 text-gray-800', blurb: 'Order board and 86 items only' },
+  owner: { label: 'Owner', Icon: Crown, chip: 'bg-butter-300 text-ink-900', blurb: 'Everything, including the menu, tables and settings' },
+  staff: { label: 'Staff', Icon: User, chip: 'bg-brand-100 text-brand-800', blurb: 'Order board, 86 items, and the till' },
+  kitchen: { label: 'Kitchen', Icon: ChefHat, chip: 'bg-ink-200 text-ink-800', blurb: 'Order board and 86 items only' },
 };
 
 // Settings → User Account: you, not the team. The Staff tab is where an owner
@@ -37,7 +37,7 @@ export function UserAccount({ token, identity, auth, onIdentityChange }) {
     };
   }, [auth]);
 
-  const role = ROLES[identity.role] ?? { label: identity.role, Icon: User, chip: 'bg-gray-200 text-gray-800', blurb: '' };
+  const role = ROLES[identity.role] ?? { label: identity.role, Icon: User, chip: 'bg-ink-200 text-ink-800', blurb: '' };
   const nameChanged = name.trim() !== (identity.displayName ?? '');
 
   const saveName = async (e) => {
@@ -60,20 +60,20 @@ export function UserAccount({ token, identity, auth, onIdentityChange }) {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={saveName} className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 bg-gray-50 p-6">
-          <h3 className="text-lg font-bold text-gray-900">Your account</h3>
-          <p className="text-sm font-semibold text-gray-600">Your name is what the order timeline records against anything you do.</p>
+      <form onSubmit={saveName} className="overflow-hidden rounded-card border border-ink-200 bg-paper">
+        <div className="border-b border-ink-200 bg-ink-50 p-6">
+          <h3 className="text-lg font-bold text-ink-900">Your account</h3>
+          <p className="text-sm font-semibold text-ink-600">Your name is what the order timeline records against anything you do.</p>
         </div>
 
         <div className="space-y-4 p-6">
-          <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-4">
-            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-teal-600 text-base font-bold text-white">
+          <div className="flex items-center gap-3 rounded-card bg-ink-50 p-4">
+            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-brand text-base font-bold text-white">
               {(identity.displayName ?? role.label).slice(0, 1).toUpperCase()}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-gray-900">{identity.displayName ?? 'Unnamed'}</div>
-              <div className="text-xs font-semibold text-gray-600">{role.blurb}</div>
+              <div className="truncate text-sm font-bold text-ink-900">{identity.displayName ?? 'Unnamed'}</div>
+              <div className="text-xs font-semibold text-ink-600">{role.blurb}</div>
             </div>
             <span className={`flex flex-none items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${role.chip}`}>
               <role.Icon className="h-3.5 w-3.5" aria-hidden="true" /> {role.label}
@@ -85,7 +85,7 @@ export function UserAccount({ token, identity, auth, onIdentityChange }) {
               Display name
             </label>
             <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
               <input
                 id="account-name"
                 type="text"
@@ -106,32 +106,32 @@ export function UserAccount({ token, identity, auth, onIdentityChange }) {
               Email
             </label>
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
               <input id="account-email" type="email" value={email ?? ''} readOnly disabled className={FIELD} />
             </div>
-            <p className="mt-1.5 text-xs font-semibold text-gray-600">
-              This is your sign-in, and it's how an invite found you. Changing it isn't something Petuk can do — it lives in
+            <p className="mt-1.5 text-xs font-semibold text-ink-600">
+              This is your sign-in, and it's how an invite found you. Changing it isn't something BurpnBill can do — it lives in
               your login, not in the café's records.
             </p>
           </div>
 
           {nameError && (
-            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800" role="alert">
+            <p className="rounded-card border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700" role="alert">
               {nameError}
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-ink-200 bg-ink-50 px-6 py-4">
           {nameSaved && !nameChanged && (
-            <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-700">
+            <span className="flex items-center gap-1.5 text-sm font-bold text-ready-ink">
               <Check className="h-4 w-4" aria-hidden="true" /> Saved
             </span>
           )}
           <button
             type="submit"
             disabled={savingName || !nameChanged || name.trim() === ''}
-            className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+            className="min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
           >
             {savingName ? 'Saving…' : 'Save name'}
           </button>
@@ -143,7 +143,7 @@ export function UserAccount({ token, identity, auth, onIdentityChange }) {
   );
 }
 
-// The password never touches Petuk's API: the browser's own Supabase client
+// The password never touches BurpnBill's API: the browser's own Supabase client
 // holds the session and changes it directly, so no password is ever sent to a
 // server we wrote or logged by one.
 function PasswordCard({ auth }) {
@@ -173,10 +173,10 @@ function PasswordCard({ auth }) {
   };
 
   return (
-    <form onSubmit={submit} className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-      <div className="border-b border-gray-200 bg-gray-50 p-6">
-        <h3 className="text-lg font-bold text-gray-900">Password</h3>
-        <p className="text-sm font-semibold text-gray-600">Changed with your login directly — it never passes through Petuk.</p>
+    <form onSubmit={submit} className="overflow-hidden rounded-card border border-ink-200 bg-paper">
+      <div className="border-b border-ink-200 bg-ink-50 p-6">
+        <h3 className="text-lg font-bold text-ink-900">Password</h3>
+        <p className="text-sm font-semibold text-ink-600">Changed with your login directly — it never passes through BurpnBill.</p>
       </div>
 
       <div className="grid gap-4 p-6 sm:grid-cols-2">
@@ -185,7 +185,7 @@ function PasswordCard({ auth }) {
             New password
           </label>
           <div className="relative">
-            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
             <input
               id="account-password"
               type="password"
@@ -204,7 +204,7 @@ function PasswordCard({ auth }) {
             Confirm new password
           </label>
           <div className="relative">
-            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
             <input
               id="account-password-confirm"
               type="password"
@@ -220,22 +220,22 @@ function PasswordCard({ auth }) {
         </div>
 
         {error && (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800 sm:col-span-2" role="alert">
+          <p className="rounded-card border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700 sm:col-span-2" role="alert">
             {error}
           </p>
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+      <div className="flex items-center justify-end gap-3 border-t border-ink-200 bg-ink-50 px-6 py-4">
         {done && (
-          <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-700">
+          <span className="flex items-center gap-1.5 text-sm font-bold text-ready-ink">
             <Check className="h-4 w-4" aria-hidden="true" /> Password changed
           </span>
         )}
         <button
           type="submit"
           disabled={busy || password === ''}
-          className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+          className="min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? 'Changing…' : 'Change password'}
         </button>

@@ -1,31 +1,21 @@
 /* Only ever imported from staff/StaffApp.jsx, so it ships in the lazy
-   /staff chunk only — same scoping as staff.css. Default Tailwind, no
-   config file: no custom theme, no custom colors, per the design brief. */
+   /staff chunk only. Tailwind itself has no config file; the BurpnBill brand
+   system rides in as theme tokens (../brand/tokens.css, docs/design.md). */
 @import "tailwindcss";
-
-/* The customer stylesheet gives h1/h2 the Fraunces display face; this
-   dashboard is system-sans throughout (docs/design.md). Tailwind has no
-   font-family utility on those headings to override it with, so reset the
-   family once for the whole subtree instead of remembering `font-sans` on
-   every heading someone adds later. Deliberately family-only and unlayered:
-   `font: inherit` here would also clobber the `text-*`/`font-bold` utilities,
-   since unlayered rules outrank layered ones. */
-.staff-app :is(h1, h2, h3) {
-  font-family: inherit;
-}
+@import "../brand/tokens.css";
 
 /* The checkout receipt. It renders into <body> via a portal rather than from
    inside the checkout <dialog>, because a modal dialog sits in the browser's
    top layer and browsers print that inconsistently. Hidden on screen; on paper
    it is the only thing left. */
-.petuk-print-receipt {
+.bnb-print-receipt {
   display: none;
 }
 @media print {
   body > #root {
     display: none !important;
   }
-  .petuk-print-receipt {
+  .bnb-print-receipt {
     display: block !important;
     font-size: 12pt;
   }

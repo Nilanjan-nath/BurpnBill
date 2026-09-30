@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Coins, LayoutGrid, LogOut, Store, UserCircle } from 'lucide-react';
 import { staffApi, StaffApiError } from './staffApi.js';
 import { CURRENCIES } from './RestaurantProfile.jsx';
+import { AuthShell } from './AuthShell.jsx';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600';
-const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper py-2.5 pl-10 pr-3 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30';
+const LABEL = 'mb-1.5 block text-sm font-bold text-ink-900';
 
 // Where a self-signup lands. Signing up creates a Supabase account and nothing
 // else — an invite is a pre-authorised email, not an account (ARCHITECTURE §6)
@@ -45,11 +46,11 @@ export function CreateCafeScreen({ token, onCreated, onSignOut }) {
   };
 
   return (
-    <div className="staff-app flex min-h-dvh items-center justify-center bg-gray-50 p-6">
-      <form onSubmit={submit} className="w-full max-w-lg overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 bg-gray-50 p-6">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Create your café</h1>
-          <p className="text-sm font-semibold text-gray-600">
+    <AuthShell>
+      <form onSubmit={submit} className="w-full max-w-lg overflow-hidden rounded-card border border-ink-200 bg-paper">
+        <div className="border-b border-ink-200 bg-ink-50 p-6">
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">Create your café</h1>
+          <p className="text-sm font-semibold text-ink-600">
             Your account is ready. Tell us about the café and it's yours — you can change any of this later in
             Settings.
           </p>
@@ -57,7 +58,7 @@ export function CreateCafeScreen({ token, onCreated, onSignOut }) {
 
         {error && (
           <p
-            className="m-6 mb-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800"
+            className="m-6 mb-0 rounded-input border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700"
             role="alert"
           >
             {error}
@@ -106,7 +107,7 @@ export function CreateCafeScreen({ token, onCreated, onSignOut }) {
             </Field>
             </div>
 
-            <p className="text-xs font-semibold text-gray-600">
+            <p className="text-xs font-semibold text-ink-600">
               We'll put them on your floor plan as T1, T2, T3 — drag them into the shape of your room, rename them,
               and print their QR codes from Settings.
             </p>
@@ -125,24 +126,24 @@ export function CreateCafeScreen({ token, onCreated, onSignOut }) {
           </Field>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-t border-ink-200 bg-ink-50 px-6 py-4">
           <button
             type="button"
             onClick={onSignOut}
-            className="flex items-center gap-1.5 text-sm font-bold text-gray-700 hover:text-gray-900"
+            className="flex items-center gap-1.5 text-sm font-bold text-ink-700 hover:text-ink-900"
           >
             <LogOut className="h-4 w-4" aria-hidden="true" /> Sign out
           </button>
           <button
             type="submit"
             disabled={saving || !form.name.trim()}
-            className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+            className="min-h-12 rounded-card bg-brand px-6 text-base font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand active:scale-[0.98] disabled:opacity-50"
           >
             {saving ? 'Creating…' : 'Create café'}
           </button>
         </div>
       </form>
-    </div>
+    </AuthShell>
   );
 }
 
@@ -153,7 +154,7 @@ function Field({ id, label, Icon, children }) {
         {label}
       </label>
       <div className="relative">
-        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
         {children}
       </div>
     </div>

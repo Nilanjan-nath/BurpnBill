@@ -1,0 +1,141 @@
+/* The BurpnBill brand system as Tailwind v4 theme tokens (docs/design.md).
+
+   Imported by staff/tailwind.css and landing/landing-tailwind.css AFTER
+   `@import "tailwindcss"`, and by nothing else — so, like Tailwind itself, it
+   ships in those two lazy chunks only. The customer app (/t/<token>) does not
+   take the brand system and never loads this file.
+
+   Utilities that come out of this file:
+     brand-50…900   crimson. 600 is THE brand colour (#A70045) and the only
+                    primary action colour; `bg-brand` is shorthand for it.
+     butter-50…900  the logo's second colour (#F4F0A9 = 300). Accent and
+                    highlight, never a text colour on white.
+     canvas / paper the page (#FFFCF0) and the surface that sits on it (white).
+     ink-50…900     warm neutrals; replaces Tailwind's cold `gray`.
+     placed / prep / ready / served / cancelled (+ `-ink`)
+                    order-status pairs: `bg-placed text-placed-ink`. Always
+                    used WITH a label — colour is never the only signal.
+     veg / nonveg (+ -ink)  the food-safety marks; see the note in @theme.
+     danger-*       errors and destructive actions. Deliberately not crimson:
+                    the brand says brand and error must never blur.
+     font-display / font-sans / font-mono
+     rounded-input (8) / rounded-card (12), shadow-pop, ease-tap */
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/jetbrains-mono";
+
+@theme {
+  --font-display: 'Bricolage Grotesque Variable', 'Trebuchet MS', sans-serif;
+  --font-sans: 'Manrope Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Crimson — brand & primary action */
+  --color-brand-50: #fff0f5;
+  --color-brand-100: #ffd9e6;
+  --color-brand-200: #ffb3ce;
+  --color-brand-300: #f77ba5;
+  --color-brand-400: #e0407b;
+  --color-brand-500: #c7195f;
+  --color-brand-600: #a70045;
+  --color-brand-700: #8a003a;
+  --color-brand-800: #6b002e;
+  --color-brand-900: #4a0020;
+  --color-brand: var(--color-brand-600);
+
+  /* Butter — accent & highlight */
+  --color-butter-50: #fefce8;
+  --color-butter-100: #fbf8c8;
+  --color-butter-300: #f4f0a9;
+  --color-butter-500: #e3d96a;
+  --color-butter-700: #a89a2a;
+  --color-butter-900: #6e6420;
+
+  /* Ground */
+  --color-canvas: #fffcf0;
+  --color-paper: #ffffff;
+
+  /* Ink — warm neutrals */
+  --color-ink-50: #faf7f8;
+  --color-ink-100: #f3eef0;
+  --color-ink-200: #e4dcdf;
+  --color-ink-300: #c9bec3;
+  --color-ink-400: #9c8e95;
+  --color-ink-500: #7a6a72;
+  --color-ink-600: #5c4c54;
+  --color-ink-700: #43343b;
+  --color-ink-800: #2c1f25;
+  --color-ink-900: #1e1418;
+
+  /* Order status. Background / text pairs, contrast-checked in
+     brand/brand.test.js rather than by eye. */
+  --color-placed: #fff1cc;
+  --color-placed-ink: #8a5a00;
+  --color-prep: #e3edfc;
+  --color-prep-ink: #1d4fa3;
+  --color-ready: #ddf3e5;
+  --color-ready-ink: #16703c;
+  --color-served: #eceef1;
+  --color-served-ink: #525a66;
+  --color-cancelled: #f3eef0;
+  /* The brand sheet gives #7A6A72 here, which measures 4.43:1 on this tint —
+     just under AA for text this small. ink-600 is the same warm ink one step
+     darker (7.6:1) and still reads as muted next to the strikethrough. */
+  --color-cancelled-ink: #5c4c54;
+
+  /* Danger. The brand fixes only the base (#D92D20); the tints and the dark
+     text are its own ramp so a danger banner has the same 50/200/700 recipe
+     as every other coloured banner here. */
+  --color-danger-50: #fef3f2;
+  --color-danger-100: #fee4e2;
+  --color-danger-200: #fecdca;
+  --color-danger-500: #d92d20;
+  --color-danger-600: #c0281c;
+  --color-danger-700: #b42318;
+
+  /* Veg / non-veg marks. Food-safety information, not decoration, so these are
+     the same greens and reds the customer app's VegMark uses — a dish must not
+     look vegetarian on one screen and not on another. */
+  --color-veg: #16a34a;
+  --color-veg-ink: #166534;
+  --color-nonveg: #dc2626;
+  --color-nonveg-ink: #991b1b;
+
+  --radius-input: 8px;
+  --radius-card: 12px;
+
+  /* The one elevation the brand allows: popovers and dialogs. Everything else
+     is a border. */
+  --shadow-pop: 0 8px 24px rgb(30 20 24 / 0.12);
+
+  --ease-tap: cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Type. Headings get the display face; everything else Manrope; prices,
+   table numbers and order ids opt in to `font-mono` so digits align.
+   In `base` (a later layer than styles.css's `petuk-customer`, earlier than
+   utilities) so a `font-*` utility on a heading still wins. */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Light only, for now: neither surface has dark styles yet, and styles.css
+   declares `color-scheme: light dark`, which would dark-theme scrollbars and
+   form controls under a light page. Unlayered and scoped through :has so it can
+   only ever apply while one of these surfaces is mounted — a bare `:root` rule
+   would follow the customer app onto its own route. */
+:root:has(.brand-surface) {
+  color-scheme: light;
+}
+:root:has(.brand-surface) body {
+  background: var(--color-canvas);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+}

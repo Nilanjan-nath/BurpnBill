@@ -6,12 +6,12 @@ import { ImagePlus, Trash2, X } from 'lucide-react';
 // to centre itself. bg/text are explicit for the reason in docs/design.md (a
 // <dialog> with no background falls back to the UA's dark `canvas` colour).
 const PANEL =
-  'm-auto w-[min(32rem,92vw)] rounded-2xl bg-white p-0 text-gray-900 shadow-sm backdrop:bg-gray-900/50';
+  'm-auto w-[min(32rem,92vw)] rounded-card bg-paper p-0 text-ink-900 shadow-pop backdrop:bg-ink-900/50';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600';
-const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper px-3 py-2.5 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30';
+const LABEL = 'mb-1.5 block text-sm font-bold text-ink-900';
 
 const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp'];
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -102,14 +102,14 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
       <form className="max-h-[90dvh] overflow-y-auto p-6" onSubmit={submit}>
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{item ? 'Edit menu item' : 'Add menu item'}</h2>
-            <p className="text-sm font-semibold text-gray-600">What a customer sees when they scan the table.</p>
+            <h2 className="text-xl font-extrabold text-ink-900">{item ? 'Edit menu item' : 'Add menu item'}</h2>
+            <p className="text-sm font-semibold text-ink-600">What a customer sees when they scan the table.</p>
           </div>
           <button
             type="button"
             onClick={() => dialog.current.close()}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -127,12 +127,12 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
             onChange={(e) => pickFile(e.target.files?.[0])}
           />
           {preview ? (
-            <div className="relative overflow-hidden rounded-xl border border-gray-200">
-              <img src={preview} alt="" className="h-40 w-full bg-gray-100 object-cover" />
+            <div className="relative overflow-hidden rounded-card border border-ink-200">
+              <img src={preview} alt="" className="h-40 w-full bg-ink-100 object-cover" />
               <div className="absolute right-2 top-2 flex gap-2">
                 <label
                   htmlFor="item-photo"
-                  className="cursor-pointer rounded-lg bg-white/95 px-3 py-1.5 text-xs font-bold text-gray-800 shadow-sm hover:bg-white"
+                  className="flex min-h-10 cursor-pointer items-center rounded-input bg-white/95 px-3 text-xs font-bold text-ink-800 hover:bg-paper"
                 >
                   Replace
                 </label>
@@ -140,7 +140,7 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
                   type="button"
                   onClick={clearPhoto}
                   aria-label="Remove photo"
-                  className="rounded-lg bg-white/95 p-1.5 text-red-700 shadow-sm hover:bg-white"
+                  className="flex h-10 w-10 items-center justify-center rounded-input bg-white/95 text-danger-700 hover:bg-paper"
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -154,15 +154,15 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
                 e.preventDefault();
                 pickFile(e.dataTransfer.files?.[0]);
               }}
-              className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-7 text-center hover:border-teal-600 hover:bg-teal-50"
+              className="flex cursor-pointer flex-col items-center gap-1 rounded-card border-2 border-dashed border-ink-300 bg-ink-50 px-4 py-7 text-center hover:border-brand hover:bg-brand-50"
             >
-              <ImagePlus className="h-6 w-6 text-gray-400" aria-hidden="true" />
-              <span className="text-sm font-bold text-teal-700">Click to add a photo</span>
-              <span className="text-xs font-semibold text-gray-600">PNG, JPG or WEBP · up to 5MB</span>
+              <ImagePlus className="h-6 w-6 text-ink-500" aria-hidden="true" />
+              <span className="text-sm font-bold text-brand-700">Click to add a photo</span>
+              <span className="text-xs font-semibold text-ink-600">PNG, JPG or WEBP · up to 5MB</span>
             </label>
           )}
           {photoError && (
-            <p className="mt-1.5 text-xs font-bold text-red-700" role="alert">
+            <p className="mt-1.5 text-xs font-bold text-danger-700" role="alert">
               {photoError}
             </p>
           )}
@@ -222,14 +222,14 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
           <legend className={LABEL}>Food type</legend>
           <div className="flex gap-2">
             {[
-              ['veg', 'Veg', 'border-green-600 bg-green-50 text-green-800'],
-              ['nonveg', 'Non-veg', 'border-red-600 bg-red-50 text-red-800'],
-              ['unspecified', 'Not specified', 'border-gray-400 bg-gray-100 text-gray-800'],
+              ['veg', 'Veg', 'border-veg bg-veg/10 text-veg-ink'],
+              ['nonveg', 'Non-veg', 'border-nonveg bg-nonveg/10 text-nonveg-ink'],
+              ['unspecified', 'Not specified', 'border-ink-400 bg-ink-100 text-ink-800'],
             ].map(([value, label, active]) => (
               <label
                 key={value}
-                className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold ${
-                  isVeg === value ? active : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                className={`flex min-h-12 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-input border-2 px-3 text-sm font-bold ${
+                  isVeg === value ? active : 'border-ink-300 bg-paper text-ink-700 hover:bg-ink-50'
                 }`}
               >
                 <input
@@ -241,7 +241,7 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
                   className="sr-only"
                 />
                 {value !== 'unspecified' && (
-                  <span className={`h-2.5 w-2.5 rounded-full ${value === 'veg' ? 'bg-green-600' : 'bg-red-600'}`} aria-hidden="true" />
+                  <span className={`h-2.5 w-2.5 rounded-full ${value === 'veg' ? 'bg-veg' : 'bg-nonveg'}`} aria-hidden="true" />
                 )}
                 {label}
               </label>
@@ -251,7 +251,7 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
 
         <div className="mb-5">
           <label className={LABEL} htmlFor="item-description">
-            Description <span className="font-semibold text-gray-600">(optional)</span>
+            Description <span className="font-semibold text-ink-600">(optional)</span>
           </label>
           <textarea
             id="item-description"
@@ -265,7 +265,7 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
         </div>
 
         {error && (
-          <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800" role="alert">
+          <p className="mb-3 rounded-card border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700" role="alert">
             {error}
           </p>
         )}
@@ -273,7 +273,7 @@ export function ItemForm({ item, categories, busy, error, onSave, onUploadImage,
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-xl bg-teal-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+          className="w-full min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? 'Saving…' : item ? 'Save changes' : 'Create menu item'}
         </button>

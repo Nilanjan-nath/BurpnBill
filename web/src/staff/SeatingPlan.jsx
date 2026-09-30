@@ -15,8 +15,8 @@ import { tableUrl, useQrDataUrls } from './qr.js';
 const IS_LOCAL_ORIGIN = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper px-3 py-2.5 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30';
 
 export function SeatingPlan({ token }) {
   const admin = useTablesAdmin(token);
@@ -29,7 +29,7 @@ export function SeatingPlan({ token }) {
   const qrDataUrls = useQrDataUrls(admin.tables);
 
   if (admin.tables === null && !admin.error) {
-    return <p className="p-10 text-center text-sm font-semibold text-gray-700">Loading the floor…</p>;
+    return <p className="p-10 text-center text-sm font-semibold text-ink-700">Loading the floor…</p>;
   }
 
   const tables = admin.tables ?? [];
@@ -44,7 +44,7 @@ export function SeatingPlan({ token }) {
     <div className="space-y-4">
       {admin.error && (
         <div
-          className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800"
+          className="flex items-center justify-between gap-3 rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700"
           role="alert"
         >
           <span>{admin.error}</span>
@@ -54,9 +54,9 @@ export function SeatingPlan({ token }) {
         </div>
       )}
 
-      <form onSubmit={add} className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-4 print:hidden">
+      <form onSubmit={add} className="flex flex-wrap items-end gap-3 rounded-card border border-ink-200 bg-paper p-4 print:hidden">
         <div className="min-w-[12rem] flex-1">
-          <label className="mb-1.5 block text-sm font-bold text-gray-900" htmlFor="new-table-label">
+          <label className="mb-1.5 block text-sm font-bold text-ink-900" htmlFor="new-table-label">
             Table name
           </label>
           <input
@@ -71,7 +71,7 @@ export function SeatingPlan({ token }) {
           />
         </div>
         <div className="w-28">
-          <label className="mb-1.5 block text-sm font-bold text-gray-900" htmlFor="new-table-seats">
+          <label className="mb-1.5 block text-sm font-bold text-ink-900" htmlFor="new-table-seats">
             Capacity
           </label>
           <input
@@ -87,17 +87,17 @@ export function SeatingPlan({ token }) {
         <button
           type="submit"
           disabled={admin.creating || label.trim() === ''}
-          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+          className="flex items-center gap-1.5 min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
         >
           <Plus className="h-4 w-4" aria-hidden="true" /> {admin.creating ? 'Adding…' : 'Add table'}
         </button>
       </form>
 
-      <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4 print:hidden">
+      <div className="space-y-3 rounded-card border border-ink-200 bg-paper p-4 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Floor plan</h3>
-            <p className="text-sm font-semibold text-gray-600">
+            <h3 className="text-lg font-bold text-ink-900">Floor plan</h3>
+            <p className="text-sm font-semibold text-ink-600">
               Drag a table to move it, or focus one and use the arrow keys. {tables.length}{' '}
               {tables.length === 1 ? 'table' : 'tables'}
               {paused > 0 && ` · ${paused} paused`}
@@ -106,7 +106,7 @@ export function SeatingPlan({ token }) {
           <button
             type="button"
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            className="flex items-center gap-1.5 min-h-12 rounded-card border-2 border-ink-300 px-4 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
           >
             <Printer className="h-4 w-4" aria-hidden="true" /> Print QR sheet
           </button>
@@ -127,39 +127,39 @@ export function SeatingPlan({ token }) {
           so a sheet printed from localhost is a page of dead links. Worth
           saying before someone prints twenty of them. */}
       {tables.length > 0 && IS_LOCAL_ORIGIN && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 print:hidden">
+        <p className="rounded-card border border-butter-500 bg-butter-100 px-4 py-2.5 text-sm font-semibold text-placed-ink print:hidden">
           These codes point at <code className="font-bold">{window.location.origin}</code>, which a phone can't open. Open this
           page on the café's network address before printing them.
         </p>
       )}
 
       {tables.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center print:hidden">
-          <Table2 className="mx-auto mb-2 h-8 w-8 text-gray-400" aria-hidden="true" />
-          <p className="text-sm font-bold text-gray-900">No tables yet</p>
-          <p className="text-sm font-semibold text-gray-600">
+        <div className="rounded-card border border-dashed border-ink-300 bg-paper p-10 text-center print:hidden">
+          <Table2 className="mx-auto mb-2 h-8 w-8 text-ink-500" aria-hidden="true" />
+          <p className="text-sm font-bold text-ink-900">No tables yet</p>
+          <p className="text-sm font-semibold text-ink-600">
             Each table gets its own QR code. That code is how an order knows which table it came from.
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white print:hidden">
+        <div className="overflow-hidden rounded-card border border-ink-200 bg-paper print:hidden">
           <table className="w-full">
             <caption className="sr-only">Tables, their capacity and their QR codes</caption>
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-left">
-                <th scope="col" className="px-4 py-3 text-sm font-bold text-gray-900">
+              <tr className="border-b border-ink-200 bg-ink-50 text-left">
+                <th scope="col" className="px-4 py-3 text-sm font-bold text-ink-900">
                   Table
                 </th>
-                <th scope="col" className="px-4 py-3 text-sm font-bold text-gray-900">
+                <th scope="col" className="px-4 py-3 text-sm font-bold text-ink-900">
                   Capacity
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-ink-900">
                   Ordering
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-ink-900">
                   QR
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-ink-900">
                   Remove
                 </th>
               </tr>
@@ -238,7 +238,7 @@ function TableRow({
     // Selecting links the two halves of this screen: pick a table on the plan
     // and its row lights up, and the other way round. Without it, finding
     // "the one in the far corner" in a list of twenty is a guessing game.
-    <tr className={`border-b border-gray-200 last:border-b-0 ${selected ? 'bg-teal-50' : ''}`}>
+    <tr className={`border-b border-ink-200 last:border-b-0 ${selected ? 'bg-brand-50' : ''}`}>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5">
           <button
@@ -246,7 +246,7 @@ function TableRow({
             onClick={onSelect}
             aria-pressed={selected}
             aria-label={`Find ${table.label} on the plan`}
-            className="rounded text-sm font-bold text-gray-900 hover:text-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+            className="rounded text-sm font-bold text-ink-900 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             {table.label}
           </button>
@@ -254,12 +254,12 @@ function TableRow({
             type="button"
             onClick={onRename}
             aria-label={`Edit ${table.label}`}
-            className="rounded-lg p-1 text-gray-600 hover:bg-gray-100 hover:text-teal-700"
+            className="flex h-9 w-9 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100 hover:text-brand-700"
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
-        {!table.is_active && <div className="text-xs font-bold text-gray-600">Paused</div>}
+        {!table.is_active && <div className="text-xs font-bold text-ink-600">Paused</div>}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
@@ -268,17 +268,17 @@ function TableRow({
             disabled={busy || seats <= 1}
             onClick={() => onSeats(seats - 1)}
             aria-label={`Fewer seats at ${table.label}`}
-            className="rounded-lg border border-gray-300 p-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="flex h-9 w-9 items-center justify-center rounded-input border border-ink-300 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
           >
             <Minus className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-          <span className="min-w-[1.5rem] text-center text-sm font-bold text-gray-900">{table.seats ?? '—'}</span>
+          <span className="min-w-[1.5rem] text-center font-mono text-sm font-bold text-ink-900">{table.seats ?? '—'}</span>
           <button
             type="button"
             disabled={busy || seats >= 99}
             onClick={() => onSeats(seats + 1)}
             aria-label={`More seats at ${table.label}`}
-            className="rounded-lg border border-gray-300 p-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="flex h-9 w-9 items-center justify-center rounded-input border border-ink-300 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
@@ -290,7 +290,7 @@ function TableRow({
           disabled={busy}
           onClick={onTogglePause}
           aria-label={table.is_active ? `Pause ${table.label}` : `Resume ${table.label}`}
-          className="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="ml-auto flex items-center gap-1.5 rounded-input border border-ink-300 px-3 py-1.5 text-xs font-bold text-ink-700 hover:bg-ink-50 disabled:opacity-50"
         >
           {table.is_active ? <Pause className="h-3.5 w-3.5" aria-hidden="true" /> : <Play className="h-3.5 w-3.5" aria-hidden="true" />}
           {table.is_active ? 'Pause' : 'Resume'}
@@ -301,7 +301,7 @@ function TableRow({
           type="button"
           onClick={onShowQr}
           aria-label={`Show the QR code for ${table.label}`}
-          className="ml-auto flex items-center gap-1.5 rounded-lg p-2 text-sm font-bold text-teal-700 hover:bg-teal-50"
+          className="ml-auto flex min-h-10 items-center gap-1.5 rounded-input px-2 text-sm font-bold text-brand-700 hover:bg-brand-50"
         >
           <QrCode className="h-4 w-4" aria-hidden="true" /> QR
         </button>
@@ -310,11 +310,11 @@ function TableRow({
         {confirming ? (
           <div className="flex items-center justify-end gap-2">
             {/* Says what actually happens: the table goes, its orders stay. */}
-            <span className="text-xs font-bold text-gray-900">Remove {table.label}? Its past orders stay.</span>
+            <span className="text-xs font-bold text-ink-900">Remove {table.label}? Its past orders stay.</span>
             <button
               type="button"
               onClick={onCancelRetire}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-800 hover:bg-gray-50"
+              className="min-h-10 rounded-input border-2 border-ink-300 px-3 text-sm font-bold text-ink-800 hover:bg-ink-50"
             >
               Keep
             </button>
@@ -322,7 +322,7 @@ function TableRow({
               type="button"
               disabled={busy}
               onClick={onRetire}
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              className="min-h-10 rounded-input bg-danger-500 px-3 text-sm font-bold text-white hover:bg-danger-600 disabled:opacity-50"
             >
               Remove
             </button>
@@ -332,7 +332,7 @@ function TableRow({
             type="button"
             onClick={onAskRetire}
             aria-label={`Remove ${table.label}`}
-            className="ml-auto flex rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-red-700"
+            className="ml-auto flex h-10 w-10 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100 hover:text-danger-700"
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
           </button>

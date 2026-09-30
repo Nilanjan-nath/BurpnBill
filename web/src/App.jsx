@@ -33,7 +33,7 @@ export default function App() {
     // customer arrives at /t/<token> with their camera. So / is the landing
     // page now; the line the customer used to get lives in its footer.
     return (
-      <Suspense fallback={<Message title="Petuk">One moment.</Message>}>
+      <Suspense fallback={<Message title="BurpnBill">One moment.</Message>}>
         <LandingPage />
       </Suspense>
     );

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { primeAudio, chime } from './chime.js';
 
-const BASE_TITLE = 'Petuk staff — Order board';
+const BASE_TITLE = 'BurpnBill staff — Order board';
 const FLASH_MS = 1000;
 
 // New-order alerts: a sound (once armed by a click — see chime.js for why)

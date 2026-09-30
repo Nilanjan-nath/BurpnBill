@@ -25,6 +25,7 @@ import {
   SeatingPlanMock,
   DashboardMock,
 } from './ProductMockups.jsx';
+import { Logo } from '../brand/Logo.jsx';
 import { useReveal } from './useReveal.js';
 import './landing-tailwind.css';
 
@@ -32,10 +33,12 @@ import './landing-tailwind.css';
 // code downloads neither this nor the dashboard — verified in a production
 // build, where this is its own chunk.
 //
-// It is a B2B page and wears the DASHBOARD's language, not the customer app's:
-// white, charcoal, one teal accent held back for the things you can act on. The
-// reader is a café owner deciding whether to trust this with their service, and
-// the calm version of that page is the persuasive one.
+// It is a B2B page and wears the BURPNBILL brand system (docs/design.md), the
+// same one as the dashboard, not the customer app's: cream canvas, white
+// cards, warm ink, and crimson held for the things you can act on. The hero is
+// the one place the brand goes loud — a full crimson band, the way the brand
+// system's own cover does it. The reader is a café owner deciding whether to
+// trust this with their service, so everything below the hero stays calm.
 //
 // What is deliberately NOT here, and what a test will fail over if it comes
 // back: a "trusted by N cafés" count, years in business, an uptime figure,
@@ -209,7 +212,7 @@ function PrimaryCta({ children, className = '' }) {
   return (
     <a
       href={CTA}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-teal-700 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 active:scale-[0.98] ${className}`}
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-card bg-brand px-6 py-3 text-base font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand active:scale-[0.98] ${className}`}
     >
       {children}
     </a>
@@ -217,13 +220,17 @@ function PrimaryCta({ children, className = '' }) {
 }
 
 function Eyebrow({ children }) {
-  return <p className="text-sm font-semibold uppercase tracking-wider text-teal-700">{children}</p>;
+  return <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-brand">{children}</p>;
 }
 
 export default function LandingPage() {
   // The bar earns its border only once you have left the top, so the hero opens
   // without a line ruled across it.
   const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    // index.html's title belongs to the customer app, which shares the shell.
+    document.title = 'BurpnBill — the table, the till and the kitchen';
+  }, []);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
@@ -232,25 +239,19 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="lp min-h-dvh bg-white text-gray-900 antialiased">
+    <div className="lp brand-surface min-h-dvh bg-canvas text-ink-900 antialiased">
       <header
         className={`sticky top-0 z-30 transition-colors duration-200 ${
-          scrolled ? 'border-b border-gray-200 bg-white/85 backdrop-blur' : 'border-b border-transparent bg-white'
+          scrolled ? 'border-b border-ink-200 bg-canvas/90 backdrop-blur' : 'border-b border-transparent bg-canvas'
         }`}
       >
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3.5 sm:px-8">
-          <a href="#top" className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-gray-900">
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 text-sm font-bold text-white"
-              aria-hidden="true"
-            >
-              P
-            </span>
-            Petuk
+          <a href="#top" aria-label="BurpnBill, back to the top" className="flex-none">
+            <Logo variant="white" width={112} />
           </a>
           <nav className="ml-4 hidden items-center gap-6 md:flex" aria-label="Sections">
             {NAV.map(([href, label]) => (
-              <a key={href} href={href} className="text-sm font-semibold text-gray-600 transition-colors hover:text-gray-900">
+              <a key={href} href={href} className="text-sm font-bold text-ink-600 transition-colors hover:text-ink-900">
                 {label}
               </a>
             ))}
@@ -258,13 +259,13 @@ export default function LandingPage() {
           <div className="ml-auto flex items-center gap-1 sm:gap-3">
             <a
               href={CTA}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:text-gray-900"
+              className="rounded-input px-3 py-2 text-sm font-bold text-ink-700 transition-colors hover:text-ink-900"
             >
               Sign in
             </a>
             <a
               href={CTA}
-              className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700 hover:shadow-md active:scale-[0.98]"
+              className="rounded-card bg-brand px-4 py-2.5 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98]"
             >
               Start free
             </a>
@@ -274,41 +275,42 @@ export default function LandingPage() {
 
       <main id="top">
         {/* Hero ------------------------------------------------------------ */}
-        <div className="relative overflow-hidden">
-          {/* Understated and behind everything: one soft wash, so the hero is
-              not a flat white rectangle. */}
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-gradient-to-b from-teal-50 via-white to-white"
-            aria-hidden="true"
-          />
+        {/* The brand cover: a full crimson band with the 32px grid laid faintly
+            over it. Text on it is white or butter only. */}
+        <div
+          className="relative overflow-hidden bg-brand text-white [background-image:linear-gradient(rgba(255,255,255,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.07)_1px,transparent_1px)] [background-size:32px_32px]"
+        >
           <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-14 sm:px-8 sm:pb-24 sm:pt-20">
             <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr]">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white px-3 py-1 text-xs font-semibold text-teal-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-teal-500" aria-hidden="true" />
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-bold text-white">
+                  <span className="h-1.5 w-1.5 rounded-full bg-butter-300" aria-hidden="true" />
                   The table, the till and the kitchen, in one tool for cafés
                 </span>
-                <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
+                <h1 className="mt-5 text-4xl font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
                   Your staff can’t reach every table at 7pm.
-                  <span className="block text-teal-700">The tables can order themselves.</span>
+                  <span className="block text-butter-300">The tables can order themselves.</span>
                 </h1>
-                <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-600">
+                <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/90">
                   Put a QR code on every table. Customers read your live menu and order from their own phone. The
                   order waits at your counter for you to accept, then goes straight to the kitchen board — and you
                   take the money the way you always have.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center gap-3">
-                  <PrimaryCta>
+                  <a
+                    href={CTA}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-card bg-butter-300 px-6 py-3 text-base font-bold text-ink-900 transition duration-150 ease-tap hover:bg-butter-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98]"
+                  >
                     Start free <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </PrimaryCta>
+                  </a>
                   <a
                     href="#how"
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-5 py-3.5 text-base font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 active:scale-[0.98]"
+                    className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-card border-2 border-white/70 px-5 py-3 text-base font-bold text-white transition duration-150 ease-tap hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98]"
                   >
                     See how it works
                   </a>
                 </div>
-                <p className="mt-5 text-sm font-medium text-gray-500">
+                <p className="mt-5 text-sm font-semibold text-white/90">
                   Free for 14 days. No card, no commission, no payment gateway to sign up for.
                 </p>
               </div>
@@ -322,46 +324,46 @@ export default function LandingPage() {
 
         {/* An honest strip. One café is live and it is the owner's own, so it
             says that rather than inventing a wall of logos. ---------------- */}
-        <div className="border-y border-gray-200 bg-gray-50">
+        <div className="border-b border-ink-200 bg-paper">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-3 px-5 py-5 text-center sm:px-8">
-            <p className="text-sm font-semibold text-gray-600">Built in Tripura, for cafés in towns like it</p>
-            <span className="hidden h-4 w-px bg-gray-300 sm:block" aria-hidden="true" />
-            <p className="text-sm font-semibold text-gray-600">Running live in its first café</p>
-            <span className="hidden h-4 w-px bg-gray-300 sm:block" aria-hidden="true" />
-            <p className="text-sm font-semibold text-gray-600">Built with owners, not for a pitch deck</p>
+            <p className="text-sm font-bold text-ink-600">Built in Tripura, for cafés in towns like it</p>
+            <span className="hidden h-4 w-px bg-ink-300 sm:block" aria-hidden="true" />
+            <p className="text-sm font-bold text-ink-600">Running live in its first café</p>
+            <span className="hidden h-4 w-px bg-ink-300 sm:block" aria-hidden="true" />
+            <p className="text-sm font-bold text-ink-600">Built with owners, not for a pitch deck</p>
           </div>
         </div>
 
         {/* Problems -------------------------------------------------------- */}
         <Reveal className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
           <Eyebrow>The actual problem</Eyebrow>
-          <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight text-ink-900 sm:text-4xl">
             Service doesn’t break because of software. It breaks because nobody could get to table nine.
           </h2>
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {PAINS.map(({ Icon, title, body }) => (
               <div
                 key={title}
-                className="rounded-2xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-md"
+                className="rounded-card border border-ink-200 bg-paper p-6 transition hover:border-ink-300"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                <span className="flex h-10 w-10 items-center justify-center rounded-card bg-brand-50 text-brand">
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <h3 className="mt-4 text-base font-bold text-gray-900">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600">{body}</p>
+                <h3 className="mt-4 text-base font-bold text-ink-900">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-600">{body}</p>
               </div>
             ))}
           </div>
         </Reveal>
 
         {/* Features -------------------------------------------------------- */}
-        <div id="features" className="border-t border-gray-200 bg-gray-50">
+        <div id="features" className="border-t border-ink-200 bg-paper">
           <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
             <Eyebrow>What you get</Eyebrow>
-            <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight text-ink-900 sm:text-4xl">
               One tool for the table, the till and the kitchen
             </h2>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-gray-600">
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-600">
               QR ordering is where it starts, not where it stops. The same system rings up walk-ins at the counter,
               runs the kitchen board, holds your floor plan, and adds up the day.
             </p>
@@ -371,12 +373,12 @@ export default function LandingPage() {
                 <Reveal key={title} className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
                   <div className={i % 2 === 1 ? 'lg:order-2' : ''}>
                     <Eyebrow>{eyebrow}</Eyebrow>
-                    <h3 className="mt-3 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">{title}</h3>
-                    <p className="mt-4 text-base leading-relaxed text-gray-600">{body}</p>
+                    <h3 className="mt-3 text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">{title}</h3>
+                    <p className="mt-4 text-base leading-relaxed text-ink-600">{body}</p>
                     <ul className="mt-6 space-y-3">
                       {points.map((point) => (
-                        <li key={point} className="flex items-start gap-3 text-sm font-medium text-gray-700">
-                          <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-teal-50 text-teal-700">
+                        <li key={point} className="flex items-start gap-3 text-sm font-medium text-ink-700">
+                          <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-brand-50 text-brand">
                             <Check className="h-3 w-3" aria-hidden="true" />
                           </span>
                           {point}
@@ -393,12 +395,12 @@ export default function LandingPage() {
 
             <div className="mt-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {ALSO.map(({ Icon, title, body }) => (
-                <div key={title} className="rounded-2xl border border-gray-200 bg-white p-5">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+                <div key={title} className="rounded-card border border-ink-200 bg-canvas p-5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-input bg-brand-50 text-brand">
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </span>
-                  <h3 className="mt-3 text-sm font-bold text-gray-900">{title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{body}</p>
+                  <h3 className="mt-3 text-sm font-bold text-ink-900">{title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-600">{body}</p>
                 </div>
               ))}
             </div>
@@ -408,54 +410,54 @@ export default function LandingPage() {
         {/* How it works ---------------------------------------------------- */}
         <Reveal id="how" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
           <Eyebrow>How it works</Eyebrow>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-ink-900 sm:text-4xl">
             Four steps, and one of them is you
           </h2>
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map(({ Icon, title, body }, i) => (
-              <div key={title} className="rounded-2xl border border-gray-200 bg-white p-6">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-600 text-white">
+              <div key={title} className="rounded-card border border-ink-200 bg-paper p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-card bg-brand text-white">
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <p className="mt-4 text-xs font-bold uppercase tracking-wider text-gray-400">Step {i + 1}</p>
-                <h3 className="mt-1 text-lg font-bold text-gray-900">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600">{body}</p>
+                <p className="mt-4 text-xs font-bold uppercase tracking-wider text-ink-500">Step {i + 1}</p>
+                <h3 className="mt-1 text-lg font-bold text-ink-900">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-600">{body}</p>
               </div>
             ))}
           </div>
-          <p className="mt-8 rounded-xl border border-teal-200 bg-teal-50 px-5 py-4 text-sm font-semibold text-teal-900">
+          <p className="mt-8 rounded-card border border-butter-500 bg-butter-100 px-5 py-4 text-sm font-semibold text-ink-900">
             Step three is the one most systems skip. A QR code can be scanned by anyone who kept the link, so nothing
             reaches your kitchen until someone behind the counter says yes.
           </p>
         </Reveal>
 
         {/* Pricing --------------------------------------------------------- */}
-        <div id="pricing" className="border-t border-gray-200 bg-gray-50">
+        <div id="pricing" className="border-t border-ink-200 bg-paper">
           <Reveal className="mx-auto max-w-4xl px-5 py-20 sm:px-8 sm:py-24">
             <div className="text-center">
               <Eyebrow>Pricing</Eyebrow>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-ink-900 sm:text-4xl">
                 Try it in your café before you decide
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-gray-600">
+              <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink-600">
                 Everything is switched on from the first day, and there’s no card to enter. We haven’t set a price
                 yet, and we would rather work it out with the first cafés than guess — you’ll hear what it is from
                 us, before it costs you anything.
               </p>
             </div>
-            <div className="mt-10 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-              <div className="border-b border-gray-200 p-8 text-center">
-                <p className="text-sm font-semibold text-gray-600">Everything, for every café</p>
-                <p className="mt-2 text-5xl font-bold tracking-tight text-gray-900">14 days</p>
-                <p className="mt-2 text-sm font-medium text-gray-500">free, nothing held back</p>
+            <div className="mt-10 overflow-hidden rounded-card border border-ink-200 bg-canvas">
+              <div className="border-b border-ink-200 p-8 text-center">
+                <p className="text-sm font-semibold text-ink-600">Everything, for every café</p>
+                <p className="mt-2 font-display text-5xl font-extrabold tracking-tight text-ink-900">14 days</p>
+                <p className="mt-2 text-sm font-medium text-ink-500">free, nothing held back</p>
                 <PrimaryCta className="mt-6">
                   Create your café <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </PrimaryCta>
               </div>
               <ul className="grid gap-3 p-8 sm:grid-cols-2">
                 {INCLUDED.map((item) => (
-                  <li key={item} className="flex items-start gap-3 text-sm font-medium text-gray-700">
-                    <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-teal-50 text-teal-700">
+                  <li key={item} className="flex items-start gap-3 text-sm font-medium text-ink-700">
+                    <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-brand-50 text-brand">
                       <Check className="h-3 w-3" aria-hidden="true" />
                     </span>
                     {item}
@@ -469,32 +471,33 @@ export default function LandingPage() {
         {/* What it doesn't do ---------------------------------------------- */}
         <Reveal id="limits" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
           <Eyebrow>What it doesn’t do</Eyebrow>
-          <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight text-ink-900 sm:text-4xl">
             The short list, before you find out on a Saturday
           </h2>
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
             {LIMITS.map(([title, body]) => (
-              <div key={title} className="rounded-2xl border border-gray-200 bg-white p-6">
-                <h3 className="text-base font-bold text-gray-900">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600">{body}</p>
+              <div key={title} className="rounded-card border border-ink-200 bg-paper p-6">
+                <h3 className="text-base font-bold text-ink-900">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-600">{body}</p>
               </div>
             ))}
           </div>
         </Reveal>
 
         {/* Final CTA ------------------------------------------------------- */}
-        <div className="bg-gray-900">
+        <div className="bg-ink-900">
           <Reveal className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 sm:py-24">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <Logo variant="ink" width={144} className="mx-auto mb-8" />
+            <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
               Set it up before tomorrow’s lunch
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-gray-300">
+            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink-300">
               Make an account, tell us your café’s name and how many tables you have, and they’ll be waiting on your
               floor plan. Add your menu, print the codes, start taking orders.
             </p>
             <a
               href={CTA}
-              className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-base font-semibold text-gray-900 shadow-sm transition hover:bg-gray-100 active:scale-[0.98]"
+              className="mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-card bg-butter-300 px-6 py-3 text-base font-bold text-ink-900 transition duration-150 ease-tap hover:bg-butter-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-butter-300 active:scale-[0.98]"
             >
               Create your café <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </a>
@@ -502,35 +505,27 @@ export default function LandingPage() {
         </div>
       </main>
 
-      <footer className="border-t border-gray-200 bg-white">
+      <footer className="border-t border-ink-200 bg-paper">
         <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-6">
-            <div className="flex items-center gap-2.5 text-base font-bold text-gray-900">
-              <span
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-xs font-bold text-white"
-                aria-hidden="true"
-              >
-                P
-              </span>
-              Petuk
-            </div>
+            <Logo variant="white" width={104} />
             <nav className="flex flex-wrap gap-x-6 gap-y-2" aria-label="Footer">
               {[...NAV, [CTA, 'Sign in']].map(([href, label]) => (
                 <a
                   key={label}
                   href={href}
-                  className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900"
+                  className="text-sm font-medium text-ink-600 transition-colors hover:text-ink-900"
                 >
                   {label}
                 </a>
               ))}
             </nav>
           </div>
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-6">
-            <p className="text-sm text-gray-500">QR table ordering for cafés and small restaurants.</p>
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-ink-200 pt-6">
+            <p className="text-sm text-ink-500">QR table ordering for cafés and small restaurants.</p>
             {/* This page took over the address that used to tell a customer what
                 to do, so the line they needed keeps a home down here. */}
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-ink-500">
               Sitting in a café? Point your phone’s camera at the QR code on your table — nothing to install.
             </p>
           </div>

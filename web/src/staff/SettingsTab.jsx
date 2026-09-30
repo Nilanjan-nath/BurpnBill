@@ -24,15 +24,15 @@ export function SettingsTab({ token, identity, auth, onIdentityChange }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-6">
       <div className="mx-auto max-w-4xl space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 print:hidden">
-          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Settings</h2>
-          <p className="text-sm font-semibold text-gray-600">
+        <div className="rounded-card border border-ink-200 bg-paper p-6 print:hidden">
+          <h2 className="text-2xl font-extrabold tracking-tight text-ink-900">Settings</h2>
+          <p className="text-sm font-semibold text-ink-600">
             {isOwner ? 'Your café’s details, its tables, and your own account.' : 'Your own account.'}
           </p>
         </div>
 
         {views.length > 1 && (
-          <div className="flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1 print:hidden" role="tablist">
+          <div className="flex flex-wrap gap-1 rounded-card bg-ink-100 p-1 print:hidden" role="tablist">
             {views.map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -40,8 +40,8 @@ export function SettingsTab({ token, identity, auth, onIdentityChange }) {
                 role="tab"
                 aria-selected={view === id}
                 onClick={() => setView(id)}
-                className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold ${
-                  view === id ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-700 hover:bg-white'
+                className={`flex min-h-10 items-center gap-1.5 rounded-input px-4 text-sm font-bold transition-colors duration-150 ease-tap ${
+                  view === id ? 'bg-brand text-white' : 'text-ink-700 hover:bg-paper'
                 }`}
               >
                 <Icon className="h-4 w-4" aria-hidden="true" /> {label}

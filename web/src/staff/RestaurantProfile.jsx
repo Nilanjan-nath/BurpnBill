@@ -3,10 +3,10 @@ import { Check, Coins, ConciergeBell, MapPin, Phone, Save, Store } from 'lucide-
 import { useRestaurantProfile } from './useRestaurantProfile.js';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 ' +
-  'disabled:bg-gray-50 disabled:text-gray-700';
-const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper py-2.5 pl-10 pr-3 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 ' +
+  'disabled:bg-ink-50 disabled:text-ink-700';
+const LABEL = 'mb-1.5 block text-sm font-bold text-ink-900';
 
 // The currencies this is plausibly used in. The column takes any ISO 4217
 // code, so this list is a convenience rather than a constraint — it exists so
@@ -42,7 +42,7 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
   }, [profile.restaurant, form]);
 
   if (profile.restaurant === null && !profile.error) {
-    return <p className="p-10 text-center text-sm font-semibold text-gray-700">Loading the profile…</p>;
+    return <p className="p-10 text-center text-sm font-semibold text-ink-700">Loading the profile…</p>;
   }
   if (!form) return null;
 
@@ -76,16 +76,16 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
     form.service_mode !== profile.restaurant.service_mode;
 
   return (
-    <form onSubmit={submit} className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-      <div className="border-b border-gray-200 bg-gray-50 p-6">
-        <h3 className="text-lg font-bold text-gray-900">Business identity</h3>
-        <p className="text-sm font-semibold text-gray-600">
+    <form onSubmit={submit} className="overflow-hidden rounded-card border border-ink-200 bg-paper">
+      <div className="border-b border-ink-200 bg-ink-50 p-6">
+        <h3 className="text-lg font-bold text-ink-900">Business identity</h3>
+        <p className="text-sm font-semibold text-ink-600">
           What a customer sees when they scan a table, and what goes on their bill.
         </p>
       </div>
 
       {profile.error && (
-        <p className="m-6 mb-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800" role="alert">
+        <p className="m-6 mb-0 rounded-card border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700" role="alert">
           {profile.error}
         </p>
       )}
@@ -149,29 +149,29 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
               <option value="counter">Collected at the counter</option>
             </select>
           </Field>
-          <p className="mt-1.5 text-xs font-semibold text-gray-600">
+          <p className="mt-1.5 text-xs font-semibold text-ink-600">
             Decides what a customer's phone says when their order is ready — "on its way to your table" or "please
             collect it from the counter". Pick the one that is true; a promise nobody keeps is worse than none.
           </p>
         </div>
 
-        <p className="text-xs font-semibold text-gray-600">
+        <p className="text-xs font-semibold text-ink-600">
           The currency changes how every price is shown, here and on the customer's menu. It does not convert any
           price you have already set.
         </p>
       </div>
 
       {isOwner && (
-        <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-ink-200 bg-ink-50 px-6 py-4">
           {profile.savedAt && !changed && (
-            <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-700">
+            <span className="flex items-center gap-1.5 text-sm font-bold text-ready-ink">
               <Check className="h-4 w-4" aria-hidden="true" /> Saved
             </span>
           )}
           <button
             type="submit"
             disabled={profile.saving || !changed}
-            className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
           >
             <Save className="h-4 w-4" aria-hidden="true" />
             {profile.saving ? 'Saving…' : 'Save profile'}
@@ -189,7 +189,7 @@ function Field({ id, label, Icon, children }) {
         {label}
       </label>
       <div className="relative">
-        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
         {children}
       </div>
     </div>

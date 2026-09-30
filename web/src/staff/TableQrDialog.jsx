@@ -5,7 +5,7 @@ import { tableUrl } from './qr.js';
 // Same two traps as every other dialog here: m-auto, because Tailwind's
 // preflight kills the margin a modal <dialog> centres itself with, and an
 // explicit bg/text so it can't fall back to the UA's dark canvas colour.
-const PANEL = 'm-auto w-[min(26rem,92vw)] rounded-2xl bg-white p-0 text-gray-900 shadow-sm backdrop:bg-gray-900/50';
+const PANEL = 'm-auto w-[min(26rem,92vw)] rounded-card bg-paper p-0 text-ink-900 shadow-pop backdrop:bg-ink-900/50';
 
 // One table's code, big enough to check by eye before it goes on a table, and
 // downloadable in both the format that prints and the format that pastes.
@@ -42,8 +42,8 @@ export function TableQrDialog({ table, dataUrl, onClose }) {
       <div className="p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{table.label}</h2>
-            <p className="text-sm font-semibold text-gray-600">
+            <h2 className="text-xl font-extrabold text-ink-900">{table.label}</h2>
+            <p className="text-sm font-semibold text-ink-600">
               {table.seats != null ? `${table.seats} seats · ` : ''}Stick this on the table.
             </p>
           </div>
@@ -51,7 +51,7 @@ export function TableQrDialog({ table, dataUrl, onClose }) {
             type="button"
             onClick={() => dialog.current.close()}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -61,10 +61,10 @@ export function TableQrDialog({ table, dataUrl, onClose }) {
           <img src={dataUrl} alt={`QR code for table ${table.label}`} className="mx-auto mb-3 h-auto w-full max-w-[16rem]" />
         )}
 
-        <p className="mb-4 break-all rounded-xl bg-gray-50 px-3 py-2 text-center text-xs font-semibold text-gray-700">{url}</p>
+        <p className="mb-4 break-all rounded-input bg-ink-50 px-3 py-2 text-center font-mono text-xs font-semibold text-ink-700">{url}</p>
 
         {pngError && (
-          <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900" role="alert">
+          <p className="mb-3 rounded-input border border-butter-500 bg-butter-100 px-3 py-2 text-sm font-semibold text-ink-900" role="alert">
             {pngError}
           </p>
         )}
@@ -73,19 +73,19 @@ export function TableQrDialog({ table, dataUrl, onClose }) {
           <a
             href={dataUrl ?? '#'}
             download={svgName}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+            className="flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98]"
           >
             <Download className="h-4 w-4" aria-hidden="true" /> Download SVG
           </a>
           <button
             type="button"
             onClick={downloadPng}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            className="flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-card border-2 border-ink-300 px-4 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
           >
             <Download className="h-4 w-4" aria-hidden="true" /> Download PNG
           </button>
         </div>
-        <p className="mt-2 text-center text-xs font-semibold text-gray-600">SVG prints sharp at any size; PNG pastes anywhere.</p>
+        <p className="mt-2 text-center text-xs font-semibold text-ink-600">SVG prints sharp at any size; PNG pastes anywhere.</p>
       </div>
     </dialog>
   );

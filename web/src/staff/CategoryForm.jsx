@@ -4,12 +4,12 @@ import { X } from 'lucide-react';
 // Same two traps as every other dialog here: m-auto, because Tailwind's
 // preflight kills the margin a modal <dialog> centres itself with, and an
 // explicit bg/text so it can't fall back to the UA's dark canvas colour.
-const PANEL = 'm-auto w-[min(26rem,92vw)] rounded-2xl bg-white p-0 text-gray-900 shadow-sm backdrop:bg-gray-900/50';
+const PANEL = 'm-auto w-[min(26rem,92vw)] rounded-card bg-paper p-0 text-ink-900 shadow-pop backdrop:bg-ink-900/50';
 
 const FIELD =
-  'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 ' +
-  'placeholder:font-normal placeholder:text-gray-500 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600';
-const LABEL = 'mb-1.5 block text-sm font-bold text-gray-900';
+  'min-h-12 w-full rounded-input border border-ink-300 bg-paper px-3 py-2.5 text-base font-semibold text-ink-900 ' +
+  'placeholder:font-normal placeholder:text-ink-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30';
+const LABEL = 'mb-1.5 block text-sm font-bold text-ink-900';
 
 export function CategoryForm({ category, busy, error, onSave, onClose }) {
   const dialog = useRef(null);
@@ -41,14 +41,14 @@ export function CategoryForm({ category, busy, error, onSave, onClose }) {
       <form className="p-6" onSubmit={submit}>
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{category ? 'Edit category' : 'Add category'}</h2>
-            <p className="text-sm font-semibold text-gray-600">A section of the menu, in the order you want it read.</p>
+            <h2 className="text-xl font-extrabold text-ink-900">{category ? 'Edit category' : 'Add category'}</h2>
+            <p className="text-sm font-semibold text-ink-600">A section of the menu, in the order you want it read.</p>
           </div>
           <button
             type="button"
             onClick={() => dialog.current.close()}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -85,11 +85,11 @@ export function CategoryForm({ category, busy, error, onSave, onClose }) {
             placeholder={category ? undefined : 'Last on the menu'}
             className={FIELD}
           />
-          <p className="mt-1.5 text-xs font-semibold text-gray-600">Lower numbers come first on the customer's menu.</p>
+          <p className="mt-1.5 text-xs font-semibold text-ink-600">Lower numbers come first on the customer's menu.</p>
         </div>
 
         {error && (
-          <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800" role="alert">
+          <p className="mb-3 rounded-card border border-danger-200 bg-danger-50 px-3 py-2 text-sm font-bold text-danger-700" role="alert">
             {error}
           </p>
         )}
@@ -97,7 +97,7 @@ export function CategoryForm({ category, busy, error, onSave, onClose }) {
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-xl bg-teal-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+          className="w-full min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? 'Saving…' : category ? 'Save changes' : 'Create category'}
         </button>
