@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, beforeEach, vi, inject } from 'vitest';
+import { describe, test, expect, beforeAll, beforeEach, afterEach, vi, inject } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App.jsx';
@@ -283,12 +283,27 @@ describe('the landing page', () => {
     const page = document.body.textContent;
     expect(page).not.toMatch(/trusted by \d/i);
     expect(page).not.toMatch(/\d[\d,]*\+\s*(cafés|cafes|restaurants|businesses)/i);
-    expect(page).not.toMatch(/free trial|no credit card|money.back guarantee/i);
+    expect(page).not.toMatch(/no credit card|money.back guarantee|cancel anytime|lifetime/i);
     expect(page).not.toMatch(/uptime|99\.\d\s*%/i);
+    // Order status is polled and only as current as the kitchen's taps, and there
+    // is no estimate anywhere in the product — so the page may not say otherwise.
+    expect(page).not.toMatch(/real.?time|instant(ly)? (update|notif)|push notification/i);
+    expect(page).not.toMatch(/estimated (time|wait)|\bETA\b|ready in \d|exactly when/i);
 
-    // What it says instead is true, and checkable: free while in beta, and it
-    // says out loud what it will not do.
-    expect(screen.getAllByText(/Free while we.re in beta/i).length).toBeGreaterThan(0);
+    // What it says instead is true, and checkable: 14 days free, and it says out
+    // loud that no price is set. There is no subscription yet, so the pricing
+    // section must not carry an amount or a billing period — that would be a
+    // price nobody has decided.
+    expect(screen.getAllByText(/Free for 14 days/i).length).toBeGreaterThan(0);
+    expect(page).not.toMatch(/while we.re in beta/i);
+    const pricing = document.getElementById('pricing');
+    expect(pricing).toHaveTextContent(/haven.t set a price yet/i);
+    expect(pricing.textContent).not.toMatch(/₹\s*\d|\$\s*\d|per month|\/\s*mo\b|per year|billed/i);
+    // The order-status card says what it does, including that the café decides
+    // what "ready" means — it is not a promise of delivery.
+    const status = screen.getByRole('heading', { name: 'Customers see where their order is' }).closest('div');
+    expect(status).toHaveTextContent(/being prepared/);
+    expect(status).toHaveTextContent(/brought to the table or collected at the counter/);
     expect(screen.getByRole('heading', { name: 'No payment gateway' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'No tax engine' })).toBeInTheDocument();
   });
@@ -564,6 +579,19 @@ describe('the bill', () => {
 });
 
 describe('order status', () => {
+  // These tests place orders and move them along, and every web test file shares
+  // one database. An approved, unpaid order left on T4 is exactly what a later
+  // POS test then finds on its bill, which made "a table that ordered twice
+  // checks out as one merged bill" fail — but only when this file ran first.
+  // So each test removes whatever it placed.
+  let firstNewOrder;
+  beforeEach(async () => {
+    firstNewOrder = Number((await sql('select coalesce(max(order_number), 0) n from orders'))[0].n) + 1;
+  });
+  afterEach(async () => {
+    await sql('delete from orders where order_number >= $1', [firstNewOrder]);
+  });
+
   async function orderAndWait(user, table = 'T2', item = 'Masala Chai') {
     await visit(table);
     await addToCart(user, item);

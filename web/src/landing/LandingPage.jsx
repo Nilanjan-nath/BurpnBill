@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
+  BellRing,
   Check,
   ChefHat,
   ClipboardList,
   CreditCard,
   LayoutGrid,
+  Pause,
   Printer,
   QrCode,
   Receipt,
@@ -37,10 +39,14 @@ import './landing-tailwind.css';
 //
 // What is deliberately NOT here, and what a test will fail over if it comes
 // back: a "trusted by N cafés" count, years in business, an uptime figure,
-// invented testimonials, or a "free trial" with a clock nobody is running.
-// There is one café live and it is the owner's own. Claiming otherwise on the
-// first page anyone sees is the same fake capability as a floor-plan state
-// nothing records.
+// invented testimonials, or a price. There is one café live and it is the
+// owner's own, and no subscription exists yet, so the pricing section offers
+// 14 days free and says plainly that the price is not set. (A trial WAS on this
+// list until the owner chose one. Nothing in the product ends it at day 15 —
+// restaurants.created_at says when each café's fortnight is up, and the owner
+// honours it by hand. If that ever stops being true, this page must change.)
+// Claiming otherwise on the first page anyone sees is the same fake capability
+// as a floor-plan state nothing records.
 
 const CTA = '/staff';
 
@@ -139,6 +145,15 @@ const ALSO = [
   { Icon: ClipboardList, title: 'Order history', body: 'Every served and cancelled order, by day, with who finished it and how it was paid.' },
   { Icon: LayoutGrid, title: 'Live order stream', body: 'The board updates itself. No refresh button, and it tells you if the connection drops.' },
   { Icon: BarChart3, title: 'Seven-day view', body: 'Last week at a glance, plus the payment mix from real payments, not estimates.' },
+  // Worded to promise only what is true: the phone asks every 15–30 seconds, so
+  // it is not "live", it has no time estimate, and it is only as current as the
+  // kitchen's taps. The test below fails if a bigger claim creeps in.
+  {
+    Icon: BellRing,
+    title: 'Customers see where their order is',
+    body: 'Waiting for the counter, being prepared, ready — so guests stop flagging staff down to ask. You choose whether “ready” means brought to the table or collected at the counter.',
+  },
+  { Icon: Pause, title: 'Pause a table', body: 'Its QR code stops taking orders straight away and works again when you resume it. Nothing to reprint.' },
 ];
 
 const STEPS = [
@@ -271,7 +286,7 @@ export default function LandingPage() {
               <div>
                 <span className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white px-3 py-1 text-xs font-semibold text-teal-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-teal-500" aria-hidden="true" />
-                  QR ordering for cafés and small restaurants
+                  The table, the till and the kitchen, in one tool for cafés
                 </span>
                 <h1 className="mt-5 text-4xl font-bold leading-[1.08] tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
                   Your staff can’t reach every table at 7pm.
@@ -294,7 +309,7 @@ export default function LandingPage() {
                   </a>
                 </div>
                 <p className="mt-5 text-sm font-medium text-gray-500">
-                  Free while we’re in beta. No card, no commission, no payment gateway to sign up for.
+                  Free for 14 days. No card, no commission, no payment gateway to sign up for.
                 </p>
               </div>
 
@@ -376,7 +391,7 @@ export default function LandingPage() {
               ))}
             </div>
 
-            <div className="mt-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-20 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {ALSO.map(({ Icon, title, body }) => (
                 <div key={title} className="rounded-2xl border border-gray-200 bg-white p-5">
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
@@ -420,18 +435,19 @@ export default function LandingPage() {
             <div className="text-center">
               <Eyebrow>Pricing</Eyebrow>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-                Free while we’re in beta
+                Try it in your café before you decide
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-gray-600">
-                Petuk is new, and we would rather have cafés using it than money from them. There’s no card to enter
-                and nothing to cancel. If we start charging, you’ll hear it from us first — not from your bank.
+                Everything is switched on from the first day, and there’s no card to enter. We haven’t set a price
+                yet, and we would rather work it out with the first cafés than guess — you’ll hear what it is from
+                us, before it costs you anything.
               </p>
             </div>
             <div className="mt-10 overflow-hidden rounded-2xl border border-gray-200 bg-white">
               <div className="border-b border-gray-200 p-8 text-center">
                 <p className="text-sm font-semibold text-gray-600">Everything, for every café</p>
-                <p className="mt-2 text-5xl font-bold tracking-tight text-gray-900">₹0</p>
-                <p className="mt-2 text-sm font-medium text-gray-500">while we’re in beta</p>
+                <p className="mt-2 text-5xl font-bold tracking-tight text-gray-900">14 days</p>
+                <p className="mt-2 text-sm font-medium text-gray-500">free, nothing held back</p>
                 <PrimaryCta className="mt-6">
                   Create your café <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </PrimaryCta>

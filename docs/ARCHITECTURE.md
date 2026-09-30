@@ -426,7 +426,7 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
    multi-tenancy: every query already scopes by the caller's own `restaurant_id`, and no
    restaurant id is hardcoded in either `server/src` or `web/src`), then the page at `/`.
    What the page may claim is enforced by a test rather than by convention — no
-   trusted-by counts, no pricing, no free-trial badge, because there is one café and it is
+   trusted-by counts, no price (the pricing section offers a 14-day free trial and says none is set — see TASKS step 10), because there is one café and it is
    the owner's own
 
 After v1: payments, invoices, a richer role set (cashier/waiter, so POS isn't owner-only),

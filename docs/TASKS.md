@@ -1265,8 +1265,30 @@ screen is showing and something is unfinished, 15s then 30s, paused while hidden
       "awaiting" stage, session scoping) — all caught
 - [x] Looked at in a browser, light and dark, all six stages and both "ready" wordings (a throwaway
       page — the live database can't serve the endpoint until the migration is applied)
-- [ ] **Not yet seen for real:** the whole flow with a live order, and the Settings control. Both need
-      the migration first
+- [x] Migration applied by the owner, and a real order placed: the status showed. The Settings
+      control was not separately checked
+- [x] **Landing page:** one card in the "also" grid — "Customers see where their order is" — plus
+      "Pause a table", so the grid is two full rows of four rather than a seventh card stranded.
+      Worded to promise only what is true, and the honesty test now rejects "real-time", push
+      notifications and any estimate or "exactly when" claim (mutation-checked three ways)
+
+## Step 10 — Landing copy: what it is, and what it costs
+
+- [x] **The hero line no longer says "QR ordering".** It sold only the QR half, which the owner had
+      already flagged once. Now: "The table, the till and the kitchen, in one tool for cafés" —
+      matching the features heading. (The footer tagline still says QR table ordering, as a label)
+- [x] **Pricing: "Free while we're in beta / ₹0" is gone; it is now a 14-day free trial**, at the
+      owner's decision, with no subscription model yet. The section says so plainly — no card
+      to enter, no price set, "you'll hear what it is from us before it costs you anything" — and
+      carries **no amount and no billing period**. That is a test, mutation-checked three ways
+      (an invented price, the beta line returning, the "no price set" sentence being dropped)
+- [x] The honesty test used to forbid a free trial outright ("a clock nobody is running"); it now
+      forbids only the claims that would still be false: no credit card, money-back, cancel anytime,
+      lifetime, and any price or period inside `#pricing`
+- [ ] **Nothing ends the trial at day 15.** There is no billing and no expiry — `restaurants.created_at`
+      is the only record of when a café's 14 days began, and honouring the end is manual. Fine for the
+      first café or two; before a stranger signs up unattended, decide what day 15 does (a banner
+      in the dashboard, a note to the owner, or an actual lock) and, once a price exists, put it here
 
 ## Before first real cafe
 
