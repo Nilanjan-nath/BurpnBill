@@ -1,0 +1,53 @@
+# BurpnBill — Caddy on the Oracle VM.
+# Serves the built web app and forwards the API to Node on :4000. One origin,
+# so no CORS and no VITE_API_URL. Installed to /etc/caddy/Caddyfile (see DEPLOY.md).
+#
+# Cloudflare sits in front (orange cloud, SSL mode "Full (strict)"). Caddy still
+# gets its own Let's Encrypt certificate for both names, which is what
+# "Full (strict)" needs at the origin.
+
+# Bare domain -> www
+burpnbill.com {
+	redir https://www.burpnbill.com{uri} permanent
+}
+
+www.burpnbill.com {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# API. Health checks live at /health and /health/ready (not under /api).
+	# The staff order stream is server-sent events: flush every write at once,
+	# or the kitchen board gets updates in lumps.
+	@api path /api/* /health /health/ready
+	handle @api {
+		reverse_proxy 127.0.0.1:4000 {
+			flush_interval -1
+		}
+	}
+
+	# Web app: hashed assets cache forever, everything else falls back to
+	# index.html so /staff and /t/<token> survive a reload.
+	handle {
+		root * /opt/burpnbill/web/dist
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html not path /assets/*
+		header @html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/burpnbill.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

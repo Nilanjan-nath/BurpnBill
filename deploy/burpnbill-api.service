@@ -1,0 +1,23 @@
+[Unit]
+Description=BurpnBill API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=burpnbill
+WorkingDirectory=/opt/burpnbill/server
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+# The API reads /opt/burpnbill/.env (config.js); keep it private to this user.
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

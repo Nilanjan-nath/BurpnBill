@@ -1305,7 +1305,7 @@ The product name changes before the first real café sees it. It is small — ab
 
 - [x] **Confirm the exact spelling and casing** — "BurpNBill" as one word, as written by the owner —
       and the domain it goes on. Every string below is derived from that one decision
-- [ ] **A quick name check before printing anything:** search the name and the domain/app-store/social
+- [x] **A quick name check before printing anything** (owner confirms done, 2026-09-30): search the name and the domain/app-store/social
       handles for a clash with an existing food or billing product. (Not legal advice; it is a
       five-minute search that is very expensive to skip.)
 - [x] User-visible: the landing page (nav wordmark, the monogram — currently "P" — hero, footer, page
@@ -1345,7 +1345,7 @@ The product name changes before the first real café sees it. It is small — ab
   free way to shield the API from abuse. Live streams pass through it fine — the server already
   sends a heartbeat every 25 s, well inside Cloudflare's idle timeout. The simpler alternative is
   to keep Namecheap DNS and let Caddy fetch a Let's Encrypt certificate directly; that also works,
-  it just gives up the shield. **Open — owner to choose**
+  it just gives up the shield. **(decided 2026-09-30: Cloudflare now; bare domain redirects to www)**
 - **A separate production Supabase project (recommended, and I would not skip it).** Today
   development and the only café share one project, so any experiment against the dev database is an
   experiment on real data — a stuck order was repaired by hand on it this very week. The free plan
@@ -1376,14 +1376,14 @@ The product name changes before the first real café sees it. It is small — ab
 
 ### 11d. What I will write when we start **(planned)**
 
-- [ ] `deploy/Caddyfile` — static `web/dist`, `/api` reverse proxy, SPA fallback so `/t/<token>` and
+- [x] `deploy/Caddyfile` — static `web/dist`, `/api` reverse proxy, SPA fallback so `/t/<token>` and
       `/staff` reload, streaming for the order stream, security headers
-- [ ] `deploy/burpnbill-api.service` — the systemd unit
-- [ ] `.env.production.example` — every variable, what it is and where it comes from, no secrets
-- [ ] `deploy/deploy.sh` — pull, install, build the web app, restart the service, health-check it
+- [x] `deploy/burpnbill-api.service` — the systemd unit
+- [x] `.env.production.example` — every variable, what it is and where it comes from, no secrets
+- [x] `deploy/deploy.sh` — pull, install, build the web app, restart the service, health-check it
       (and roll back to the previous build if the health check fails)
 - [ ] `deploy/backup.sh` + a cron line — see the backups item below
-- [ ] A step-by-step **checklist** for the parts only the owner can do: Oracle signup and VM, Cloudflare
+- [x] (`DEPLOY.md`) A step-by-step **checklist** for the parts only the owner can do: Oracle signup and VM, Cloudflare
       and Namecheap nameservers, Supabase production project, Auth settings, first deploy, first
       real order end to end
 
