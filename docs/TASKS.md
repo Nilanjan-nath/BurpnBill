@@ -1290,11 +1290,158 @@ screen is showing and something is unfinished, 15s then 30s, paused while hidden
       first café or two; before a stranger signs up unattended, decide what day 15 does (a banner
       in the dashboard, a note to the owner, or an actual lock) and, once a price exists, put it here
 
+## Step 11 — Rename to BurpNBill, then deploy
+
+*Planning only — nothing below is built yet. Written after the owner chose a name and a
+domain and settled on a free host. Decisions are marked **(decided)**; recommendations are marked
+**(recommended)** and are open until the owner answers.*
+
+### 11a. The rename: Petuk → BurpNBill **(decided)**
+
+The product name changes before the first real café sees it. It is small — about 40 mentions in
+~22 files — and cheaper now than after there are printed QR sheets and a public page.
+
+- [ ] **Confirm the exact spelling and casing** — "BurpNBill" as one word, as written by the owner —
+      and the domain it goes on. Every string below is derived from that one decision
+- [ ] **A quick name check before printing anything:** search the name and the domain/app-store/social
+      handles for a clash with an existing food or billing product. (Not legal advice; it is a
+      five-minute search that is very expensive to skip.)
+- [ ] User-visible: the landing page (nav wordmark, the monogram — currently "P" — hero, footer, page
+      `<title>`), the customer app's `<title>`, the dashboard sidebar brand mark, Create-your-café
+      copy, sign-in screen, printed QR sheet header, the checkout receipt
+- [ ] The landing test asserts some brand text (nav, footer); update it with the copy so the
+      "honest claims" tests still run against the real page
+- [ ] Internal identifiers, renamed for consistency while it is cheap: `petuk.session.<token>` (the
+      customer's stored guest session — renaming it means anyone mid-order re-scans once, harmless
+      before launch), `@layer petuk-customer` in `styles.css`, `.petuk-print-receipt`, the
+      `petukPage` history-state key, and the three `package.json` names
+- [ ] Docs: `README.md`, `ARCHITECTURE.md`, `design.md`, `schema.md`, this file, and the SQL comment
+      that names it. Leave old entries in this file as they are — they are history, and were true
+      when written
+- [ ] Not renamed on purpose: git history, and the repo folder `qr-cafe-ordering` (the folder name is
+      local and nothing depends on it)
+- [ ] `theme-color` and the browser-tab icon are already colour-only, so they need nothing
+
+### 11b. Hosting **(decided unless marked)**
+
+- **One free Oracle Cloud "Always Free" VM** for the API *and* the web app **(decided)**. The API is
+  a long-running Node process (live streams, an in-memory hub that assumes a single instance), so a
+  host that sleeps when idle — Render's free tier, for one — would break the kitchen board and make
+  the first request after a quiet spell slow. One VM is exactly the shape the app expects
+- **The web app is served from the same VM, same origin** **(decided)**: Caddy serves the built
+  `web/dist` and forwards `/api` to Node. One domain means **no CORS to configure and no
+  `VITE_API_URL`**; the dashboard, the customer app and the landing page are one deploy
+- **Supabase stays the database and Auth** (already in Mumbai, `ap-south-1`)
+- **The Oracle account does not exist yet, so the region choice is still open — and it cannot be
+  changed after signup.** **(recommended)** pick **Mumbai (`ap-mumbai-1`)** as the home region, or
+  Hyderabad. The API makes several queries per request, and every one crosses to Supabase in
+  Mumbai; a VM on another continent adds 150 ms or more to each. Prefer the ARM shape (up to 4
+  cores / 24 GB) and fall back to the small AMD one — ARM free capacity is sometimes "out of
+  capacity" for days, and retrying is normal
+- **DNS (recommended):** the domain is at **Namecheap**. Point its nameservers at **Cloudflare's
+  free plan** rather than staying on Namecheap's DNS: free TLS in front, the VM's IP hidden, a
+  free way to shield the API from abuse. Live streams pass through it fine — the server already
+  sends a heartbeat every 25 s, well inside Cloudflare's idle timeout. The simpler alternative is
+  to keep Namecheap DNS and let Caddy fetch a Let's Encrypt certificate directly; that also works,
+  it just gives up the shield. **Open — owner to choose**
+- **A separate production Supabase project (recommended, and I would not skip it).** Today
+  development and the only café share one project, so any experiment against the dev database is an
+  experiment on real data — a stuck order was repaired by hand on it this very week. The free plan
+  allows two active projects. Production gets its own, migrated with `scripts/db.sh migrate`, **never
+  seeded** (the seed is the demo café). Development keeps the current one
+- **Process supervision:** Node 22 under **systemd** (restart on crash and reboot, logs in
+  journald). Docker is optional and not needed for one process
+
+### 11c. What has to change in configuration
+
+- [ ] `APP_BASE_URL` = the production domain — **printed QR codes encode it**, so a wrong value
+      means a sheet of dead links (the seating plan already warns when printed from `localhost`)
+- [ ] Supabase Auth: **Site URL** and redirect URLs = the production domain (the open item from the
+      handover; it decides where a confirmation link lands)
+- [ ] Supabase Auth: confirm **"Confirm email" is enabled** — self-serve signup and the invite model
+      both trust it
+- [ ] `DATABASE_CA_CERT` set so the database connection is *verified*, then turn on **Enforce SSL** in
+      Supabase (both already on the housekeeping list)
+- [ ] Express **`trust proxy`** — behind Caddy the client IP is otherwise the proxy's, which would
+      make per-client rate limiting (below) limit everyone at once
+- [ ] Caddy: **no response buffering for `/api/orders/stream`** (`flush_interval -1`), or the kitchen
+      board's live updates arrive in lumps
+- [ ] The web build needs its `VITE_SUPABASE_*` values at *build* time (they are baked into the
+      bundle); the server's `.env` never leaves the VM
+- [ ] Open the ports **twice**: Oracle's cloud firewall (the VCN security list: 80 and 443) *and* the
+      VM's own firewall — Oracle's Ubuntu images ship with restrictive `iptables` rules, and "the
+      port is open in the console but nothing answers" is the classic first-day problem
+
+### 11d. What I will write when we start **(planned)**
+
+- [ ] `deploy/Caddyfile` — static `web/dist`, `/api` reverse proxy, SPA fallback so `/t/<token>` and
+      `/staff` reload, streaming for the order stream, security headers
+- [ ] `deploy/burpnbill-api.service` — the systemd unit
+- [ ] `.env.production.example` — every variable, what it is and where it comes from, no secrets
+- [ ] `deploy/deploy.sh` — pull, install, build the web app, restart the service, health-check it
+      (and roll back to the previous build if the health check fails)
+- [ ] `deploy/backup.sh` + a cron line — see the backups item below
+- [ ] A step-by-step **checklist** for the parts only the owner can do: Oracle signup and VM, Cloudflare
+      and Namecheap nameservers, Supabase production project, Auth settings, first deploy, first
+      real order end to end
+
+**What I cannot do:** anything inside Oracle, Cloudflare, Namecheap or the Supabase dashboard. Those
+steps are the owner's, and the checklist will say exactly what to click. **Applying migrations to a
+live database is also the owner's to run** — the sandbox has refused it (correctly) once already.
+
+### 11e. Before the first real café, not after **(recommended)**
+
+Ordered by how badly each one hurts if it is missing on a Saturday.
+
+- [ ] **Custom SMTP for Supabase Auth — the one I would have missed.** Supabase's built-in email
+      sender is limited to a handful of messages per hour on the free plan. The landing page sends
+      people to *sign up*, and sign-up needs a confirmation email, so on a launch day the third
+      person to try gets nothing. Use a free transactional sender (Resend, Brevo or similar) on a
+      verified sender address on the new domain (SPF/DKIM records at Cloudflare/Namecheap)
+- [ ] **Rate limiting on the public routes.** Every QR scan creates a guest session and nothing limits
+      how often. The database allows about **5 connections**, so one hammering client can take the
+      whole café's board down. A per-IP limit on `/menu`, `/cart`, `/orders`, `/orders/status` and
+      the sign-up route (`express-rate-limit`), generous enough that a table of six sharing café
+      Wi-Fi — one IP — is never blocked. Needs `trust proxy` first
+- [ ] **A daily database backup, stored off the VM.** Supabase's free plan has **no point-in-time
+      recovery**, so a bad migration or a mistaken delete is unrecoverable without one. A nightly
+      `pg_dump` to object storage (Oracle's free bucket, or Cloudflare R2), kept for a fortnight —
+      and **one restore tried for real**, because an untested backup is a hope, not a backup
+- [ ] **An uptime monitor** (UptimeRobot or Better Stack, free) on `/health/ready`, which checks the
+      database and Supabase Auth. It also does a second job: **Supabase pauses a free project after
+      a week of inactivity**, and a check that touches the database every few minutes prevents it
+- [ ] **Verify staff tokens locally** (JWT signature) instead of a network call to Supabase Auth on
+      every request. Already listed; on a free tier it removes a dependency from every screen and a
+      round trip from every tap
+- [ ] **Structured request logging** (already listed) — request id, route, status, duration, staff
+      id, *no bodies and no tokens* — so "an order vanished" can be answered from the log, not from
+      memory. (This week's stuck order was diagnosed from the database; that will not always work)
+- [ ] **Decide what day 15 of the free trial does** (see step 10). Manual is fine for one or two
+      cafés you know; not for strangers
+- [ ] **Watch the Oracle idle rule:** free VMs that sit almost idle for a week can be reclaimed. Real
+      traffic prevents it; while there is none, the uptime monitor's pings help but are not a
+      guarantee — keep the deploy script so a rebuilt VM is an hour's work, not a day's
+- [ ] **A rehearsal:** before any café, deploy, create a *second* café through the landing page on the
+      real domain, place an order from a phone on mobile data (not the LAN), watch it reach the
+      board, print one QR sheet and scan it. Every "worked on my Wi-Fi" surprise lives in that gap
+- [ ] **Know the free-tier ceilings** so nobody is surprised: 500 MB database, 1 GB of photo storage,
+      egress limits, a 5-connection pool. Comfortable for a handful of cafés; a number to watch, not
+      a wall to hit blind
+
+### Open questions for the owner
+
+1. The exact name spelling/casing and the domain string
+2. Cloudflare in front (recommended) or Namecheap DNS + Caddy alone?
+3. A separate production Supabase project (recommended) or reuse the current one?
+4. Oracle home region at signup — Mumbai (recommended) or Hyderabad
+5. Which SMTP sender to use for Auth mail
+
 ## Before first real cafe
 
-- [ ] Deploy: API on Render/Railway, web app on Vercel/Netlify
-- [ ] Verify staff tokens locally (JWT signature) instead of a network call per request
-- [ ] Structured request logging
+*Superseded by Step 11 above — the deploy line and the two items that used to be here now live in
+11b and 11e, with the rest of what a real café needs. Kept as a pointer so nothing is lost.*
+
+- [ ] Deploy → 11b/11d · Verify staff tokens locally → 11e · Structured request logging → 11e
 
 ## After v1 (out of scope, not forgotten)
 
