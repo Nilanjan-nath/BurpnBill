@@ -33,12 +33,13 @@ const TABS = [
 const SETTINGS_TAB = { id: 'settings', label: 'Settings' };
 // Three roles (step 6 slice 5). Everyone works the board; POS is front of
 // house, so 'staff' gets it but 'kitchen' doesn't; the rest is the owner's.
-const FRONT_OF_HOUSE_TABS = [...TABS, { id: 'pos', label: 'POS' }, SETTINGS_TAB];
+const POS_TAB = { id: 'pos', label: 'POS' };
+const FRONT_OF_HOUSE_TABS = [POS_TAB, ...TABS, SETTINGS_TAB];
 const KITCHEN_TABS = [...TABS, SETTINGS_TAB];
 const OWNER_TABS = [
-  ...TABS,
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'pos', label: 'POS' },
+  POS_TAB,
+  ...TABS,
   { id: 'staff', label: 'Staff' },
   SETTINGS_TAB,
 ];

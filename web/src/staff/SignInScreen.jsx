@@ -40,7 +40,7 @@ export function SignInScreen({ session }) {
             {signingUp ? 'Create your account' : 'Staff sign in'}
           </h1>
           {signingUp && (
-            <p className="mt-1.5 text-sm font-semibold text-ink-600">Use the email address your café invited.</p>
+            <p className="mt-1.5 text-sm font-semibold text-ink-600">Invited to a café? Use the email address they invited.</p>
           )}
         </div>
         <label className="block">
@@ -100,7 +100,7 @@ export function SignInScreen({ session }) {
           className="block w-full rounded-input py-1 text-center text-sm font-bold text-brand underline-offset-2 hover:text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
           onClick={() => switchTo(signingUp ? 'signin' : 'signup')}
         >
-          {signingUp ? 'Already have an account? Sign in' : 'Been invited? Create your account'}
+          {signingUp ? 'Already have an account? Sign in' : 'New here? Create your account'}
         </button>
       </form>
     </AuthShell>

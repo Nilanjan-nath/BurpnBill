@@ -1828,7 +1828,7 @@ describe('joining a café from an invite', () => {
     await screen.findByRole('heading', { name: 'Staff sign in' });
 
     // The invite created no login, so there has to be a way to make one.
-    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.click(screen.getByRole('button', { name: /New here/ }));
     await screen.findByRole('heading', { name: 'Create your account' });
     await user.type(screen.getByLabelText('Email'), 'newhire@example.com');
     await user.type(screen.getByLabelText('Password'), 'hunter22');
@@ -1853,7 +1853,7 @@ describe('joining a café from an invite', () => {
 
     render(<StaffApp auth={createFakeAuth(null, { signUpAs: stranger })} />);
     await screen.findByRole('heading', { name: 'Staff sign in' });
-    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.click(screen.getByRole('button', { name: /New here/ }));
     await user.type(screen.getByLabelText('Email'), 'nobody@example.com');
     await user.type(screen.getByLabelText('Password'), 'hunter22');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
@@ -1872,7 +1872,7 @@ describe('joining a café from an invite', () => {
     try {
       render(<StaffApp auth={createFakeAuth(null, { signUpAs: founder })} />);
       await screen.findByRole('heading', { name: 'Staff sign in' });
-      await user.click(screen.getByRole('button', { name: /Been invited/ }));
+      await user.click(screen.getByRole('button', { name: /New here/ }));
       await user.type(screen.getByLabelText('Email'), 'founder@example.com');
       await user.type(screen.getByLabelText('Password'), 'hunter22');
       await user.click(screen.getByRole('button', { name: 'Create account' }));
@@ -1916,7 +1916,7 @@ describe('joining a café from an invite', () => {
     render(<StaffApp auth={createFakeAuth(null, { signUpAs: NEWCOMER, requiresConfirmation: true })} />);
     await screen.findByRole('heading', { name: 'Staff sign in' });
 
-    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.click(screen.getByRole('button', { name: /New here/ }));
     await user.type(screen.getByLabelText('Email'), 'later@example.com');
     await user.type(screen.getByLabelText('Password'), 'hunter22');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
@@ -1930,7 +1930,7 @@ describe('joining a café from an invite', () => {
     render(<StaffApp auth={createFakeAuth(null, { signUpAs: NEWCOMER })} />);
     await screen.findByRole('heading', { name: 'Staff sign in' });
 
-    await user.click(screen.getByRole('button', { name: /Been invited/ }));
+    await user.click(screen.getByRole('button', { name: /New here/ }));
     await user.type(screen.getByLabelText('Email'), 'taken@example.com');
     await user.type(screen.getByLabelText('Password'), 'hunter22');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
