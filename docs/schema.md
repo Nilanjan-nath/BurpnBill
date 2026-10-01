@@ -131,6 +131,8 @@ and when. `bill_lines` copies the dishes as they stood. Nothing on a bill joins 
 the café, so a reprint never changes. `payments.bill_id` ties each payment row to its bill (null for
 payments made before this migration, which have no bill).
 
+**Public token (migration 20261002120000).** `bills.public_token`: 32 hex characters from `generate_opaque_token()`, unique, one per bill (existing bills backfilled). It is what the receipt's QR code carries; separate from `bills.id` so the id never leaves the building.
+
 **GST (migration 20261002090000).** `restaurants` gains `gst_enabled`, `gstin` (required while enabled, by a
 check), `gst_rate` (0-28, default 5) and `fssai_number`. `bills` gains `gstin`, `fssai_number`, `tax_rate`,
 `taxable_value`, `cgst_amount`, `sgst_amount`; `tax_amount` is the total tax. Prices are tax-inclusive, and a

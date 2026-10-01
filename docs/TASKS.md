@@ -1574,7 +1574,7 @@ computed on screen and never stored.
       subtotal, total, footer text; A4 / 80mm toggle with `@page` sizes; on-screen preview as in the reference
 - [x] **B. GST** (branch `feat/billing-gst`; migration `20261002090000_gst.sql` NOT yet run on live). Settings > Billing: GST on/off, GSTIN, rate (default 5), FSSAI number, receipt footer. Bill stores
       taxable value, CGST, SGST and the rate it used. Receipt gets the tax lines and a GST breakdown table
-- [ ] **C. Digital receipt.** Public read-only page at `/r/<long random token>` (no personal data), reached by the
+- [x] **C. Digital receipt** (branch `feat/billing-digital-receipt`; migration `20261002120000_bill_public_token.sql` NOT yet run on live). Public read-only page at `/r/<long random token>` (no personal data), reached by the
       QR on the printout ("Scan for digital receipt")
 - [ ] **D. Past bills** list with reprint (marked "Duplicate"); then discounts (flat or percent, with a reason) and
       voiding a bill (owner only; GST needs a credit note, so check with an accountant first)
@@ -1599,3 +1599,15 @@ caption. Tests: server 218, web 168. Mutation-checked: GST ignored at checkout, 
 **For an accountant to confirm before a GST-registered café relies on it:** the "Tax Invoice" wording and layout,
 whether a SAC/HSN code (restaurant services) must print (left off rather than guess), and the per-day bill numbering
 (consecutive per café, not reset per financial year). Not built: per-item rates, IGST, exclusive pricing, credit notes.
+
+**Phase C built (2026-10-02).** Each bill has an unguessable `public_token` (32 hex, the table-QR generator;
+existing bills are backfilled by the column default). `GET /api/receipts/:token` is public: it returns the receipt
+and nothing else (no bill/restaurant/staff ids, not the token, not the cook's notes), `Cache-Control: private,
+no-store`, `X-Robots-Tag: noindex`; a malformed token is a 404 without a query. The printed receipt carries a QR
+("Scan for digital receipt") encoding `{origin}/r/{token}`, built in the browser like the table codes, so a receipt
+printed from localhost points at localhost: print from the real domain. `/r/<token>` is its own lazy chunk
+(`web/src/receipt/ReceiptPage.jsx`) with plain CSS and no Tailwind, so it loads neither the dashboard's nor the
+ordering app's styles; `Receipt.jsx` and `receipt.css` moved to `web/src/receipt/` for that. The page shows the
+same receipt without a code of its own, a "Print or save as PDF" button, and a noindex meta. Not built:
+WhatsApp/SMS sharing, a link on the customer's phone bill, expiring tokens. Tests: server 221, web 172.
+Mutation-checked: a QR that encodes the wrong path is caught.

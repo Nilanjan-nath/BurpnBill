@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Banknote, CreditCard, QrCode, X, Maximize2, Minimize2, Printer, CheckCircle2 } from 'lucide-react';
 import { formatMoney } from '../format.js';
-import { Receipt } from './Receipt.jsx';
+import { Receipt } from '../receipt/Receipt.jsx';
 
 // Cash/card/UPI mirror the payments table's own method enum (minus 'mock',
 // which exists for tests). Nothing here moves money: the counter takes it the

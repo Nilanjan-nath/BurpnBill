@@ -4,6 +4,7 @@ import { openMenu } from '../services/menu.js';
 import * as cart from '../services/cart.js';
 import { placeOrder } from '../services/orders.js';
 import { getBill } from '../services/bill.js';
+import { getPublicReceipt } from '../services/bills.js';
 import { getOrderStatus } from '../services/orderStatus.js';
 // publishBoardCard lives with the staff order queries, but a placed order is
 // the one event the customer side ever needs to push to a staff dashboard.
@@ -24,6 +25,15 @@ export function publicRoutes({ db, config, requireGuestSession, hub }) {
       sessionTtlHours: config.guestSessionTtlHours,
     });
     res.json(menu);
+  });
+
+  // A settled bill's public page (the receipt's QR code). Only the token
+  // gates it, so it is never cached or indexed: a receipt is for whoever was
+  // handed the paper.
+  router.get('/receipts/:token', async (req, res) => {
+    const receipt = await getPublicReceipt(db, req.params.token);
+    res.set({ 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({ receipt });
   });
 
   // Server-side cart, one open cart per guest session.

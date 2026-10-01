@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, beforeEach, vi, inject } from 'vitest';
 import { render, screen, within, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import QRCode from 'qrcode';
 import StaffApp from './StaffApp.jsx';
 
 // The real staff dashboard -> the real Express API -> a real Postgres (see
@@ -1720,6 +1721,14 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     expect(within(preview).getByText('Cash received').closest('div')).toHaveTextContent('₹100.00');
     expect(within(preview).getByText('Change').closest('div')).toHaveTextContent('₹70.00');
     expect(preview.querySelector('.bnb-receipt-a4')).not.toBeNull();
+    // The printed copy carries a code that opens the digital receipt.
+    const qr = await within(preview).findByAltText('Scan for digital receipt');
+    expect(qr.getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,/);
+    expect(within(preview).getByText('Scan for digital receipt')).toBeInTheDocument();
+    // ...and it encodes THIS bill's public address, not just any code.
+    const [latest] = await sql('select public_token from bills order by settled_at desc, bill_number desc limit 1');
+    const expected = await QRCode.toString(`${window.location.origin}/r/${latest.public_token}`, { type: 'svg', margin: 0, width: 160 });
+    expect(atob(qr.getAttribute('src').split(',')[1])).toBe(expected);
 
     // Thermal 80mm: the preview and the printout both switch, and it is remembered.
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Thermal 80mm' }));

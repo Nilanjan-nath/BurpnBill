@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { formatMoney } from '../format.js';
+import './receipt.css';
 
 // The customer's receipt. One component for the on-screen preview AND the
 // printout, so what the cashier checks is what comes out of the printer.
@@ -9,7 +12,12 @@ import { formatMoney } from '../format.js';
 //
 //   size 'a4'      — a normal printer, full page width
 //   size 'thermal' — an 80mm counter receipt printer
-export function Receipt({ bill, size = 'a4' }) {
+//
+// `showQr` puts a code on the printed copy that opens the same receipt on the
+// customer's phone (/r/<token>). The public page itself turns it off: a QR code
+// for the page you are already looking at is just clutter.
+export function Receipt({ bill, size = 'a4', showQr = true }) {
+  const qr = useReceiptQr(showQr ? bill.public_token : null);
   const rows = mergeLines(bill.lines);
   const money = (amount) => formatMoney(amount, bill.currency_code);
   const tax = Number(bill.tax_amount);
@@ -102,6 +110,13 @@ export function Receipt({ bill, size = 'a4' }) {
         </table>
       )}
 
+      {qr && (
+        <div className="bnb-receipt-qr">
+          <img src={qr} alt="Scan for digital receipt" />
+          <p className="bnb-receipt-small">Scan for digital receipt</p>
+        </div>
+      )}
+
       <footer className="bnb-receipt-foot">
         <p>Thank you for dining with us!</p>
         <p className="bnb-receipt-small">* Computer generated receipt *</p>
@@ -145,4 +160,29 @@ export function formatBillDate(iso) {
   const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }).toUpperCase();
   return `${date} at ${time}`;
+}
+
+// The address the QR code encodes. Like a table's code, it is built from the
+// origin the app is served from, so a receipt printed from localhost points at
+// localhost: print from the real domain.
+export const receiptUrl = (token) => `${window.location.origin}/r/${encodeURIComponent(token)}`;
+
+// The same pure-JS SVG renderer the table codes use (staff/qr.js): no canvas, no
+// server round trip, and crisp on a thermal printer at any size.
+function useReceiptQr(token) {
+  const [dataUrl, setDataUrl] = useState(null);
+  useEffect(() => {
+    if (!token) {
+      setDataUrl(null);
+      return undefined;
+    }
+    let cancelled = false;
+    QRCode.toString(receiptUrl(token), { type: 'svg', margin: 0, width: 160 }).then((svg) => {
+      if (!cancelled) setDataUrl(`data:image/svg+xml;base64,${btoa(svg)}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+  return dataUrl;
 }

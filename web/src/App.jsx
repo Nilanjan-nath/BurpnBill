@@ -11,14 +11,34 @@ const LandingPage = lazy(() => import('./landing/LandingPage.jsx'));
 // too, and Tailwind's preflight is global, so it may only load on /t/<token>.
 const CustomerApp = lazy(() => import('./customer/CustomerApp.jsx'));
 
+// A printed receipt's QR code opens /r/<token>: the same bill on the customer's
+// phone. Plain CSS in its own chunk, like the pages above, so it loads nothing
+// else's styles.
+const ReceiptPage = lazy(() => import('./receipt/ReceiptPage.jsx'));
+
 // The QR code encodes {APP_BASE_URL}/t/{qr_token}.
 export function qrTokenFromPath(pathname) {
   const match = pathname.match(/^\/t\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+// The receipt QR code encodes {origin}/r/{public_token}.
+export function receiptTokenFromPath(pathname) {
+  const match = pathname.match(/^\/r\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export default function App() {
   const path = window.location.pathname;
+  const receiptToken = receiptTokenFromPath(path);
+  if (receiptToken) {
+    return (
+      <Suspense fallback={<Message title="Loading your receipt…">One moment.</Message>}>
+        <ReceiptPage token={receiptToken} />
+      </Suspense>
+    );
+  }
+
   if (path === '/staff' || path.startsWith('/staff/')) {
     return (
       <Suspense fallback={<Message title="Loading…">One moment.</Message>}>

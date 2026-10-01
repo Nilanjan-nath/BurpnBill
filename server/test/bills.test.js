@@ -285,3 +285,55 @@ test('with GST off the bill has no tax split, but still carries an FSSAI number 
     await db.query(`update restaurants set fssai_number = null where id = $1`, [RESTAURANT_ID]);
   }
 });
+
+// --- The public digital receipt (phase C) ---------------------------------------
+
+test('every bill gets its own unguessable token, and only staff are handed it with the bill', async () => {
+  const a = await freshTable();
+  await order(a, 'Masala Chai');
+  const b = await freshTable();
+  await order(b, 'Masala Chai');
+  const first = (await checkout(OWNER, a)).body.bill;
+  const second = (await checkout(OWNER, b)).body.bill;
+  assert.match(first.public_token, /^[0-9a-f]{32}$/);
+  assert.notEqual(first.public_token, second.public_token);
+  assert.notEqual(first.public_token, first.id, 'the token is not the internal id');
+});
+
+test('the receipt page data is public by token: no login, the bill as printed, and nothing internal', async () => {
+  const table = await freshTable();
+  const placed = await call('POST', '/api/staff/orders', {
+    as: OWNER,
+    body: { table_id: table, items: [{ menu_item_id: await itemId('Masala Chai'), quantity: 2, special_instructions: 'less sugar' }] },
+  });
+  assert.equal(placed.status, 201);
+  const { bill } = (await checkout(OWNER, table, { amount_tendered: 100 })).body;
+
+  const res = await fetch(`${base}/api/receipts/${bill.public_token}`); // no Authorization header
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'private, no-store');
+  assert.match(res.headers.get('x-robots-tag'), /noindex/);
+  const { receipt } = await res.json();
+
+  assert.equal(receipt.bill_number, bill.bill_number);
+  assert.equal(receipt.total_amount, '60.00');
+  assert.equal(receipt.change_given, '40.00');
+  assert.deepEqual(receipt.lines.map((l) => [l.name, l.quantity, l.line_total]), [['Masala Chai', 2, '60.00']]);
+
+  // Nothing that identifies a row, a tenant or a person, and not the cook's notes.
+  for (const leaked of ['id', 'restaurant_id', 'settled_by', 'public_token', 'idempotency_key', 'table_id']) {
+    assert.equal(leaked in receipt, false, `${leaked} must not be public`);
+  }
+  assert.equal('special_instructions' in receipt.lines[0], false);
+  assert.equal(JSON.stringify(receipt).includes(OWNER), false);
+});
+
+test('an unknown or malformed receipt token is a plain 404, and a bill id is not a token', async () => {
+  const table = await freshTable();
+  await order(table, 'Masala Chai');
+  const { bill } = (await checkout(OWNER, table)).body;
+  for (const token of ['0'.repeat(32), 'abc', "x'; drop table bills;--", bill.id, bill.id.replace(/-/g, '').toUpperCase()]) {
+    const res = await fetch(`${base}/api/receipts/${encodeURIComponent(token)}`);
+    assert.equal(res.status, 404, token);
+  }
+});

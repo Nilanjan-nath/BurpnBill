@@ -346,6 +346,9 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   same idempotency key returns the same bill (200, `already_settled: true`) and burns no number
 - `GET /bills/:billId` — front of house; one settled bill with its lines, for a reprint. Another
   café's bill is a 404
+- `GET /receipts/:token` — **public, no login** (step 14, phase C): the bill behind the receipt's QR
+  code, found by its unguessable `public_token`. Returns the receipt fields only (no ids, no
+  token, no kitchen notes), never cached, not indexed; a malformed token is a 404 with no query
 
 ### Realtime (SSE)
 
