@@ -477,3 +477,16 @@ test('the owner turns GST on with a GSTIN (any case), sets a rate and an FSSAI n
 
   await db.query(`update restaurants set gstin = null, fssai_number = null, gst_rate = 5 where id = $1`, [RESTAURANT_ID]);
 });
+
+test('a pasted GSTIN or FSSAI number with spaces is accepted and stored clean; a bad one says which field and why', async () => {
+  const ok = await call('PATCH', '/api/restaurant', { as: OWNER, body: { gstin: '19 abcde 1234 f1z5', fssai_number: '1234 5678 9012 34' } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.restaurant.gstin, '19ABCDE1234F1Z5');
+  assert.equal(ok.body.restaurant.fssai_number, '12345678901234');
+
+  const bad = await call('PATCH', '/api/restaurant', { as: OWNER, body: { gstin: '12345' } });
+  assert.equal(bad.status, 400);
+  assert.deepEqual(bad.body.error.issues, [{ field: 'gstin', message: 'GSTIN should be 15 characters, like 19ABCDE1234F1Z5' }]);
+
+  await db.query(`update restaurants set gstin = null, fssai_number = null where id = $1`, [RESTAURANT_ID]);
+});

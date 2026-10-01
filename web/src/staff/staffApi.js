@@ -38,7 +38,11 @@ async function request(method, path, { token, body } = {}) {
 
   if (!res.ok) {
     const err = data?.error ?? {};
-    throw new StaffApiError(res.status, err.code ?? 'unknown', err.message ?? 'Something went wrong. Please try again.', err);
+    // The API's blanket "Invalid request" hides the useful part: WHICH field and
+    // why (e.g. "GSTIN should be 15 characters"). Say that instead.
+    const reasons = Array.isArray(err.issues) ? err.issues.map((i) => i.message).filter(Boolean) : [];
+    const message = reasons.length ? reasons.join('. ') : err.message;
+    throw new StaffApiError(res.status, err.code ?? 'unknown', message ?? 'Something went wrong. Please try again.', err);
   }
   return data;
 }

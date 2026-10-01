@@ -1065,6 +1065,20 @@ describe('Settings', () => {
     }
   });
 
+  test('Settings: a GSTIN that is not valid says what is wrong, not just "Invalid request"', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Restaurant profile/);
+    await user.click(await screen.findByRole('checkbox', { name: /Charge GST on bills/ }));
+    await user.type(screen.getByLabelText('GSTIN'), 'abc');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('GSTIN should be 15 characters');
+    expect(alert).not.toHaveTextContent('Invalid request');
+    const [row] = await sql(`select gst_enabled from restaurants where slug = 'chai-point'`);
+    expect(row.gst_enabled).toBe(false); // nothing half-saved
+  });
+
   test('Save is only offered once something has actually changed', async () => {
     const user = userEvent.setup();
     await openSettings(user, STAFF_USER, /Restaurant profile/);

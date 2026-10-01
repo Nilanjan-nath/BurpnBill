@@ -142,19 +142,26 @@ export const updateRestaurantBody = z
     gst_enabled: z.boolean().optional(),
     gstin: z
       .string()
-      .trim()
-      .toUpperCase()
-      .regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'GSTIN should be 15 characters, like 19ABCDE1234F1Z5')
-      .or(z.literal('').transform(() => null))
+      .transform((v) => v.replace(/\s+/g, '').toUpperCase()) // pasted GSTINs often carry spaces
+      .pipe(
+        z.union([
+          z.literal('').transform(() => null),
+          z.string().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'GSTIN should be 15 characters, like 19ABCDE1234F1Z5'),
+        ]),
+      )
       .nullable()
       .optional(),
     gst_rate: z.number().min(0, 'GST rate cannot be negative').max(28, 'GST rate cannot be above 28%').multipleOf(0.01).optional(),
     // 14 digits, printed on every bill whether or not GST is on.
     fssai_number: z
       .string()
-      .trim()
-      .regex(/^\d{14}$/, 'FSSAI licence number is 14 digits')
-      .or(z.literal('').transform(() => null))
+      .transform((v) => v.replace(/\s+/g, ''))
+      .pipe(
+        z.union([
+          z.literal('').transform(() => null),
+          z.string().regex(/^\d{14}$/, 'FSSAI licence number is 14 digits'),
+        ]),
+      )
       .nullable()
       .optional(),
   })
