@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Coins, ConciergeBell, MapPin, Phone, Save, Store } from 'lucide-react';
+import { Check, Coins, ConciergeBell, FileText, MapPin, Percent, Phone, Save, ShieldCheck, Store } from 'lucide-react';
 import { useRestaurantProfile } from './useRestaurantProfile.js';
 
 const FIELD =
@@ -37,6 +37,10 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
         phone: profile.restaurant.phone ?? '',
         currency_code: profile.restaurant.currency_code ?? 'INR',
         service_mode: profile.restaurant.service_mode ?? 'table',
+        gst_enabled: profile.restaurant.gst_enabled ?? false,
+        gstin: profile.restaurant.gstin ?? '',
+        gst_rate: String(Number(profile.restaurant.gst_rate ?? 5)),
+        fssai_number: profile.restaurant.fssai_number ?? '',
       });
     }
   }, [profile.restaurant, form]);
@@ -60,6 +64,10 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
       phone: form.phone.trim(),
       currency_code: form.currency_code,
       service_mode: form.service_mode,
+      gst_enabled: form.gst_enabled,
+      gstin: form.gstin.trim(),
+      gst_rate: Number(form.gst_rate),
+      fssai_number: form.fssai_number.trim(),
     });
     // The sidebar names the café you are signed in to, and it reads that from
     // the identity fetched at sign-in — so a rename has to reach it, or the
@@ -73,7 +81,11 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
     form.address !== (profile.restaurant.address ?? '') ||
     form.phone !== (profile.restaurant.phone ?? '') ||
     form.currency_code !== profile.restaurant.currency_code ||
-    form.service_mode !== profile.restaurant.service_mode;
+    form.service_mode !== profile.restaurant.service_mode ||
+    form.gst_enabled !== profile.restaurant.gst_enabled ||
+    form.gstin !== (profile.restaurant.gstin ?? '') ||
+    Number(form.gst_rate) !== Number(profile.restaurant.gst_rate) ||
+    form.fssai_number !== (profile.restaurant.fssai_number ?? '');
 
   return (
     <form onSubmit={submit} className="overflow-hidden rounded-card border border-ink-200 bg-paper">
@@ -159,6 +171,76 @@ export function RestaurantProfile({ token, isOwner, onRenamed }) {
           The currency changes how every price is shown, here and on the customer's menu. It does not convert any
           price you have already set.
         </p>
+      </div>
+
+      <div className="border-y border-ink-200 bg-ink-50 p-6">
+        <h3 className="text-lg font-bold text-ink-900">Bill &amp; tax</h3>
+        <p className="text-sm font-semibold text-ink-600">What is printed at the top of every bill, and whether it charges GST.</p>
+      </div>
+      <div className="space-y-4 p-6">
+        <Field id="cafe-fssai" label="FSSAI licence number (optional)" Icon={ShieldCheck}>
+          <input
+            id="cafe-fssai"
+            type="text"
+            inputMode="numeric"
+            value={form.fssai_number}
+            onChange={set('fssai_number')}
+            maxLength={14}
+            disabled={!isOwner}
+            placeholder="14 digits"
+            className={FIELD}
+          />
+        </Field>
+
+        <label className="flex items-start gap-3 rounded-card border border-ink-200 p-4">
+          <input
+            type="checkbox"
+            checked={form.gst_enabled}
+            onChange={(e) => setForm({ ...form, gst_enabled: e.target.checked })}
+            disabled={!isOwner}
+            className="mt-1 h-5 w-5 accent-brand"
+          />
+          <span>
+            <span className="block text-sm font-bold text-ink-900">Charge GST on bills</span>
+            <span className="block text-xs font-semibold text-ink-600">
+              Only if your café is registered for GST. Your menu prices already include it: the bill shows how much of the
+              total is tax (CGST and SGST), and the customer pays the same amount. Leave this off if you are not
+              registered, or are on the composition scheme.
+            </span>
+          </span>
+        </label>
+
+        {form.gst_enabled && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="cafe-gstin" label="GSTIN" Icon={FileText}>
+              <input
+                id="cafe-gstin"
+                type="text"
+                value={form.gstin}
+                onChange={set('gstin')}
+                maxLength={15}
+                required
+                disabled={!isOwner}
+                placeholder="15 characters"
+                className={`${FIELD} uppercase`}
+              />
+            </Field>
+            <Field id="cafe-gst-rate" label="GST rate (%)" Icon={Percent}>
+              <input
+                id="cafe-gst-rate"
+                type="number"
+                min="0"
+                max="28"
+                step="0.5"
+                value={form.gst_rate}
+                onChange={set('gst_rate')}
+                required
+                disabled={!isOwner}
+                className={FIELD}
+              />
+            </Field>
+          </div>
+        )}
       </div>
 
       {isOwner && (

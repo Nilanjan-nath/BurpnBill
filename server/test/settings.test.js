@@ -101,7 +101,7 @@ test('changing the café profile is owner only, and validates the input', async 
     { currency_code: 'RUPEES' },
     { currency_code: 'IN' },
     { phone: 'x'.repeat(41) },
-    { tax_rate: 18 }, // not a field here — tax is not built (ARCHITECTURE §2)
+    { tax_rate: 18 }, // not a field: the GST rate is called gst_rate
     { service_mode: 'drive-through' }, // only the two the wording is written for
     { service_mode: '' },
   ]) {
@@ -420,4 +420,60 @@ test('a blank or missing display name is refused, not silently stored', async ()
   for (const body of [{}, { display_name: '' }, { display_name: '   ' }, { display_name: 'x'.repeat(81) }]) {
     assert.equal((await call('PATCH', '/api/me', { as: STAFF, body })).status, 400, JSON.stringify(body));
   }
+});
+
+// --- GST settings (docs/TASKS.md Step 14, phase B) -----------------------------
+
+const GSTIN = '19ABCDE1234F1Z5';
+
+test('GST is off by default, with a 5% rate waiting', async () => {
+  const r = (await call('GET', '/api/restaurant', { as: OWNER })).body.restaurant;
+  assert.equal(r.gst_enabled, false);
+  assert.equal(r.gstin, null);
+  assert.equal(r.gst_rate, '5.00');
+  assert.equal(r.fssai_number, null);
+});
+
+test('GST cannot be turned on without a GSTIN, and the GSTIN and FSSAI number are checked for shape', async () => {
+  const noGstin = await call('PATCH', '/api/restaurant', { as: OWNER, body: { gst_enabled: true } });
+  assert.equal(noGstin.status, 400);
+  assert.match(noGstin.body.error.message, /GSTIN/);
+
+  for (const body of [
+    { gstin: '12345' },
+    { gstin: '19ABCDE1234F1X5' }, // 14th character must be Z
+    { fssai_number: '1234' },
+    { fssai_number: 'ABCDEFGHIJKLMN' },
+    { gst_rate: -1 },
+    { gst_rate: 29 },
+    { gst_rate: 2.555 },
+    { gst_enabled: 'yes' },
+  ]) {
+    assert.equal((await call('PATCH', '/api/restaurant', { as: OWNER, body })).status, 400, JSON.stringify(body));
+  }
+  assert.equal((await call('GET', '/api/restaurant', { as: OWNER })).body.restaurant.gst_enabled, false, 'nothing was half-saved');
+});
+
+test('the owner turns GST on with a GSTIN (any case), sets a rate and an FSSAI number, and can turn it off again', async () => {
+  const on = await call('PATCH', '/api/restaurant', {
+    as: OWNER,
+    body: { gst_enabled: true, gstin: GSTIN.toLowerCase(), gst_rate: 12, fssai_number: '12345678901234' },
+  });
+  assert.equal(on.status, 200);
+  assert.equal(on.body.restaurant.gst_enabled, true);
+  assert.equal(on.body.restaurant.gstin, GSTIN, 'stored uppercase');
+  assert.equal(on.body.restaurant.gst_rate, '12.00');
+  assert.equal(on.body.restaurant.fssai_number, '12345678901234');
+
+  // The GSTIN cannot be cleared while GST is on...
+  assert.equal((await call('PATCH', '/api/restaurant', { as: OWNER, body: { gstin: null } })).status, 400);
+  // ...and turning GST off keeps the number for next time.
+  const off = await call('PATCH', '/api/restaurant', { as: OWNER, body: { gst_enabled: false } });
+  assert.equal(off.body.restaurant.gst_enabled, false);
+  assert.equal(off.body.restaurant.gstin, GSTIN);
+
+  // Only the owner changes any of it.
+  assert.equal((await call('PATCH', '/api/restaurant', { as: STAFF, body: { gst_enabled: true } })).status, 403);
+
+  await db.query(`update restaurants set gstin = null, fssai_number = null, gst_rate = 5 where id = $1`, [RESTAURANT_ID]);
 });

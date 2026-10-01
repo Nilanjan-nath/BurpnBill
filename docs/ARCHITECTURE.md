@@ -47,7 +47,15 @@ and place an order directly — which appears instantly on a live kitchen/recept
   nothing charges. Applying one is a change to how every order is priced — order creation, both
   bills, checkout and the dashboard's takings all read those totals — so it is its own piece of
   work, not a settings field **(decided, step 6)**. Each is its own piece of work; the checkout
-  screen deliberately stops at "what's owed, and how was it paid" **(decided, step 6)**
+  screen deliberately stops at "what's owed, and how was it paid" **(decided, step 6)**.
+  **Changed in step 14 (billing, phase B): optional GST, as a bill-level split, not order pricing.**
+  Prices stay tax-INCLUSIVE and `orders.tax_amount` stays 0, so order creation, both bills' totals and
+  the dashboard's takings are untouched. A café that is GST-registered turns it on in Settings
+  (`restaurants.gst_enabled`, `gstin`, one `gst_rate`); at checkout the bill carves tax out of the total
+  (tax = total x rate / (100 + rate), CGST half, SGST the rest, taxable value the remainder) and stores
+  the split with the rate and registration numbers, frozen. One rate per café; per-item rates, exclusive
+  pricing, inter-state IGST and credit notes are not built. Discounts, tips, split bills and partial
+  payments still have no schema
 - **Invoices** (email/SMS) — planned for after v1 **(decided)**
 - ~~Customer-facing order-status tracking~~ **Reversed (step 8):** the customer's phone now shows
   where each order is — waiting for the counter, accepted, being prepared, ready, served or

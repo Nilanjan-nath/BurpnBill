@@ -177,3 +177,37 @@
 .bnb-receipt-thermal h1 {
   font-size: 1.5em;
 }
+
+.bnb-receipt-title {
+  margin-top: 0.4em !important;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.bnb-receipt-gst {
+  width: 100%;
+  margin-top: 0.75em;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.bnb-receipt-gst caption {
+  padding-bottom: 0.3em;
+  text-align: left;
+  font-weight: 700;
+  color: #444;
+}
+.bnb-receipt-gst th {
+  padding: 0.3em 0;
+  text-align: left;
+  border-bottom: 1px solid #999;
+}
+.bnb-receipt-gst td {
+  padding: 0.3em 0;
+}
+.bnb-receipt-gst .num {
+  text-align: right;
+  padding-left: 0.5em;
+}
+.bnb-receipt-thermal .bnb-receipt-gst {
+  font-size: 0.85em;
+}

@@ -1040,6 +1040,30 @@ describe('Settings', () => {
     await waitFor(() => expect(sheet.querySelectorAll('img').length).toBe(4));
   });
 
+  test('Settings: turning GST on asks for a GSTIN and a rate, and saves them', async () => {
+    const user = userEvent.setup();
+    try {
+      await openSettings(user, STAFF_USER, /Restaurant profile/);
+      expect(screen.queryByLabelText('GSTIN')).not.toBeInTheDocument(); // off by default
+
+      await user.click(await screen.findByRole('checkbox', { name: /Charge GST on bills/ }));
+      await user.type(screen.getByLabelText('GSTIN'), '19abcde1234f1z5');
+      await user.clear(screen.getByLabelText('GST rate (%)'));
+      await user.type(screen.getByLabelText('GST rate (%)'), '18');
+      await user.type(screen.getByLabelText(/FSSAI licence number/), '12345678901234');
+      await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+      await waitFor(async () => {
+        const [row] = await sql(`select gst_enabled, gstin, gst_rate::text as rate, fssai_number from restaurants where slug = 'chai-point'`);
+        expect(row).toEqual({ gst_enabled: true, gstin: '19ABCDE1234F1Z5', rate: '18.00', fssai_number: '12345678901234' });
+      });
+    } finally {
+      await sql(
+        `update restaurants set gst_enabled = false, gstin = null, gst_rate = 5, fssai_number = null where slug = 'chai-point'`,
+      );
+    }
+  });
+
   test('Save is only offered once something has actually changed', async () => {
     const user = userEvent.setup();
     await openSettings(user, STAFF_USER, /Restaurant profile/);
@@ -1705,6 +1729,44 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     expect(localStorage.getItem('burpnbill.paper')).toBe('thermal');
 
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
+  });
+
+  test('GST on the bill: the receipt names the GSTIN, splits CGST and SGST, and shows the breakdown', async () => {
+    const user = userEvent.setup();
+    await sql(
+      `update restaurants set gst_enabled = true, gstin = '19ABCDE1234F1Z5', gst_rate = 5, fssai_number = '12345678901234'
+        where slug = 'chai-point'`,
+    );
+    await sql(
+      `update orders set status = 'cancelled'
+        where table_id = (select id from restaurant_tables where label = 'T2')
+          and paid_at is null and status <> 'cancelled'`,
+    );
+    try {
+      await openPOS(user);
+      await user.click((await screen.findByText('T2')).closest('button'));
+      await user.click((await screen.findByText('Masala Chai')).closest('button')); // 30.00 incl. GST
+      await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+      await user.click(await screen.findByRole('button', { name: /Bill & checkout/ }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Confirm payment/ }));
+
+      expect(await screen.findByText('Payment received')).toBeInTheDocument();
+      const preview = within(screen.getByRole('dialog')).getByLabelText('Receipt preview');
+      expect(within(preview).getByText('Tax Invoice')).toBeInTheDocument();
+      expect(within(preview).getByText('GSTIN: 19ABCDE1234F1Z5')).toBeInTheDocument();
+      expect(within(preview).getByText('FSSAI Lic. No: 12345678901234')).toBeInTheDocument();
+      // 30.00 at 5% inclusive: tax 1.43 (CGST 0.72, SGST 0.71), taxable 28.57
+      expect(within(preview).getByText('Taxable value').closest('div')).toHaveTextContent('₹28.57');
+      expect(within(preview).getByText('CGST @ 2.5%').closest('div')).toHaveTextContent('₹0.72');
+      expect(within(preview).getByText('SGST @ 2.5%').closest('div')).toHaveTextContent('₹0.71');
+      expect(within(preview).getByText('Total').closest('div')).toHaveTextContent('₹30.00');
+      expect(within(preview).getByRole('table', { name: 'GST breakdown' })).toBeInTheDocument();
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
+    } finally {
+      await sql(
+        `update restaurants set gst_enabled = false, gstin = null, gst_rate = 5, fssai_number = null where slug = 'chai-point'`,
+      );
+    }
   });
 
   test('a QR order waits in the QR tab and only reaches the kitchen once approved', async () => {

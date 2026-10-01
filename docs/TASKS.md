@@ -1572,7 +1572,7 @@ computed on screen and never stored.
       settled it, when; a table label snapshot. Checkout creates the bill in the same transaction as the payments.
       Receipt: café name, address, phone, FSSAI/GSTIN line, bill number, table, date, payment, item table,
       subtotal, total, footer text; A4 / 80mm toggle with `@page` sizes; on-screen preview as in the reference
-- [ ] **B. GST.** Settings > Billing: GST on/off, GSTIN, rate (default 5), FSSAI number, receipt footer. Bill stores
+- [x] **B. GST** (branch `feat/billing-gst`; migration `20261002090000_gst.sql` NOT yet run on live). Settings > Billing: GST on/off, GSTIN, rate (default 5), FSSAI number, receipt footer. Bill stores
       taxable value, CGST, SGST and the rate it used. Receipt gets the tax lines and a GST breakdown table
 - [ ] **C. Digital receipt.** Public read-only page at `/r/<long random token>` (no personal data), reached by the
       QR on the printout ("Scan for digital receipt")
@@ -1589,3 +1589,13 @@ nothing), `GET /bills/:id`, `amount_tendered`. Web: `staff/Receipt.jsx` (one com
 paper toggle A4 / Thermal 80mm (remembered), `@page` size per paper, cash short of the total blocks Confirm.
 Tests: server 212 (new `bills.test.js`, 9), web 166. Deliberately not on the receipt yet: tax lines (B) and the
 "scan for digital receipt" QR (C). Not tried on a real printer.
+
+**Phase B built (2026-10-01).** Settings > Restaurant profile > "Bill & tax": FSSAI number (optional, printed
+whether or not GST is on), "Charge GST on bills" (needs a GSTIN, checked in the service), one rate (default 5,
+0-28). Checkout splits the inclusive total with `splitInclusiveGst` (whole paise; CGST gets the odd paisa) and
+stores rate, GSTIN and the split on the bill; a DB check keeps the parts adding up. Receipt: GSTIN and FSSAI
+lines, "Tax Invoice" title, Taxable value / CGST / SGST lines, a GST breakdown table, and a "prices include GST"
+caption. Tests: server 218, web 168. Mutation-checked: GST ignored at checkout, and an off-by-one paisa in SGST.
+**For an accountant to confirm before a GST-registered café relies on it:** the "Tax Invoice" wording and layout,
+whether a SAC/HSN code (restaurant services) must print (left off rather than guess), and the per-day bill numbering
+(consecutive per café, not reset per financial year). Not built: per-item rates, IGST, exclusive pricing, credit notes.

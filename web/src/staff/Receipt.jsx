@@ -13,6 +13,9 @@ export function Receipt({ bill, size = 'a4' }) {
   const rows = mergeLines(bill.lines);
   const money = (amount) => formatMoney(amount, bill.currency_code);
   const tax = Number(bill.tax_amount);
+  const gst = bill.tax_rate != null; // GST was charged on this bill
+  const rate = Number(bill.tax_rate);
+  const half = `${rate / 2}%`;
 
   return (
     <div className={`bnb-receipt bnb-receipt-${size}`}>
@@ -20,6 +23,9 @@ export function Receipt({ bill, size = 'a4' }) {
         <h1>{bill.restaurant_name}</h1>
         {bill.restaurant_address && <p className="bnb-receipt-address">{bill.restaurant_address}</p>}
         {bill.restaurant_phone && <p>Ph: {bill.restaurant_phone}</p>}
+        {bill.gstin && <p>GSTIN: {bill.gstin}</p>}
+        {bill.fssai_number && <p>FSSAI Lic. No: {bill.fssai_number}</p>}
+        {gst && <p className="bnb-receipt-title">Tax Invoice</p>}
       </header>
 
       <dl className="bnb-receipt-meta">
@@ -51,8 +57,18 @@ export function Receipt({ bill, size = 'a4' }) {
       </table>
 
       <dl className="bnb-receipt-totals">
-        <Meta label="Subtotal" value={money(bill.subtotal)} />
-        {tax > 0 && <Meta label="Tax" value={money(bill.tax_amount)} />}
+        {gst ? (
+          <>
+            <Meta label="Taxable value" value={money(bill.taxable_value)} />
+            <Meta label={`CGST @ ${half}`} value={money(bill.cgst_amount)} />
+            <Meta label={`SGST @ ${half}`} value={money(bill.sgst_amount)} />
+          </>
+        ) : (
+          <>
+            <Meta label="Subtotal" value={money(bill.subtotal)} />
+            {tax > 0 && <Meta label="Tax" value={money(bill.tax_amount)} />}
+          </>
+        )}
         <Meta label="Total" value={money(bill.total_amount)} strong />
         {bill.amount_tendered != null && (
           <>
@@ -61,6 +77,30 @@ export function Receipt({ bill, size = 'a4' }) {
           </>
         )}
       </dl>
+
+      {gst && (
+        <table className="bnb-receipt-gst" aria-label="GST breakdown">
+          <caption>GST breakdown (prices include GST)</caption>
+          <thead>
+            <tr>
+              <th scope="col">Rate</th>
+              <th scope="col" className="num">Taxable</th>
+              <th scope="col" className="num">CGST</th>
+              <th scope="col" className="num">SGST</th>
+              <th scope="col" className="num">Total tax</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{rate}%</td>
+              <td className="num">{money(bill.taxable_value)}</td>
+              <td className="num">{money(bill.cgst_amount)}</td>
+              <td className="num">{money(bill.sgst_amount)}</td>
+              <td className="num">{money(bill.tax_amount)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       <footer className="bnb-receipt-foot">
         <p>Thank you for dining with us!</p>

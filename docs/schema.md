@@ -129,8 +129,13 @@ unique with `restaurant_id`), a **snapshot** of everything a receipt prints (tab
 name/address/phone, currency, method, subtotal/tax/total, cash tendered and change), who settled it
 and when. `bill_lines` copies the dishes as they stood. Nothing on a bill joins back to the menu or
 the café, so a reprint never changes. `payments.bill_id` ties each payment row to its bill (null for
-payments made before this migration, which have no bill). `tax_amount` is a zero placeholder until
-GST (phase B).
+payments made before this migration, which have no bill).
+
+**GST (migration 20261002090000).** `restaurants` gains `gst_enabled`, `gstin` (required while enabled, by a
+check), `gst_rate` (0-28, default 5) and `fssai_number`. `bills` gains `gstin`, `fssai_number`, `tax_rate`,
+`taxable_value`, `cgst_amount`, `sgst_amount`; `tax_amount` is the total tax. Prices are tax-inclusive, and a
+check on `bills` enforces taxable + CGST + SGST = total, and CGST + SGST = tax, to the paisa. `tax_rate` null
+means GST was not charged.
 
 ## Known gaps, deliberately left
 

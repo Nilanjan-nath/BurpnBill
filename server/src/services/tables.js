@@ -275,24 +275,32 @@ export async function checkoutTable(
     const { rows: cafe } = await tx.query(
       `update public.restaurants set bill_counter = bill_counter + 1
         where id = $1
-        returning bill_counter, name, address, phone, currency_code`,
+        returning bill_counter, name, address, phone, currency_code, gst_enabled, gstin, gst_rate, fssai_number`,
       [restaurantId],
     );
+
+    // GST, when the café charges it: prices are tax-inclusive, so the tax is
+    // carved out of the total rather than added to it. Whole paise throughout.
+    const gst = cafe[0].gst_enabled ? splitInclusiveGst(totals.total_amount, cafe[0].gst_rate) : null;
 
     const { rows: created } = await tx.query(
       `insert into public.bills
          (restaurant_id, bill_number, idempotency_key, table_id, table_label,
           restaurant_name, restaurant_address, restaurant_phone, currency_code,
           payment_method, subtotal, tax_amount, total_amount,
-          amount_tendered, change_given, settled_by)
+          amount_tendered, change_given, settled_by,
+          gstin, fssai_number, tax_rate, taxable_value, cgst_amount, sgst_amount)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::public.payment_method, $11, $12, $13,
-               $14::numeric, case when $14::numeric is null then null else $14::numeric - $13::numeric end, $15)
+               $14::numeric, case when $14::numeric is null then null else $14::numeric - $13::numeric end, $15,
+               $16, $17, $18, $19, $20, $21)
        returning id`,
       [
         restaurantId, cafe[0].bill_counter, idempotencyKey, tableId, tables[0].label,
         cafe[0].name, cafe[0].address, cafe[0].phone, cafe[0].currency_code,
-        method, totals.subtotal, totals.tax_amount, totals.total_amount,
+        method, totals.subtotal, gst ? gst.tax : totals.tax_amount, totals.total_amount,
         tendered, staffUserId,
+        cafe[0].gst_enabled ? cafe[0].gstin : null, cafe[0].fssai_number,
+        gst ? cafe[0].gst_rate : null, gst?.taxable ?? null, gst?.cgst ?? null, gst?.sgst ?? null,
       ],
     );
     const billId = created[0].id;
@@ -325,4 +333,22 @@ export async function checkoutTable(
       bill: await getBill(tx, restaurantId, billId),
     };
   }, { actorId: staffUserId ?? undefined });
+}
+
+// Splits a tax-INCLUSIVE total into taxable value, CGST and SGST, to the paisa.
+//   tax = total * rate / (100 + rate)
+// CGST takes the odd paisa when the tax is odd, SGST the rest, so the three
+// parts always add back to the total exactly (the bills table checks that).
+export function splitInclusiveGst(total, rate) {
+  const totalPaise = Math.round(Number(total) * 100);
+  const rateHundredths = Math.round(Number(rate) * 100); // 5.00% -> 500
+  const taxPaise = Math.round((totalPaise * rateHundredths) / (10000 + rateHundredths));
+  const cgstPaise = Math.round(taxPaise / 2);
+  const money = (paise) => (paise / 100).toFixed(2);
+  return {
+    tax: money(taxPaise),
+    taxable: money(totalPaise - taxPaise),
+    cgst: money(cgstPaise),
+    sgst: money(taxPaise - cgstPaise),
+  };
 }

@@ -222,3 +222,66 @@ test('a bill can be fetched by front of house in its own café only', async () =
   assert.equal((await call('GET', `/api/bills/${bill.id}`, { as: RIVAL })).status, 404, 'another café cannot read it');
   assert.equal((await call('GET', '/api/bills/99999999-9999-4999-8999-999999999999', { as: OWNER })).status, 404);
 });
+
+// --- GST on the bill (phase B) --------------------------------------------------
+
+import { splitInclusiveGst } from '../src/services/tables.js';
+
+test('splitting an inclusive total: tax carved out, CGST and SGST add back exactly', () => {
+  // 180.00 at 5% -> tax 8.57 (180 * 5 / 105 = 8.5714), taxable 171.43
+  assert.deepEqual(splitInclusiveGst('180.00', '5.00'), { tax: '8.57', taxable: '171.43', cgst: '4.29', sgst: '4.28' });
+  // Odd paisa goes to CGST; the parts always sum to the total.
+  for (const [total, rate] of [['200.00', '5.00'], ['99.99', '12.00'], ['0.01', '5.00'], ['1234.56', '18.00'], ['75.00', '2.50']]) {
+    const s = splitInclusiveGst(total, rate);
+    const paise = (v) => Math.round(Number(v) * 100);
+    assert.equal(paise(s.taxable) + paise(s.cgst) + paise(s.sgst), paise(total), `${total} @ ${rate}`);
+    assert.equal(paise(s.cgst) + paise(s.sgst), paise(s.tax));
+  }
+  assert.deepEqual(splitInclusiveGst('100.00', '0.00'), { tax: '0.00', taxable: '100.00', cgst: '0.00', sgst: '0.00' });
+});
+
+test('with GST on, the bill carries the split and the registration numbers, and the total is unchanged', async () => {
+  await db.query(
+    `update restaurants set gst_enabled = true, gstin = '19ABCDE1234F1Z5', gst_rate = 5, fssai_number = '12345678901234' where id = $1`,
+    [RESTAURANT_ID],
+  );
+  try {
+    const table = await freshTable();
+    await order(table, 'Masala Chai', 2); // 60.00
+    await order(table, 'Veg Sandwich', 1); // 80.00 -> 140.00 inclusive
+
+    const { bill } = (await checkout(OWNER, table)).body;
+    assert.equal(bill.total_amount, '140.00', 'inclusive: the customer pays the menu prices');
+    assert.equal(bill.tax_rate, '5.00');
+    assert.equal(bill.tax_amount, '6.67'); // 140 * 5 / 105 = 6.6667
+    assert.equal(bill.taxable_value, '133.33');
+    assert.equal(bill.cgst_amount, '3.34');
+    assert.equal(bill.sgst_amount, '3.33');
+    assert.equal(bill.gstin, '19ABCDE1234F1Z5');
+    assert.equal(bill.fssai_number, '12345678901234');
+
+    // Frozen: turning GST off, or changing the rate, does not rewrite a reprint.
+    await db.query(`update restaurants set gst_enabled = false, gst_rate = 18 where id = $1`, [RESTAURANT_ID]);
+    const again = (await call('GET', `/api/bills/${bill.id}`, { as: OWNER })).body.bill;
+    assert.equal(again.tax_rate, '5.00');
+    assert.equal(again.cgst_amount, '3.34');
+  } finally {
+    await db.query(`update restaurants set gst_enabled = false, gstin = null, gst_rate = 5, fssai_number = null where id = $1`, [RESTAURANT_ID]);
+  }
+});
+
+test('with GST off the bill has no tax split, but still carries an FSSAI number if the café has one', async () => {
+  await db.query(`update restaurants set fssai_number = '12345678901234' where id = $1`, [RESTAURANT_ID]);
+  try {
+    const table = await freshTable();
+    await order(table, 'Masala Chai');
+    const { bill } = (await checkout(OWNER, table)).body;
+    assert.equal(bill.tax_rate, null);
+    assert.equal(bill.taxable_value, null);
+    assert.equal(bill.gstin, null);
+    assert.equal(bill.tax_amount, '0.00');
+    assert.equal(bill.fssai_number, '12345678901234');
+  } finally {
+    await db.query(`update restaurants set fssai_number = null where id = $1`, [RESTAURANT_ID]);
+  }
+});

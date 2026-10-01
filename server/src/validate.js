@@ -136,6 +136,27 @@ export const updateRestaurantBody = z
     // How food reaches the customer. Only changes the wording of "Ready" on the
     // customer's phone — see orderStatus.js.
     service_mode: z.enum(['table', 'counter']).optional(),
+    // GST (docs/TASKS.md Step 14). Off by default; the GSTIN is required to turn it
+    // on (checked in the service, which can see the stored one). 15 characters:
+    // 2-digit state code, 10-character PAN, entity number, 'Z', check character.
+    gst_enabled: z.boolean().optional(),
+    gstin: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'GSTIN should be 15 characters, like 19ABCDE1234F1Z5')
+      .or(z.literal('').transform(() => null))
+      .nullable()
+      .optional(),
+    gst_rate: z.number().min(0, 'GST rate cannot be negative').max(28, 'GST rate cannot be above 28%').multipleOf(0.01).optional(),
+    // 14 digits, printed on every bill whether or not GST is on.
+    fssai_number: z
+      .string()
+      .trim()
+      .regex(/^\d{14}$/, 'FSSAI licence number is 14 digits')
+      .or(z.literal('').transform(() => null))
+      .nullable()
+      .optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'Send at least one field to update' });
 

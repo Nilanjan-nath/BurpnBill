@@ -7,7 +7,8 @@ import { notFound } from '../errors.js';
 //
 // `db` may be the pool or an open transaction client; both have .query.
 const BILL_COLUMNS = `id, bill_number, table_label, restaurant_name, restaurant_address, restaurant_phone,
-  currency_code, payment_method, subtotal, tax_amount, total_amount, amount_tendered, change_given, settled_at`;
+  currency_code, payment_method, subtotal, tax_amount, total_amount, amount_tendered, change_given, settled_at,
+  gstin, fssai_number, tax_rate, taxable_value, cgst_amount, sgst_amount`;
 
 export async function getBill(db, restaurantId, billId) {
   const { rows } = await db.query(
