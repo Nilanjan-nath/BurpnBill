@@ -44,6 +44,9 @@ export function POS({ token }) {
   const [category, setCategory] = useState('All');
   const [floorTab, setFloorTab] = useState('floor'); // floor | qr
   const [orderTab, setOrderTab] = useState('cart'); // cart | ongoing
+  // Below xl (1280px) the three panes can't sit side by side, so one shows at a
+  // time and the switcher bar picks which. At xl and up this is ignored.
+  const [pane, setPane] = useState('tables'); // tables | menu | order
 
   const categories = useMemo(() => {
     if (!pos.items) return ['All'];
@@ -76,9 +79,36 @@ export function POS({ token }) {
     // relative: the error banner below is absolutely positioned, and without a
     // positioned ancestor it anchors to the document instead of to POS — which
     // put failures somewhere nobody was looking.
-    <div className="relative flex min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1 flex-col xl:flex-row">
+      <div className="flex flex-none gap-1 border-b border-ink-200 bg-paper p-2 xl:hidden" role="group" aria-label="POS sections">
+        {[
+          { id: 'tables', label: 'Tables', aria: 'Show tables', badge: pendingCount, Icon: LayoutGrid },
+          { id: 'menu', label: 'Items', aria: 'Show menu items', badge: 0, Icon: Search },
+          { id: 'order', label: 'Order', aria: 'Show order', badge: pos.cart.length, Icon: ShoppingCart },
+        ].map(({ id, label, aria, badge, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            aria-label={aria}
+            aria-current={pane === id}
+            onClick={() => setPane(id)}
+            className={`flex min-h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-card px-2 text-sm font-bold transition-colors duration-150 ease-tap ${
+              pane === id ? 'bg-brand text-white' : 'text-ink-700 hover:bg-ink-100'
+            }`}
+          >
+            <Icon className="h-4 w-4 flex-none" aria-hidden="true" />
+            <span className="truncate">{label}</span>
+            {badge > 0 && (
+              <span className={`rounded-full px-1.5 text-xs font-bold ${pane === id ? 'bg-white/25 text-white' : 'bg-placed-ink text-white'}`}>
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {pos.error && (
-        <div className="absolute inset-x-0 top-0 z-10 mx-6 mt-4 flex items-center justify-between gap-3 rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
+        <div className="absolute inset-x-0 top-0 z-10 mx-3 mt-16 xl:mt-4 xl:mx-6 flex items-center justify-between gap-3 rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
           <span>{pos.error}</span>
           <button type="button" onClick={pos.dismissError} aria-label="Dismiss" className="text-lg leading-none">
             ×
@@ -87,7 +117,7 @@ export function POS({ token }) {
       )}
 
       {/* Floor / QR */}
-      <div className="flex w-80 flex-none flex-col overflow-hidden border-r border-ink-200 bg-paper">
+      <div className={`${pane === 'tables' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col overflow-hidden bg-paper xl:flex xl:w-80 xl:flex-none xl:border-r xl:border-ink-200`}>
         <div className="flex flex-none gap-1 p-3">
           {[
             { id: 'floor', label: 'Floor', Icon: LayoutGrid, count: 0 },
@@ -144,7 +174,11 @@ export function POS({ token }) {
                       selected ? 'border-brand bg-brand' : STATUS_CARD[t.status]
                     }`}
                   >
-                    <button type="button" onClick={() => pos.selectTable(t.id)} className="w-full text-left">
+                    <button type="button" onClick={() => {
+                        pos.selectTable(t.id);
+                        setPane('menu');
+                      }}
+                      className="w-full text-left">
                       <div className="flex items-start justify-between gap-1">
                         <span className={`font-display text-base font-extrabold ${selected ? 'text-white' : 'text-ink-900'}`}>{t.label}</span>
                         <span
@@ -184,7 +218,7 @@ export function POS({ token }) {
       </div>
 
       {/* Menu */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`${pane === 'menu' ? 'flex' : 'hidden'} min-h-0 min-w-0 flex-1 flex-col xl:flex`}>
         <div className="flex flex-none flex-col gap-3 border-b border-ink-200 bg-paper p-4">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" aria-hidden="true" />
@@ -213,7 +247,7 @@ export function POS({ token }) {
           </div>
         </div>
 
-        <div className="grid flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto p-4 lg:grid-cols-3">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto p-3 sm:grid-cols-3 sm:p-4">
           {visibleItems.map((item) => (
             <button
               key={item.id}
@@ -241,7 +275,7 @@ export function POS({ token }) {
       </div>
 
       {/* Order */}
-      <div className="flex w-96 flex-none flex-col border-l border-ink-200 bg-paper">
+      <div className={`${pane === 'order' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col bg-paper xl:flex xl:w-96 xl:flex-none xl:border-l xl:border-ink-200`}>
         <div className="flex flex-none items-center justify-between gap-2 bg-brand px-4 py-4">
           <div className="flex items-center gap-2 text-base font-bold text-white">
             <ShoppingCart className="h-5 w-5" aria-hidden="true" /> Order

@@ -8,7 +8,8 @@
    inside the checkout <dialog>, because a modal dialog sits in the browser's
    top layer and browsers print that inconsistently. Hidden on screen; on paper
    it is the only thing left. */
-.bnb-print-receipt {
+.bnb-print-receipt,
+.bnb-print-sheet {
   display: none;
 }
 @media print {
@@ -18,5 +19,44 @@
   .bnb-print-receipt {
     display: block !important;
     font-size: 12pt;
+  }
+  /* Seating Plan's QR sheet: two codes across, a card never split over pages. */
+  .bnb-print-sheet {
+    display: block !important;
+    color: #000;
+    font-family: sans-serif;
+  }
+  .bnb-print-sheet h1 {
+    margin: 0 0 12pt;
+    font-size: 16pt;
+    text-align: center;
+  }
+  .bnb-print-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18pt;
+  }
+  .bnb-print-sheet-card {
+    break-inside: avoid;
+    border: 1pt dashed #999;
+    padding: 12pt;
+    text-align: center;
+  }
+  .bnb-print-sheet-label {
+    font-size: 18pt;
+    font-weight: 700;
+  }
+  .bnb-print-sheet-seats {
+    font-size: 10pt;
+  }
+  .bnb-print-sheet-card img {
+    display: block;
+    width: 100%;
+    max-width: 220px;
+    margin: 6pt auto;
+  }
+  .bnb-print-sheet-url {
+    font-size: 8pt;
+    word-break: break-all;
   }
 }

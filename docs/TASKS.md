@@ -1521,3 +1521,28 @@ liked. Rules and rationale: `docs/design.md`, "The BurpnBill brand system".*
 - Print / save the bill as PDF; tax invoices (with invoices, above)
 - Separate kitchen and reception views
 - Structured modifiers, stock counts, tax engine, customer login
+
+## Step 13 — Phone layout, order alerts, QR print, starter menu (branch `fix/mobile-sound-print-seed`)
+
+Found on the first live day (2026-10-01).
+
+- [x] **Phone layout for the dashboard.** Below 1024px the sidebar is a drawer opened from a menu button
+      in the header (it is hidden from keyboard and screen readers while shut); header buttons go
+      icon-only below 640px. POS shows one pane at a time below 1280px (Tables / Items / Order, with a
+      QR-orders badge and a cart count) because three panes cannot sit side by side; picking a table jumps to
+      Items. 1280px and up is unchanged. The seating-plan list drops its button labels on a phone. Checked at
+      375px on every owner tab; the floor plan canvas still scrolls sideways inside its own box
+- [x] **New-order sound.** Root cause: QR orders push `qr_order_pending`, which the board deliberately
+      ignored, and the chime only listened for `order_created` (sent on approval). So a QR order at the counter
+      made no sound. Now owner and staff are alerted when a QR order arrives (a rejection is not an alert,
+      and approving an order already announced does not ring twice); a kitchen login is alerted when an
+      order is approved, not before. The button shows "Sound on" (click to mute), plays the chime when
+      switched on so you can hear it works, is remembered, and re-arms itself on the first tap after a reload
+      (browsers refuse sound without a tap). The chime is two louder notes
+- [x] **Print QR sheet was blank.** `@media print { body > #root { display: none } }` (added so the receipt
+      prints alone) hid the whole app, including the sheet. The sheet is now a portal to `<body>`, like the
+      receipt. Not tried on a real printer
+- [x] **Starter menu for a new café**: four categories and twelve sample dishes, inserted in the same
+      transaction as the café (`server/src/services/starterMenu.js`). Placeholder prices in rupees; all editable
+- Tests: server 203, web 165. Mutation-checked: starter menu removed, and the kitchen rule removed
+- [ ] Not checked: a real print of the QR sheet; sound on a real phone (iOS needs the first tap)

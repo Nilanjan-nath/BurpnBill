@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Minus, Pause, Pencil, Play, Plus, Printer, QrCode, Table2, Trash2 } from 'lucide-react';
 import { useTablesAdmin } from './useTablesAdmin.js';
 import { TableForm } from './TableForm.jsx';
@@ -142,24 +143,24 @@ export function SeatingPlan({ token }) {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-card border border-ink-200 bg-paper print:hidden">
+        <div className="overflow-x-auto rounded-card border border-ink-200 bg-paper print:hidden">
           <table className="w-full">
             <caption className="sr-only">Tables, their capacity and their QR codes</caption>
             <thead>
               <tr className="border-b border-ink-200 bg-ink-50 text-left">
-                <th scope="col" className="px-4 py-3 text-sm font-bold text-ink-900">
+                <th scope="col" className="px-2 py-3 sm:px-4 text-sm font-bold text-ink-900">
                   Table
                 </th>
-                <th scope="col" className="px-4 py-3 text-sm font-bold text-ink-900">
+                <th scope="col" className="px-2 py-3 sm:px-4 text-sm font-bold text-ink-900">
                   Capacity
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-ink-900">
+                <th scope="col" className="px-2 py-3 sm:px-4 text-right text-sm font-bold text-ink-900">
                   Ordering
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-ink-900">
-                  QR
+                <th scope="col" className="px-2 py-3 sm:px-4 text-right text-sm font-bold text-ink-900">
+                  <span className="sr-only sm:not-sr-only">QR</span>
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-bold text-ink-900">
+                <th scope="col" className="px-2 py-3 sm:px-4 text-right text-sm font-bold text-ink-900">
                   Remove
                 </th>
               </tr>
@@ -202,19 +203,7 @@ export function SeatingPlan({ token }) {
 
       {qrFor && <TableQrDialog table={qrFor} dataUrl={qrDataUrls[qrFor.id]} onClose={() => setQrFor(null)} />}
 
-      {/* Printable sheet: every code at a size worth taping to a table, hidden
-          on screen. The plan and the list above are for arranging; this is for
-          the roll of tape. */}
-      <div className="hidden print:grid print:grid-cols-2 print:gap-6">
-        {tables.map((t) => (
-          <div key={t.id} className="break-inside-avoid text-center">
-            <div className="text-lg font-bold">{t.label}</div>
-            {t.seats != null && <div className="text-sm">{t.seats} seats</div>}
-            {qrDataUrls[t.id] && <img src={qrDataUrls[t.id]} alt="" className="mx-auto w-full max-w-[220px]" />}
-            <div className="break-all text-[10px]">{tableUrl(t.qr_token)}</div>
-          </div>
-        ))}
-      </div>
+      <PrintableQrSheet tables={tables} qrDataUrls={qrDataUrls} />
     </div>
   );
 }
@@ -239,7 +228,7 @@ function TableRow({
     // and its row lights up, and the other way round. Without it, finding
     // "the one in the far corner" in a list of twenty is a guessing game.
     <tr className={`border-b border-ink-200 last:border-b-0 ${selected ? 'bg-brand-50' : ''}`}>
-      <td className="px-4 py-3">
+      <td className="px-2 py-3 sm:px-4">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -261,7 +250,7 @@ function TableRow({
         </div>
         {!table.is_active && <div className="text-xs font-bold text-ink-600">Paused</div>}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-2 py-3 sm:px-4">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -284,7 +273,7 @@ function TableRow({
           </button>
         </div>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-2 py-3 sm:px-4 text-right">
         <button
           type="button"
           disabled={busy}
@@ -293,20 +282,20 @@ function TableRow({
           className="ml-auto flex items-center gap-1.5 rounded-input border border-ink-300 px-3 py-1.5 text-xs font-bold text-ink-700 hover:bg-ink-50 disabled:opacity-50"
         >
           {table.is_active ? <Pause className="h-3.5 w-3.5" aria-hidden="true" /> : <Play className="h-3.5 w-3.5" aria-hidden="true" />}
-          {table.is_active ? 'Pause' : 'Resume'}
+          <span className="hidden sm:inline">{table.is_active ? 'Pause' : 'Resume'}</span>
         </button>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-2 py-3 sm:px-4 text-right">
         <button
           type="button"
           onClick={onShowQr}
           aria-label={`Show the QR code for ${table.label}`}
           className="ml-auto flex min-h-10 items-center gap-1.5 rounded-input px-2 text-sm font-bold text-brand-700 hover:bg-brand-50"
         >
-          <QrCode className="h-4 w-4" aria-hidden="true" /> QR
+          <QrCode className="h-4 w-4" aria-hidden="true" /> <span className="hidden sm:inline">QR</span>
         </button>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-2 py-3 sm:px-4 text-right">
         {confirming ? (
           <div className="flex items-center justify-end gap-2">
             {/* Says what actually happens: the table goes, its orders stay. */}
@@ -339,5 +328,28 @@ function TableRow({
         )}
       </td>
     </tr>
+  );
+}
+
+// The sheet for the roll of tape: every code at a size worth taping to a table.
+// Rendered through a portal to <body>, like the checkout receipt, because the
+// print rules in tailwind.css hide #root (the whole app) on paper, and a sheet
+// left inside it printed as a blank page. Hidden on screen.
+function PrintableQrSheet({ tables, qrDataUrls }) {
+  return createPortal(
+    <div className="bnb-print-sheet" aria-hidden="true">
+      <h1>Scan to order</h1>
+      <div className="bnb-print-sheet-grid">
+        {tables.map((t) => (
+          <div key={t.id} className="bnb-print-sheet-card">
+            <div className="bnb-print-sheet-label">{t.label}</div>
+            {t.seats != null && <div className="bnb-print-sheet-seats">{t.seats} seats</div>}
+            {qrDataUrls[t.id] && <img src={qrDataUrls[t.id]} alt="" />}
+            <div className="bnb-print-sheet-url">{tableUrl(t.qr_token)}</div>
+          </div>
+        ))}
+      </div>
+    </div>,
+    document.body,
   );
 }

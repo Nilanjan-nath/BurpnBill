@@ -23,7 +23,7 @@ const ICONS = {
 // warm ink ground, the wordmark in its butter colourway, crimson for the one
 // active view. Same tab state/ids as ever (Board.jsx owns `tab`/`setTab`), so
 // tests — which query by role/name, not by class — are unaffected.
-export function Sidebar({ tabs, tab, onSelect, identity }) {
+export function Sidebar({ tabs, tab, onSelect, identity, open = false }) {
   // The café, not the person. What this footer answers is "which café am I
   // looking at" — the thing every number on every tab is scoped to — and on a
   // shared till that is the question with a wrong answer worth catching. Who
@@ -31,7 +31,15 @@ export function Sidebar({ tabs, tab, onSelect, identity }) {
   // place it can be changed.
   const cafe = identity.restaurantName ?? '';
   return (
-    <nav aria-label="View" className="flex w-64 flex-none flex-col bg-ink-900 print:hidden">
+    // Below lg (1024px) the rail is a drawer the header's menu button opens, so
+    // a phone gets the whole screen for the work. `invisible` while it is shut
+    // keeps its buttons out of the tab order and the accessibility tree.
+    <nav
+      aria-label="View"
+      className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-none flex-col bg-ink-900 transition-[transform,visibility] duration-200 ease-tap print:hidden lg:static lg:visible lg:translate-x-0 ${
+        open ? 'translate-x-0' : 'invisible -translate-x-full'
+      }`}
+    >
       <div className="px-5 py-6">
         <Logo variant="ink" width={128} />
       </div>

@@ -339,6 +339,53 @@ describe('going live', () => {
     await waitFor(() => expect(screen.getByText(`#${order.order_number}`)).toBeInTheDocument());
   });
 
+  test('a QR order reaching the counter alerts it on arrival, and approving it does not alert twice', async () => {
+    const user = userEvent.setup();
+    await clearApprovalQueue();
+    await signIn(user, STAFF_USER);
+    await screen.findByText('Live');
+    document.title = 'BurpnBill staff — Order board';
+
+    // Before the kitchen ever sees it: this is when the counter has to be told.
+    const order = await placeUnapproved('T3', 'Masala Chai');
+    await waitFor(() => expect(document.title).toMatch(/^\(1\) New order/));
+
+    // Accepting it sends order_created. Same order, already announced: still 1.
+    await approveViaApi(order.id);
+    await screen.findByText(`#${order.order_number}`);
+    expect(document.title).toMatch(/^\(1\) New order/);
+  });
+
+  test('a kitchen login is not alerted for a QR order still waiting for the counter, only once it is accepted', async () => {
+    const user = userEvent.setup();
+    await clearApprovalQueue();
+    await signIn(user, KITCHEN_USER);
+    await screen.findByText('Live');
+    document.title = 'BurpnBill staff — Order board';
+
+    const waiting = await placeUnapproved('T2', 'Masala Chai');
+    // A later, accepted order proves the earlier push has been handled.
+    const accepted = await placeUnapproved('T4', 'Filter Coffee');
+    await approveViaApi(accepted.id);
+    await screen.findByText(`#${accepted.order_number}`);
+    expect(document.title).toMatch(/^\(1\) New order/); // the accepted one only
+    expect(screen.queryByText(`#${waiting.order_number}`)).not.toBeInTheDocument();
+    await clearApprovalQueue();
+  });
+
+  test('sound can be turned on, shows as on, and is remembered for the next visit', async () => {
+    const user = userEvent.setup();
+    await signIn(user, STAFF_USER);
+    await user.click(await screen.findByRole('button', { name: 'Turn on sound' }));
+    expect(screen.getByRole('button', { name: 'Sound on' })).toBeInTheDocument();
+    expect(localStorage.getItem('burpnbill.sound')).toBe('on');
+
+    // Clicking again mutes it.
+    await user.click(screen.getByRole('button', { name: 'Sound on' }));
+    expect(screen.getByRole('button', { name: 'Turn on sound' })).toBeInTheDocument();
+    expect(localStorage.getItem('burpnbill.sound')).toBe('off');
+  });
+
   test('an order waiting a long time is highlighted, using the server\'s clock, not the age at page load', async () => {
     const user = userEvent.setup();
     const order = await place('T1', 'Masala Chai');
@@ -971,6 +1018,26 @@ describe('Settings', () => {
     } finally {
       await sql("update restaurants set name = 'Chai Point Cafe' where slug = 'chai-point'");
     }
+  });
+
+  test('the printable QR sheet is rendered outside #root, which the print rules hide', async () => {
+    const user = userEvent.setup();
+    await openSettings(user, STAFF_USER, /Seating plan/);
+    await screen.findByTestId('floor-plan');
+
+    // A sheet left inside #root printed as a blank page: `@media print` hides
+    // the whole app (so the receipt can print alone). It has to live in <body>.
+    const sheet = await waitFor(() => {
+      const el = document.querySelector('.bnb-print-sheet');
+      expect(el).not.toBeNull();
+      return el;
+    });
+    expect(document.getElementById('root')?.contains(sheet) ?? false).toBe(false);
+    expect(sheet.parentElement).toBe(document.body);
+    for (const label of ['T1', 'T2', 'T3', 'T4']) {
+      expect(within(sheet).getByText(label)).toBeInTheDocument();
+    }
+    await waitFor(() => expect(sheet.querySelectorAll('img').length).toBe(4));
   });
 
   test('Save is only offered once something has actually changed', async () => {
@@ -1903,9 +1970,10 @@ describe('joining a café from an invite', () => {
         expect(within(plan).getByRole('button', { name: new RegExp(`^${label}, `) })).toBeInTheDocument();
       }
 
-      // Their own café, not a second door onto the demo one's menu.
+      // Their own café with its own starter menu (12 sample dishes), not a
+      // second door onto the demo one's menu.
       await user.click(within(sidebar).getByRole('button', { name: 'Menu' }));
-      expect(await screen.findByText(/0 items/)).toBeInTheDocument();
+      expect(await screen.findByText(/12 items/)).toBeInTheDocument();
     } finally {
       await sql('delete from restaurants where name = $1', ['Batarashi Brew']);
     }

@@ -50,7 +50,7 @@ function Authenticated({ auth }) {
 function SignedIn({ token, auth, onSignOut }) {
   const [identity, setIdentity] = useState(undefined); // undefined = checking, null = not linked
   const [error, setError] = useState(null);
-  const board = useBoard(identity ? token : null);
+  const board = useBoard(identity ? token : null, identity?.role);
 
   useEffect(() => {
     let cancelled = false;

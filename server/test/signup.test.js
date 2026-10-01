@@ -112,10 +112,19 @@ test('the new café is genuinely its own — it cannot see the demo café, or be
   const overlap = mine.body.tables.filter((t) => theirs.body.tables.some((o) => o.id === t.id));
   assert.deepEqual(overlap, [], 'two cafés, no shared tables');
 
-  // A brand new café has no menu of its own, and certainly not the demo's.
+  // A brand new café starts with a starter menu of its own, never the demo's:
+  // same dishes by name, different rows.
   const items = await call('GET', '/api/items', { as: NEWCOMER });
-  assert.deepEqual(items.body.items, [], "an empty menu is the new café's real state");
-  assert.ok((await call('GET', '/api/items', { as: DEMO_OWNER })).body.items.length > 0);
+  const demoItems = (await call('GET', '/api/items', { as: DEMO_OWNER })).body.items;
+  assert.equal(items.body.items.length, 12, 'the starter menu');
+  assert.ok(items.body.items.every((i) => i.category_id), 'every starter dish sits in a category');
+  assert.deepEqual(
+    items.body.items.filter((i) => demoItems.some((d) => d.id === i.id)),
+    [],
+    'no item is shared with the demo café',
+  );
+  const categories = await call('GET', '/api/categories', { as: NEWCOMER });
+  assert.deepEqual(categories.body.categories.map((c) => c.name), ['Beverages', 'Snacks', 'Mains', 'Desserts']);
 });
 
 test('a café with no tables yet is a real answer, not an error', async () => {

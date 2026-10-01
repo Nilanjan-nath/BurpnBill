@@ -1,4 +1,5 @@
 import { HttpError } from '../errors.js';
+import { insertStarterMenu } from './starterMenu.js';
 
 // POST /restaurants — someone with a Supabase account and no café creates one,
 // and becomes its owner. This is the only way a restaurant comes into being
@@ -64,6 +65,10 @@ export async function createRestaurant(db, user, { name, currency_code, table_co
         [restaurant.id, table_count, TABLES_PER_ROW],
       );
     }
+
+    // A starter menu (categories + sample dishes), so the first open isn't three
+    // empty screens. Same transaction: a café is never half-seeded.
+    await insertStarterMenu(tx, restaurant.id);
 
     return {
       userId: user.id,

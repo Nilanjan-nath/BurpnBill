@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell, LogOut, Menu, Volume2 } from 'lucide-react';
 import { useNewOrderAlerts } from './useNewOrderAlerts.js';
 import { ActiveColumns } from './ActiveColumns.jsx';
 import { RecentOrders } from './RecentOrders.jsx';
@@ -51,42 +51,67 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
   const tabs = tabsFor(identity.role);
   const [tab, setTab] = useState('board');
   const [detailOrderId, setDetailOrderId] = useState(null);
+  const [navOpen, setNavOpen] = useState(false); // the drawer, below lg
+  const select = (id) => {
+    setTab(id);
+    setNavOpen(false);
+  };
 
   return (
     <div className="staff-app brand-surface flex min-h-dvh bg-canvas">
-      <Sidebar tabs={tabs} tab={tab} onSelect={setTab} identity={identity} />
+      <Sidebar tabs={tabs} tab={tab} onSelect={select} identity={identity} open={navOpen} />
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-ink-900/50 lg:hidden print:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-paper px-6 py-4 print:hidden">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">{TITLES[tab]}</h1>
-            <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-xs font-bold ${LIVE_PILL[board.liveStatus]}`}>
+        <header className="flex items-center justify-between gap-2 border-b border-ink-200 bg-paper px-3 py-3 sm:gap-3 sm:px-6 sm:py-4 print:hidden">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setNavOpen(true)}
+              aria-label="Open menu"
+              className="flex min-h-11 min-w-11 flex-none items-center justify-center rounded-card text-ink-800 hover:bg-ink-100 lg:hidden"
+            >
+              <Menu className="h-6 w-6" aria-hidden="true" />
+            </button>
+            <h1 className="truncate text-lg font-extrabold tracking-tight text-ink-900 sm:text-2xl">{TITLES[tab]}</h1>
+            <span className={`flex flex-none items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-xs font-bold ${LIVE_PILL[board.liveStatus]}`}>
               <span className={`h-2 w-2 rounded-full ${LIVE_DOT[board.liveStatus]}`} aria-hidden="true" />
               {LIVE_LABEL[board.liveStatus]}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {!alerts.soundEnabled && (
-              <button
-                type="button"
-                onClick={alerts.enableSound}
-                className="flex min-h-11 items-center gap-1.5 rounded-card border-2 border-ink-300 px-3 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
-              >
-                <Bell className="h-4 w-4" aria-hidden="true" /> Turn on sound
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={alerts.soundEnabled ? alerts.disableSound : alerts.enableSound}
+              title={alerts.soundEnabled ? 'Click to mute' : undefined}
+              aria-label={alerts.soundEnabled ? 'Sound on' : 'Turn on sound'}
+              className="flex min-h-11 items-center gap-1.5 rounded-card border-2 border-ink-300 px-3 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
+            >
+              {alerts.soundEnabled ? (
+                <>
+                  <Volume2 className="h-4 w-4" aria-hidden="true" /> <span className="hidden sm:inline">Sound on</span>
+                </>
+              ) : (
+                <>
+                  <Bell className="h-4 w-4" aria-hidden="true" /> <span className="hidden sm:inline">Turn on sound</span>
+                </>
+              )}
+            </button>
             <button
               type="button"
               onClick={onSignOut}
+              aria-label="Sign out"
               className="flex min-h-11 items-center gap-1.5 rounded-card border-2 border-ink-300 px-3 text-sm font-bold text-ink-700 transition duration-150 ease-tap hover:bg-ink-50 active:scale-[0.98]"
             >
-              <LogOut className="h-4 w-4" aria-hidden="true" /> Sign out
+              <LogOut className="h-4 w-4" aria-hidden="true" /> <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </header>
 
         {board.conflict && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-card border border-butter-500 bg-butter-100 px-4 py-2.5 text-sm font-semibold text-ink-900" role="alert">
+          <div className="mx-3 mt-4 flex items-center justify-between gap-3 rounded-card border border-butter-500 sm:mx-6 bg-butter-100 px-4 py-2.5 text-sm font-semibold text-ink-900" role="alert">
             <span>{board.conflict}</span>
             <button type="button" onClick={board.dismissConflict} aria-label="Dismiss" className="text-lg leading-none">
               ×
@@ -94,7 +119,7 @@ export function Board({ identity, board, token, auth, onIdentityChange, onSignOu
           </div>
         )}
         {board.error && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
+          <div className="mx-3 mt-4 flex items-center justify-between gap-3 rounded-card border border-danger-200 sm:mx-6 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
             <span>{board.error}</span>
             <button type="button" onClick={board.refresh} className="font-semibold">
               Retry

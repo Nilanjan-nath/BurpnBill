@@ -13,16 +13,21 @@ export function primeAudio() {
   return true;
 }
 
+// Two rising notes at a clearly audible level: a single quiet 880 Hz blip was
+// easy to miss over a kitchen's noise.
 export function chime() {
   if (!ctx || ctx.state !== 'running') return; // not primed (or the browser suspended it again)
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.frequency.value = 880; // a plain, clearly-audible ding — not trying to be musical
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.35);
+  const start = ctx.currentTime;
+  [880, 1175].forEach((frequency, i) => {
+    const now = start + i * 0.18;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.5, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  });
 }

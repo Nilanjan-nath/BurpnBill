@@ -21,13 +21,14 @@ function applyBoardEvent(orders, order) {
 // refetch. A full refetch happens only: after an action THIS tab took (the
 // simplest way to be sure of the result), and after the stream drops and
 // reconnects (a gap may have missed events — see useOrderStream.js).
-export function useBoard(token) {
+export function useBoard(token, role) {
   const [orders, setOrders] = useState(null); // null = still loading
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null); // which order a request is in flight for
   const [conflict, setConflict] = useState(null); // "already moved by X" style message
   const [newOrderCount, setNewOrderCount] = useState(0); // order_created events since last look — see useNewOrderAlerts
   const skewRef = useRef(0); // device clock vs server clock, see age.js
+  const alertedIds = useRef(new Set()); // QR orders already announced on arrival, so approving one doesn't ring twice
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -46,15 +47,33 @@ export function useBoard(token) {
     load();
   }, [load]);
 
-  const onStreamEvent = useCallback((event, order) => {
-    // A QR order waiting for the counter is pushed as qr_order_pending so POS's
-    // queue can hear about it. It is NOT the kitchen's yet, and patching it in
-    // here put it in the New column — where someone could start it before it was
-    // accepted. The board takes it only when approval sends order_created.
-    if (event === 'qr_order_pending') return;
-    setOrders((current) => (current === null ? current : applyBoardEvent(current, order)));
-    if (event === 'order_created') setNewOrderCount((n) => n + 1);
-  }, []);
+  const onStreamEvent = useCallback(
+    (event, order) => {
+      // A QR order waiting for the counter is pushed as qr_order_pending so POS's
+      // queue can hear about it. It is NOT the kitchen's yet, and patching it in
+      // here put it in the New column — where someone could start it before it was
+      // accepted. The board takes it only when approval sends order_created.
+      if (event === 'qr_order_pending') {
+        // But the counter must HEAR it: an order sitting unnoticed in the approval
+        // queue is the failure this whole flow exists to avoid. Kitchen devices
+        // stay quiet until it is accepted. (Rejections push this event too, as
+        // 'cancelled', so only a still-placed order counts.)
+        if (role !== 'kitchen' && order.status === 'placed' && !alertedIds.current.has(order.id)) {
+          alertedIds.current.add(order.id);
+          setNewOrderCount((n) => n + 1);
+        }
+        return;
+      }
+      setOrders((current) => (current === null ? current : applyBoardEvent(current, order)));
+      if (event === 'order_created') {
+        // Already announced when it arrived at the counter: don't ring again for
+        // the approval that follows.
+        if (alertedIds.current.delete(order.id)) return;
+        setNewOrderCount((n) => n + 1);
+      }
+    },
+    [role],
+  );
 
   const liveStatus = useOrderStream(token, { onEvent: onStreamEvent, onReconnect: load });
 
