@@ -67,7 +67,7 @@ import {
 // query is scoped to req.staff.restaurantId.
 //   owner: everything
 //   staff: work the order board, 86 items
-export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore }) {
+export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
@@ -80,7 +80,7 @@ export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore
   // what this creates. Signing up makes an auth account and nothing more (an
   // invite is a pre-authorised email, not an account — ARCHITECTURE §6), so
   // without this a self-signup has nowhere to land.
-  router.post('/restaurants', [requireAuthUser], async (req, res) => {
+  router.post('/restaurants', [limits.createCafe, requireAuthUser], async (req, res) => {
     const body = parse(createRestaurantBody, req.body);
     const staff = await createRestaurant(db, req.authUser, {
       ...body,

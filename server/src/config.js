@@ -26,5 +26,11 @@ export function loadConfig(env = process.env) {
     // The customer web app. Also the only origin allowed through CORS.
     appBaseUrl: (env.APP_BASE_URL || 'http://localhost:5173').trim().replace(/\/$/, ''),
     guestSessionTtlHours: 3,
+    // Caddy (on this machine) is the only proxy Express believes about client
+    // addresses. Cloudflare's addresses are handled in the Caddyfile, not here.
+    trustProxy: env.TRUST_PROXY?.trim() || 'loopback',
+    // Per-client limits on the public routes; see middleware/rateLimit.js for
+    // what each number means. RATE_LIMIT=off switches them all off.
+    rateLimit: env.RATE_LIMIT?.trim() === 'off' ? undefined : {},
   };
 }

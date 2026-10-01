@@ -6,6 +6,19 @@
 # gets its own Let's Encrypt certificate for both names, which is what
 # "Full (strict)" needs at the origin.
 
+# Who is the visitor? Cloudflare tells us in CF-Connecting-IP, but a header is only
+# believable when the request really came from Cloudflare, so Caddy trusts it only
+# from these ranges (https://www.cloudflare.com/ips-v4 and /ips-v6; they change
+# rarely, recheck now and then, see DEPLOY.md). Anyone reaching this machine
+# directly is treated as themselves and their header is ignored. The API's rate
+# limits depend on this being right.
+{
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
 # Bare domain -> www
 burpnbill.com {
 	redir https://www.burpnbill.com{uri} permanent
@@ -29,6 +42,9 @@ www.burpnbill.com {
 	handle @api {
 		reverse_proxy 127.0.0.1:4000 {
 			flush_interval -1
+			# Hand Node exactly one address, the verified visitor, so its
+			# `trust proxy` setting reads the right one. Replaces, never appends.
+			header_up X-Forwarded-For {client_ip}
 		}
 	}
 

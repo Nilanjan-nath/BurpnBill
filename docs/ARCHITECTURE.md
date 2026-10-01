@@ -80,6 +80,21 @@ and place an order directly — which appears instantly on a live kitchen/recept
 - **Idempotent payments** (when built): unique `idempotency_key` on `payments`, already in
   the schema.
 
+- **Rate limiting** **(decided, built)**: the database pool is about 5 connections, so one
+  noisy client could take a café's board down. Public routes are limited per client with
+  `express-rate-limit` (in memory; the app is single-instance anyway, §7 Realtime). Two
+  layers: **per guest session** for the routes a phone polls or writes (`POST /orders` 10 a
+  minute, status 20, cart and bill 60), so two diners behind one café Wi-Fi never share a
+  bucket; and **per IP** (menu 120 a minute, receipts 30, create-a-café 5 an hour, plus a
+  1000-a-minute backstop over every public route, so an invented session id per request
+  cannot dodge the limit and one café never reaches it). Limits run before authentication and
+  before any query. A blocked request is `429` `rate_limited` with `Retry-After`. Health
+  checks, the order stream and the staff routes are not limited. Numbers are
+  `DEFAULT_RATE_LIMITS` in `middleware/rateLimit.js`. The client IP is only real if Express
+  trusts the proxy (`trust proxy` = `loopback`, Caddy) and Caddy passes the verified visitor
+  (Cloudflare's ranges, `deploy/Caddyfile`). Supabase's own sign-up call goes from the browser
+  to Supabase and is outside this; Supabase limits it.
+
 ## 4. Core entities & relationships
 
 ```

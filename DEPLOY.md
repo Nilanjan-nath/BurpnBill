@@ -90,6 +90,28 @@ curl -sI https://www.burpnbill.com | head -3    # 200, valid certificate
 
 If Caddy cannot read `web/dist`, check that `/opt` and `/opt/burpnbill` are world-traversable (`chmod o+x`).
 
+### Rate limiting needs the Caddyfile (every time it changes)
+
+The API limits requests per visitor, so it must see the real visitor and not Cloudflare. The `Caddyfile` does that: it trusts `CF-Connecting-IP` only from Cloudflare's own address ranges and hands Node one verified address. **Install the new Caddyfile before (or with) the API release that adds the limits**, or visitors briefly share one bucket per Cloudflare edge.
+
+```bash
+sudo cp /opt/burpnbill/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile    # must say "Valid configuration"
+sudo systemctl reload caddy
+```
+
+Cloudflare's ranges change rarely. Every few months compare the list in the Caddyfile with https://www.cloudflare.com/ips-v4 and https://www.cloudflare.com/ips-v6; an address missing from it is treated as a direct visitor and gets its own bucket per Cloudflare edge.
+
+To prove it reads the right address: from your laptop, request something until it blocks, and look at the API log. The line shows the address that was blocked, and it must be yours.
+
+```bash
+for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code} " https://www.burpnbill.com/api/receipts/$(printf 'a%.0s' $(seq 32)); done; echo   # 404s, then 429s
+sudo journalctl -u burpnbill-api -n 5 | grep rate-limit                                                                                       # "from <your public ip>"
+curl -s https://api.ipify.org                                                                                                                 # compare
+```
+
+A phone on mobile data should still load the site while your laptop is blocked.
+
 ## 8. Turn Cloudflare on (you)
 
 Once `https://www.burpnbill.com` works with the grey cloud, flip both A records to **Proxied (orange cloud)** in Cloudflare. Reload the site. The kitchen board's live stream keeps working (the API sends a heartbeat every 25 s, inside Cloudflare's 100 s idle limit). If the certificate is ever not renewing behind the proxy, set the records back to grey for a minute.

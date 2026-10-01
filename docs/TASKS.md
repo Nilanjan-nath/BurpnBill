@@ -1400,11 +1400,17 @@ Ordered by how badly each one hurts if it is missing on a Saturday.
       people to *sign up*, and sign-up needs a confirmation email, so on a launch day the third
       person to try gets nothing. Use a free transactional sender (Resend, Brevo or similar) on a
       verified sender address on the new domain (SPF/DKIM records at Cloudflare/Namecheap)
-- [ ] **Rate limiting on the public routes.** Every QR scan creates a guest session and nothing limits
-      how often. The database allows about **5 connections**, so one hammering client can take the
-      whole café's board down. A per-IP limit on `/menu`, `/cart`, `/orders`, `/orders/status` and
-      the sign-up route (`express-rate-limit`), generous enough that a table of six sharing café
-      Wi-Fi — one IP — is never blocked. Needs `trust proxy` first
+- [x] **Rate limiting on the public routes** (branch `feat/rate-limiting`; no migration). Per guest session
+      for `POST /orders` (10 a minute), `/orders/status` (20), cart and `/bill` (60); per IP for `/menu` (120),
+      `/receipts` (30), `POST /restaurants` (5 an hour) and a 1000-a-minute backstop on every public route.
+      429 `rate_limited` with `Retry-After`; health, the order stream and staff routes are exempt.
+      `trust proxy` = `loopback`; `deploy/Caddyfile` trusts `CF-Connecting-IP` only from Cloudflare's ranges
+      and gives Node one verified `X-Forwarded-For` (**the owner installs the Caddyfile on the server and
+      reloads Caddy before deploying the API**, see DEPLOY.md). Tests: server 234 (was 222), 12 new in
+      `rate-limit.test.js`. Mutation-checked five ways (session key swapped for IP, `trust proxy` off, `trust
+      proxy` true, `/orders` unlimited, backstop dropped from status): each caught. Not checked: the Caddyfile
+      itself (no Caddy here, so run `caddy validate` on the server) and the real client IP behind Cloudflare
+      (DEPLOY.md has the check). Not limited: the Supabase sign-up call (browser to Supabase), staff routes
 - [ ] **A daily database backup, stored off the VM.** Supabase's free plan has **no point-in-time
       recovery**, so a bad migration or a mistaken delete is unrecoverable without one. A nightly
       `pg_dump` to object storage (Oracle's free bucket, or Cloudflare R2), kept for a fortnight —

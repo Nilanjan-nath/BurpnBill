@@ -3,6 +3,7 @@ import cors from 'cors';
 import { errorHandler, notFoundHandler } from './errors.js';
 import { createRequireStaff, createRequireAuthUser } from './middleware/auth.js';
 import { createRequireGuestSession, GUEST_SESSION_HEADER } from './middleware/guestSession.js';
+import { createRateLimiters } from './middleware/rateLimit.js';
 import { createOrderEventHub } from './orderStream.js';
 import { publicRoutes } from './routes/public.js';
 import { staffRoutes } from './routes/staff.js';
@@ -26,6 +27,10 @@ export function createApp({
   const app = express();
 
   app.disable('x-powered-by');
+  // Behind Caddy, the peer is always Caddy. Trusting it (and only it) makes
+  // req.ip the real visitor, which per-client rate limiting depends on. With
+  // `false` (the default for tests) forwarded headers are ignored entirely.
+  app.set('trust proxy', config.trustProxy ?? false);
   app.use(
     cors({
       origin: config.appBaseUrl,
@@ -58,9 +63,10 @@ export function createApp({
   // Signed in, but not yet anybody's staff — the state createRestaurant serves.
   const requireAuthUser = createRequireAuthUser({ supabase });
   const requireGuestSession = createRequireGuestSession({ db, sessionTtlHours: config.guestSessionTtlHours });
+  const limits = createRateLimiters(config.rateLimit);
 
-  app.use('/api', publicRoutes({ db, config, requireGuestSession, hub }));
-  app.use('/api', staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore }));
+  app.use('/api', publicRoutes({ db, config, requireGuestSession, hub, limits }));
+  app.use('/api', staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
