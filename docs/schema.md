@@ -122,6 +122,16 @@ key could read and write every order in the database. Service-role connections
 (the Express backend) bypass RLS, so this costs us nothing now. Writing real
 policies is still the deferred hardening pass — this just closes the door meanwhile.
 
+## Bills (migration 20261001120000, docs/TASKS.md Step 14)
+
+`bills` is one row per settled table: a consecutive number per café (`restaurants.bill_counter`,
+unique with `restaurant_id`), a **snapshot** of everything a receipt prints (table label, the café's
+name/address/phone, currency, method, subtotal/tax/total, cash tendered and change), who settled it
+and when. `bill_lines` copies the dishes as they stood. Nothing on a bill joins back to the menu or
+the café, so a reprint never changes. `payments.bill_id` ties each payment row to its bill (null for
+payments made before this migration, which have no bill). `tax_amount` is a zero placeholder until
+GST (phase B).
+
 ## Known gaps, deliberately left
 
 - `order_items` / `cart_items` carry no `restaurant_id`, so their link to a menu

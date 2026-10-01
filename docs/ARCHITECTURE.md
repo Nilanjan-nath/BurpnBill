@@ -329,7 +329,15 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   stays null, reserved for the day a gateway does move money. The caller's idempotency key is
   suffixed per order, so a double-tapped Confirm is one settlement, not two. Settles orders in
   any live status, not just `served` — paying before the food lands is normal, and the caller
-  now confirms against the itemised bill above **(changed, step 6)**
+  now confirms against the itemised bill above **(changed, step 6)**. **Step 14:** the checkout now
+  runs in one transaction and also creates a **bill** (`bills` + `bill_lines`): a per-café
+  consecutive `bill_number` (from `restaurants.bill_counter`), a frozen copy of the lines, totals and
+  the café's name/address/phone, and for cash the `amount_tendered` and `change_given` (body field
+  `amount_tendered`, refused with 400 if it is less than the total). Each payment row carries
+  `bill_id`. The response is `{ settled_order_count, amount, already_settled, bill }`; replaying the
+  same idempotency key returns the same bill (200, `already_settled: true`) and burns no number
+- `GET /bills/:billId` — front of house; one settled bill with its lines, for a reprint. Another
+  café's bill is a 404
 
 ### Realtime (SSE)
 

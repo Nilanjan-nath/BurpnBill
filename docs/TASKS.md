@@ -1546,3 +1546,46 @@ Found on the first live day (2026-10-01).
       transaction as the café (`server/src/services/starterMenu.js`). Placeholder prices in rupees; all editable
 - Tests: server 203, web 165. Mutation-checked: starter menu removed, and the kitchen rule removed
 - [ ] Not checked: a real print of the QR sheet; sound on a real phone (iOS needs the first tap)
+
+## Step 14 — Billing: real bills, a proper receipt, optional GST (planned 2026-10-01)
+
+*Planning only; nothing below is built. Decisions are the owner's, 2026-10-01.*
+
+**Today:** settling a table writes one `payments` row per order and no bill of its own, so there is no bill
+number. The printed receipt is a bare list (no café name, address, phone, bill number, tax). `orders.tax_amount`
+is always 0 and ARCHITECTURE §2 says no tax; GST reverses that, as an option. Cash tendered and change are
+computed on screen and never stored.
+
+**Decided**
+- GST is in the first release, **optional per café**, off by default (many small cafés are unregistered, and a
+  composition-scheme café must not charge it). An accountant should confirm the invoice format
+- Tax is **inclusive**: the menu price is the price paid, and the bill shows the tax inside it. Order totals,
+  POS, the customer's phone bill and the dashboard's takings are untouched. (Exclusive is a later option.)
+  Tax = total x rate / (100 + rate); CGST and SGST are each half; the reference screenshot's numbers did not add
+  up (5+5 tax on 200 with a total of 200), so compute it properly
+- Paper: **A4/Letter and Thermal 80mm**, a toggle on the receipt preview (58mm not planned)
+- Discounts: later (phase D)
+
+**Phases**
+- [x] **A. Bill records and the receipt** (branch `feat/billing-bills`; the migration is NOT yet run on live). New `bills` + `bill_lines` tables (migration, shown to the owner first):
+      a per-café consecutive bill number; a frozen copy of lines, totals, method, cash tendered and change, who
+      settled it, when; a table label snapshot. Checkout creates the bill in the same transaction as the payments.
+      Receipt: café name, address, phone, FSSAI/GSTIN line, bill number, table, date, payment, item table,
+      subtotal, total, footer text; A4 / 80mm toggle with `@page` sizes; on-screen preview as in the reference
+- [ ] **B. GST.** Settings > Billing: GST on/off, GSTIN, rate (default 5), FSSAI number, receipt footer. Bill stores
+      taxable value, CGST, SGST and the rate it used. Receipt gets the tax lines and a GST breakdown table
+- [ ] **C. Digital receipt.** Public read-only page at `/r/<long random token>` (no personal data), reached by the
+      QR on the printout ("Scan for digital receipt")
+- [ ] **D. Past bills** list with reprint (marked "Duplicate"); then discounts (flat or percent, with a reason) and
+      voiding a bill (owner only; GST needs a credit note, so check with an accountant first)
+
+**Open:** whether old settled tables (before the migration) get bills (proposed: no, they keep their payments);
+the receipt footer wording; whether the café logo goes on the receipt.
+
+**Phase A built (2026-10-01).** `supabase/migrations/20261001120000_bills.sql` (owner runs `scripts/db.sh migrate`
+BEFORE deploying this code: the new checkout needs the tables). Server: `services/bills.js`,
+`checkoutTable` rewritten as one transaction (it used `for update` outside a transaction before, which locked
+nothing), `GET /bills/:id`, `amount_tendered`. Web: `staff/Receipt.jsx` (one component for preview and print),
+paper toggle A4 / Thermal 80mm (remembered), `@page` size per paper, cash short of the total blocks Confirm.
+Tests: server 212 (new `bills.test.js`, 9), web 166. Deliberately not on the receipt yet: tax lines (B) and the
+"scan for digital receipt" QR (C). Not tried on a real printer.

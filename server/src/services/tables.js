@@ -1,4 +1,5 @@
 import { badRequest, notFound } from '../errors.js';
+import { getBill } from './bills.js';
 
 // Tables and their QR tokens. Scoped by restaurantId from the signed-in
 // staff member, the same rule as everywhere else in this codebase.
@@ -211,38 +212,117 @@ export async function getTableBill(db, restaurantId, tableId) {
 // refusing to take money for a round still in the kitchen is the wrong
 // default. An order's status lifecycle is independent of paid_at — the kitchen
 // still cooks and serves it exactly as before.
-export async function checkoutTable(db, restaurantId, tableId, { method, idempotencyKey }) {
-  const { rows: tables } = await db.query(
-    `select id from public.restaurant_tables where id = $1 and restaurant_id = $2 and deleted_at is null`,
-    [tableId, restaurantId],
-  );
-  if (!tables.length) throw notFound('Table not found');
+export async function checkoutTable(
+  db,
+  restaurantId,
+  tableId,
+  { method, idempotencyKey, amountTendered = null, staffUserId = null },
+) {
+  return db.withTransaction(async (tx) => {
+    const { rows: tables } = await tx.query(
+      `select id, label from public.restaurant_tables where id = $1 and restaurant_id = $2 and deleted_at is null`,
+      [tableId, restaurantId],
+    );
+    if (!tables.length) throw notFound('Table not found');
 
-  // for update: two people settling one table at once serialise here rather
-  // than both inserting, the same lock-first pattern as PATCH /orders/:id/status.
-  const { rows: orders } = await db.query(
-    `select id, total_amount from public.orders
-      where table_id = $1 and restaurant_id = $2 and paid_at is null and status != 'cancelled'
-        and approved_at is not null
-      order by placed_at
-      for update`,
-    [tableId, restaurantId],
-  );
-  if (!orders.length) throw badRequest('Nothing to settle on this table');
+    // for update, inside this transaction: two people settling one table at
+    // once serialise here, and the second finds the orders already paid.
+    const { rows: orders } = await tx.query(
+      `select id, subtotal, tax_amount, total_amount from public.orders
+        where table_id = $1 and restaurant_id = $2 and paid_at is null and status != 'cancelled'
+          and approved_at is not null
+        order by placed_at
+        for update`,
+      [tableId, restaurantId],
+    );
 
-  const { rows: paid } = await db.query(
-    `insert into public.payments (restaurant_id, order_id, idempotency_key, method, status, amount)
-     select $1, ord.id, $2 || ':' || ord.id::text, $3::public.payment_method, 'succeeded', ord.total_amount
-       from unnest($4::uuid[]) as o(id)
-       join public.orders ord on ord.id = o.id
-     on conflict (idempotency_key) do nothing
-     returning order_id, amount`,
-    [restaurantId, idempotencyKey, method, orders.map((o) => o.id)],
-  );
+    // A retried Confirm (a double tap, a flaky connection) finds the bill the
+    // first one made. Checked after the lock, so a retry that raced the original
+    // sees the committed bill rather than "nothing to settle".
+    const { rows: existing } = await tx.query(
+      `select id, total_amount from public.bills where restaurant_id = $1 and idempotency_key = $2`,
+      [restaurantId, idempotencyKey],
+    );
+    if (existing.length) {
+      const { rows: count } = await tx.query(`select count(*)::int as n from public.payments where bill_id = $1`, [existing[0].id]);
+      return {
+        settled_order_count: count[0].n,
+        amount: existing[0].total_amount,
+        already_settled: true,
+        bill: await getBill(tx, restaurantId, existing[0].id),
+      };
+    }
+    if (!orders.length) throw badRequest('Nothing to settle on this table');
 
-  return {
-    settled_order_count: orders.length,
-    amount: orders.reduce((acc, o) => acc + Number(o.total_amount), 0).toFixed(2),
-    already_settled: paid.length === 0,
-  };
+    // Money is summed in SQL (numeric), never in JS floats.
+    const { rows: sums } = await tx.query(
+      `select sum(subtotal)::numeric(10,2) as subtotal,
+              sum(tax_amount)::numeric(10,2) as tax_amount,
+              sum(total_amount)::numeric(10,2) as total_amount
+         from public.orders where id = any($1::uuid[])`,
+      [orders.map((o) => o.id)],
+    );
+    const totals = sums[0];
+
+    // Cash only: what was handed over, so the receipt can print the change.
+    const tendered = method === 'cash' && amountTendered != null ? amountTendered : null;
+    if (tendered !== null && Math.round(tendered * 100) < Math.round(Number(totals.total_amount) * 100)) {
+      throw badRequest('The cash handed over is less than the total');
+    }
+
+    // Next bill number for this café, taken under the same transaction as the
+    // bill, so a failed checkout leaves no gap and two tills cannot collide.
+    const { rows: cafe } = await tx.query(
+      `update public.restaurants set bill_counter = bill_counter + 1
+        where id = $1
+        returning bill_counter, name, address, phone, currency_code`,
+      [restaurantId],
+    );
+
+    const { rows: created } = await tx.query(
+      `insert into public.bills
+         (restaurant_id, bill_number, idempotency_key, table_id, table_label,
+          restaurant_name, restaurant_address, restaurant_phone, currency_code,
+          payment_method, subtotal, tax_amount, total_amount,
+          amount_tendered, change_given, settled_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::public.payment_method, $11, $12, $13,
+               $14::numeric, case when $14::numeric is null then null else $14::numeric - $13::numeric end, $15)
+       returning id`,
+      [
+        restaurantId, cafe[0].bill_counter, idempotencyKey, tableId, tables[0].label,
+        cafe[0].name, cafe[0].address, cafe[0].phone, cafe[0].currency_code,
+        method, totals.subtotal, totals.tax_amount, totals.total_amount,
+        tendered, staffUserId,
+      ],
+    );
+    const billId = created[0].id;
+
+    // The lines, copied as they stand now, in the order the table ordered them.
+    await tx.query(
+      `insert into public.bill_lines
+         (bill_id, restaurant_id, order_number, name, quantity, unit_price, line_total, special_instructions, sort_order)
+       select $1, $2, o.order_number, oi.name_at_order, oi.quantity, oi.price_at_order, oi.line_total,
+              oi.special_instructions,
+              row_number() over (order by o.placed_at, o.order_number, oi.name_at_order, oi.id)
+         from public.order_items oi
+         join public.orders o on o.id = oi.order_id
+        where o.id = any($3::uuid[])`,
+      [billId, restaurantId, orders.map((o) => o.id)],
+    );
+
+    await tx.query(
+      `insert into public.payments (restaurant_id, order_id, idempotency_key, method, status, amount, bill_id)
+       select $1, ord.id, $2 || ':' || ord.id::text, $3::public.payment_method, 'succeeded', ord.total_amount, $5
+         from unnest($4::uuid[]) as o(id)
+         join public.orders ord on ord.id = o.id`,
+      [restaurantId, idempotencyKey, method, orders.map((o) => o.id), billId],
+    );
+
+    return {
+      settled_order_count: orders.length,
+      amount: totals.total_amount,
+      already_settled: false,
+      bill: await getBill(tx, restaurantId, billId),
+    };
+  }, { actorId: staffUserId ?? undefined });
 }

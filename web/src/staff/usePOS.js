@@ -149,11 +149,11 @@ export function usePOS(token) {
   // dialog stays open to confirm what was taken, and the cashier dismisses it.
   // Closing on success would flash the amount away exactly when someone wants
   // to read it back to the customer.
-  const checkoutTable = async (tableId, { method, idempotencyKey }) => {
+  const checkoutTable = async (tableId, { method, idempotencyKey, amountTendered }) => {
     setCheckingOut(tableId);
     setError(null);
     try {
-      const result = await staffApi.checkoutTable(token, tableId, { method, idempotencyKey });
+      const result = await staffApi.checkoutTable(token, tableId, { method, idempotencyKey, amountTendered });
       await loadFloor();
       if (selectedTableId === tableId) setSelectedTableId(null);
       return { ...result, method, paid_at: new Date().toISOString() };

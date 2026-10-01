@@ -28,6 +28,7 @@ import {
   deleteMenuCategory,
 } from '../services/menuCategories.js';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../services/itemImages.js';
+import { getBill } from '../services/bills.js';
 import { listTables, createTable, updateTable, deleteTable, getTableBill, checkoutTable } from '../services/tables.js';
 import { getRestaurantProfile, updateRestaurantProfile, updateOwnProfile } from '../services/restaurantProfile.js';
 import { createRestaurant } from '../services/signup.js';
@@ -54,6 +55,7 @@ import {
   checkoutTableBody,
   createStaffOrderBody,
   tableIdParams,
+  billIdParams,
   inviteStaffBody,
   updateStaffRoleBody,
   staffUserParams,
@@ -346,8 +348,20 @@ export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore
   });
   router.post('/tables/:tableId/checkout', till, async (req, res) => {
     const { tableId } = parse(tableIdParams, req.params);
-    const { method, idempotency_key: idempotencyKey } = parse(checkoutTableBody, req.body);
-    res.json(await checkoutTable(db, req.staff.restaurantId, tableId, { method, idempotencyKey }));
+    const { method, idempotency_key: idempotencyKey, amount_tendered: amountTendered } = parse(checkoutTableBody, req.body);
+    res.json(
+      await checkoutTable(db, req.staff.restaurantId, tableId, {
+        method,
+        idempotencyKey,
+        amountTendered,
+        staffUserId: req.staff.userId,
+      }),
+    );
+  });
+  // One settled bill, for a reprint.
+  router.get('/bills/:billId', till, async (req, res) => {
+    const { billId } = parse(billIdParams, req.params);
+    res.json({ bill: await getBill(db, req.staff.restaurantId, billId) });
   });
 
   // Floor map + POS (step 7). Owner only — see TASKS.md step 7's "Decided"

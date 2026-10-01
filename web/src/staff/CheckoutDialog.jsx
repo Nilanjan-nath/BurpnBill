@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Banknote, CreditCard, QrCode, X, Maximize2, Minimize2, Printer, CheckCircle2 } from 'lucide-react';
 import { formatMoney } from '../format.js';
+import { Receipt } from './Receipt.jsx';
 
 // Cash/card/UPI mirror the payments table's own method enum (minus 'mock',
 // which exists for tests). Nothing here moves money: the counter takes it the
@@ -22,6 +23,29 @@ const METHODS = [
 const PANEL = 'm-auto rounded-card bg-paper p-0 text-ink-900 shadow-pop backdrop:bg-ink-900/50';
 const COMPACT = `w-[min(34rem,92vw)] ${PANEL}`;
 const FULLSCREEN = `h-[100dvh] max-h-none w-[100vw] max-w-none rounded-none ${PANEL}`;
+const RECEIPT_PANEL = `w-[min(40rem,94vw)] ${PANEL}`;
+
+// Which paper the till prints on is a property of the counter's printer, not of
+// a single bill, so it is remembered between bills.
+const PAPER_KEY = 'burpnbill.paper';
+const PAPERS = [
+  { id: 'a4', label: 'A4 / Letter' },
+  { id: 'thermal', label: 'Thermal 80mm' },
+];
+const readPaper = () => {
+  try {
+    return localStorage.getItem(PAPER_KEY) === 'thermal' ? 'thermal' : 'a4';
+  } catch {
+    return 'a4';
+  }
+};
+const writePaper = (paper) => {
+  try {
+    localStorage.setItem(PAPER_KEY, paper);
+  } catch {
+    // blocked storage: the choice just lasts for this bill
+  }
+};
 
 export function CheckoutDialog({ bill, busy, onConfirm, onClose }) {
   const dialogRef = useRef(null);
@@ -29,6 +53,7 @@ export function CheckoutDialog({ bill, busy, onConfirm, onClose }) {
   const [tendered, setTendered] = useState('');
   const [fullScreen, setFullScreen] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [paper, setPaper] = useState(readPaper);
 
   // One key per opened bill, so a double-tapped Confirm is a retry of the same
   // payment rather than a second one. Regenerating it per tap would defeat the
@@ -45,23 +70,56 @@ export function CheckoutDialog({ bill, busy, onConfirm, onClose }) {
   const orderCount = bill.orders.length;
   const itemCount = bill.orders.reduce((n, o) => n + o.items.length, 0);
 
+  const short = method === 'cash' && change !== null && change < 0;
   const confirm = async () => {
-    const result = await onConfirm({ method, idempotencyKey });
+    const amountTendered = method === 'cash' && tendered !== '' ? Number(tendered) : undefined;
+    const result = await onConfirm({ method, idempotencyKey, amountTendered });
     if (result) setReceipt(result);
+  };
+  const choosePaper = (id) => {
+    setPaper(id);
+    writePaper(id);
   };
 
   if (receipt) {
     return (
       <>
-        <dialog ref={dialogRef} onClose={onClose} aria-label="Payment complete" className={fullScreen ? FULLSCREEN : COMPACT}>
-          <div className="flex flex-col items-center px-6 py-10 text-center">
-            <CheckCircle2 className="h-14 w-14 text-ready-ink" aria-hidden="true" />
-            <h2 className="mt-4 text-xl font-extrabold text-ink-900">Payment received</h2>
-            <p className="mt-1 font-mono text-3xl font-bold text-ready-ink">{formatMoney(receipt.amount)}</p>
-            <p className="mt-1 font-mono text-xs font-bold uppercase tracking-wide text-ink-600">
-              {receipt.method} · {bill.table.label} · {new Date(receipt.paid_at).toLocaleString()}
-            </p>
-            <div className="mt-6 flex w-full gap-2">
+        <dialog ref={dialogRef} onClose={onClose} aria-label="Payment complete" className={fullScreen ? FULLSCREEN : RECEIPT_PANEL}>
+          <div className="flex h-full max-h-[100dvh] flex-col">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-3 border-b border-ink-200 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-9 w-9 flex-none text-ready-ink" aria-hidden="true" />
+                <div>
+                  <h2 className="text-lg font-extrabold leading-tight text-ink-900">Payment received</h2>
+                  <p className="font-mono text-sm font-bold text-ready-ink">
+                    {formatMoney(receipt.amount)} · <span className="uppercase">{receipt.method}</span> · {bill.table.label}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-1 rounded-card bg-ink-100 p-1" role="group" aria-label="Paper size">
+                {PAPERS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={paper === id}
+                    onClick={() => choosePaper(id)}
+                    className={`min-h-10 rounded-input px-3 text-xs font-bold transition-colors duration-150 ease-tap ${
+                      paper === id ? 'bg-ink-900 text-white' : 'text-ink-700 hover:bg-ink-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto bg-ink-100 px-3 py-4" aria-label="Receipt preview">
+              <div className="mx-auto w-fit max-w-full overflow-x-auto rounded-card bg-white shadow-pop">
+                <Receipt bill={receipt.bill} size={paper} />
+              </div>
+            </div>
+
+            <div className="flex flex-none gap-2 border-t border-ink-200 px-5 py-4">
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -79,7 +137,7 @@ export function CheckoutDialog({ bill, busy, onConfirm, onClose }) {
             </div>
           </div>
         </dialog>
-        <PrintableReceipt bill={bill} receipt={receipt} />
+        <PrintableReceipt bill={receipt.bill} paper={paper} />
       </>
     );
   }
@@ -233,7 +291,7 @@ export function CheckoutDialog({ bill, busy, onConfirm, onClose }) {
           </div>
           <button
             type="button"
-            disabled={busy || itemCount === 0}
+            disabled={busy || itemCount === 0 || short}
             onClick={confirm}
             className="min-h-12 w-full rounded-card bg-brand py-3 text-sm font-bold uppercase tracking-wide text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -248,31 +306,15 @@ export function CheckoutDialog({ bill, busy, onConfirm, onClose }) {
 // Printed through a portal to <body> rather than from inside the <dialog>:
 // a modal dialog lives in the browser's top layer, which browsers print
 // inconsistently. Hidden on screen, shown only by the @media print rules in
-// tailwind.css (which hide #root at the same time).
-function PrintableReceipt({ bill, receipt }) {
+// tailwind.css (which hide #root at the same time). The page size is set here
+// because @page cannot be scoped to a class: it applies to whatever is printed
+// while this is mounted, which is only ever the receipt.
+function PrintableReceipt({ bill, paper }) {
+  const page = paper === 'thermal' ? '@page { size: 80mm auto; margin: 3mm; }' : '@page { size: A4; margin: 15mm; }';
   return createPortal(
     <div className="bnb-print-receipt">
-      <h1>{bill.table.label} — receipt</h1>
-      <p>{new Date(receipt.paid_at).toLocaleString()}</p>
-      {bill.orders.map((order, roundIndex) => (
-        <div key={order.id}>
-          <p>
-            <strong>
-              Round {roundIndex + 1} · #{order.order_number}
-            </strong>
-          </p>
-          <ul>
-            {order.items.map((line, i) => (
-              <li key={`${order.id}-${i}`}>
-                {line.quantity}× {line.name} — {formatMoney(line.line_total)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-      <p>
-        <strong>Total {formatMoney(receipt.amount)}</strong> — paid by {receipt.method}
-      </p>
+      <style>{`@media print { ${page} }`}</style>
+      <Receipt bill={bill} size={paper} />
     </div>,
     document.body,
   );

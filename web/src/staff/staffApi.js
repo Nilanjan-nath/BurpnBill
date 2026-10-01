@@ -124,9 +124,10 @@ export const staffApi = {
   rejectOrder: (token, orderId) => request('POST', `/orders/${orderId}/reject`, { token }),
   getTableBill: (token, tableId) => request('GET', `/tables/${tableId}/bill`, { token }),
   // idempotencyKey is the client's: a double-tapped Confirm must settle once.
-  checkoutTable: (token, tableId, { method, idempotencyKey }) =>
+  checkoutTable: (token, tableId, { method, idempotencyKey, amountTendered }) =>
     request('POST', `/tables/${tableId}/checkout`, {
       token,
-      body: { method, idempotency_key: idempotencyKey },
+      body: { method, idempotency_key: idempotencyKey, amount_tendered: amountTendered },
     }),
+  getBill: (token, billId) => request('GET', `/bills/${billId}`, { token }),
 };

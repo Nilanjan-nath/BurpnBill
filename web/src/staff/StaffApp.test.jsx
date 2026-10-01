@@ -1668,6 +1668,45 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     expect(await screen.findByRole('button', { name: /Bill & checkout/ })).toBeInTheDocument();
   });
 
+  test('cash: a short amount blocks Confirm, a good one prints cash received and change, and the paper choice sticks', async () => {
+    const user = userEvent.setup();
+    await sql(
+      `update orders set status = 'cancelled'
+        where table_id = (select id from restaurant_tables where label = 'T3')
+          and paid_at is null and status <> 'cancelled'`,
+    );
+    await openPOS(user);
+
+    await user.click((await screen.findByText('T3')).closest('button'));
+    await user.click((await screen.findByText('Masala Chai')).closest('button')); // 30.00
+    await user.click(screen.getByRole('button', { name: 'Send to kitchen' }));
+    await user.click(await screen.findByRole('button', { name: /Bill & checkout/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    const confirmButton = within(dialog).getByRole('button', { name: /Confirm payment/ });
+    await user.type(within(dialog).getByLabelText('Amount tendered'), '20');
+    expect(confirmButton).toBeDisabled(); // 10.00 short
+    await user.clear(within(dialog).getByLabelText('Amount tendered'));
+    await user.type(within(dialog).getByLabelText('Amount tendered'), '100');
+    expect(confirmButton).toBeEnabled();
+    await user.click(confirmButton);
+
+    expect(await screen.findByText('Payment received')).toBeInTheDocument();
+    const preview = within(screen.getByRole('dialog')).getByLabelText('Receipt preview');
+    expect(within(preview).getByText('Cash received').closest('div')).toHaveTextContent('₹100.00');
+    expect(within(preview).getByText('Change').closest('div')).toHaveTextContent('₹70.00');
+    expect(preview.querySelector('.bnb-receipt-a4')).not.toBeNull();
+
+    // Thermal 80mm: the preview and the printout both switch, and it is remembered.
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Thermal 80mm' }));
+    expect(preview.querySelector('.bnb-receipt-thermal')).not.toBeNull();
+    expect(document.querySelector('.bnb-print-receipt .bnb-receipt-thermal')).not.toBeNull();
+    expect(document.querySelector('.bnb-print-receipt style').textContent).toMatch(/size: 80mm auto/);
+    expect(localStorage.getItem('burpnbill.paper')).toBe('thermal');
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
+  });
+
   test('a QR order waits in the QR tab and only reaches the kitchen once approved', async () => {
     const user = userEvent.setup();
     await clearApprovalQueue();
@@ -1780,8 +1819,15 @@ describe('the POS tab (step 7 slices 2-3)', () => {
     // reads the amount back before dismissing it.
     expect(await screen.findByText('Payment received')).toBeInTheDocument();
     const receipt = screen.getByRole('dialog');
-    expect(within(receipt).getByText('₹30.00')).toBeInTheDocument();
-    expect(within(receipt).getByText(/upi/i)).toBeInTheDocument();
+    expect(within(receipt).getAllByText('₹30.00').length).toBeGreaterThan(0);
+    expect(within(receipt).getAllByText(/upi/i).length).toBeGreaterThan(0);
+
+    // And the receipt itself: the café, a bill number, the dish, the total.
+    const preview = within(receipt).getByLabelText('Receipt preview');
+    expect(within(preview).getByRole('heading', { name: 'Chai Point Cafe' })).toBeInTheDocument();
+    expect(within(preview).getByText('Bill No.')).toBeInTheDocument();
+    expect(within(preview).getByText('Masala Chai')).toBeInTheDocument();
+    expect(within(preview).getByText('Total').closest('div')).toHaveTextContent('₹30.00');
 
     await user.click(within(receipt).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByText('Payment received')).not.toBeInTheDocument());

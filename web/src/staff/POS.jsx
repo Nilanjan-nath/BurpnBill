@@ -397,7 +397,9 @@ export function POS({ token }) {
           bill={pos.bill}
           busy={pos.checkingOut === pos.bill.table.id}
           onClose={pos.closeBill}
-          onConfirm={({ method, idempotencyKey }) => pos.checkoutTable(pos.bill.table.id, { method, idempotencyKey })}
+          onConfirm={({ method, idempotencyKey, amountTendered }) =>
+            pos.checkoutTable(pos.bill.table.id, { method, idempotencyKey, amountTendered })
+          }
         />
       )}
     </div>

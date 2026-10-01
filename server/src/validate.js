@@ -228,6 +228,7 @@ export const createStaffOrderBody = z.strictObject({
 });
 
 export const tableIdParams = z.strictObject({ tableId: id });
+export const billIdParams = z.strictObject({ billId: id });
 
 // Staff management (step 6 slice 5). 'kitchen' is the old catch-all 'staff'
 // minus POS; 'staff' is front of house.
@@ -262,6 +263,8 @@ export const dashboardQuery = z.strictObject({
 export const checkoutTableBody = z.strictObject({
   method: z.enum(['cash', 'card', 'upi']),
   idempotency_key: z.string().trim().min(8).max(128),
+  // Cash only: what the customer handed over, so the bill can print the change.
+  amount_tendered: z.number().finite().nonnegative().max(10_000_000).optional(),
 });
 
 // Throws a 400 listing every problem, or returns the parsed (cleaned) value.

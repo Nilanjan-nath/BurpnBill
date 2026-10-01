@@ -364,7 +364,11 @@ test('replaying one idempotency key settles the table once, however many times C
 
   assert.equal(first.status, 200);
   assert.equal(first.body.already_settled, false);
-  assert.equal(replay.status, 400, 'the table has nothing left to settle on a replay');
+  // A replay is not an error any more: the second tap gets the SAME bill back,
+  // flagged as already settled, so the receipt can be shown again.
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.already_settled, true);
+  assert.equal(replay.body.bill.id, first.body.bill.id);
 
   const { rows } = await db.query('select count(*)::int as n from payments where order_id = $1', [
     created.body.order.id,
