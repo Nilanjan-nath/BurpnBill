@@ -4,6 +4,7 @@ import { useStaffSession } from './useStaffSession.js';
 import { useBoard } from './useBoard.js';
 import { staffApi, StaffApiError } from './staffApi.js';
 import { SignInScreen } from './SignInScreen.jsx';
+import { SetPasswordScreen } from './SetPasswordScreen.jsx';
 import { Board } from './Board.jsx';
 import { CreateCafeScreen } from './CreateCafeScreen.jsx';
 import { AuthShell } from './AuthShell.jsx';
@@ -40,6 +41,7 @@ function Authenticated({ auth }) {
 
   if (session.token === undefined) return <Centered>Loading…</Centered>;
   if (session.token === null) return <SignInScreen session={session} />;
+  if (session.invitation) return <SetPasswordScreen session={session} />;
   return <SignedIn key={session.token} token={session.token} auth={auth} onSignOut={session.signOut} />;
 }
 

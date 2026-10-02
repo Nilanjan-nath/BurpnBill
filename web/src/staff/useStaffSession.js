@@ -8,8 +8,20 @@ import { useCallback, useEffect, useState } from 'react';
 //
 //   token: undefined while the very first check is in flight, null when
 //   signed out, a string once signed in.
+//
+//   invitation: set while someone who arrived through an invite email still has
+//   to choose a password — { restaurantName } — otherwise null. Supabase's
+//   invite link signs them in without one, and the invite put `invited: true`
+//   in their user metadata; setting the password adds `password_set: true`. That
+//   flag rides along on the session itself, so a reload can't skip the step.
+const invitationOf = (session) => {
+  const meta = session?.user?.user_metadata;
+  return meta?.invited === true && meta.password_set !== true ? { restaurantName: meta.restaurant_name ?? null } : null;
+};
+
 export function useStaffSession(authClient) {
   const [token, setToken] = useState(undefined);
+  const [invitation, setInvitation] = useState(null);
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState(null);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
@@ -17,11 +29,14 @@ export function useStaffSession(authClient) {
   useEffect(() => {
     let cancelled = false;
     authClient.auth.getSession().then(({ data }) => {
-      if (!cancelled) setToken(data.session?.access_token ?? null);
+      if (cancelled) return;
+      setToken(data.session?.access_token ?? null);
+      setInvitation(invitationOf(data.session));
     });
 
     const { data } = authClient.auth.onAuthStateChange((_event, session) => {
       setToken(session?.access_token ?? null);
+      setInvitation(invitationOf(session));
     });
     return () => {
       cancelled = true;
@@ -57,7 +72,14 @@ export function useStaffSession(authClient) {
       setSigningIn(true);
       setSignInError(null);
       setAwaitingConfirmation(false);
-      const { data, error } = await authClient.auth.signUp({ email, password });
+      // The confirmation link lands on /staff, already signed in, rather than on
+      // Supabase's default Site URL (the home page). Supabase only honours this
+      // address if it is in the project's Redirect URLs allow-list.
+      const { data, error } = await authClient.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/staff` },
+      });
       setSigningIn(false);
       if (error) {
         setSignInError(error.message);
@@ -68,10 +90,27 @@ export function useStaffSession(authClient) {
     [authClient],
   );
 
+  // Finishing an invite: choose a password. Supabase keeps the flag in the
+  // user's metadata, so it survives a reload; on success the screen moves on
+  // here without waiting for another auth event.
+  const setPassword = useCallback(
+    async (password) => {
+      setSigningIn(true);
+      setSignInError(null);
+      const { error } = await authClient.auth.updateUser({ password, data: { password_set: true } });
+      setSigningIn(false);
+      if (error) setSignInError(error.message);
+      else setInvitation(null);
+    },
+    [authClient],
+  );
+
   const signOut = useCallback(() => authClient.auth.signOut(), [authClient]);
 
   return {
     token,
+    invitation,
+    setPassword,
     signingIn,
     signInError,
     awaitingConfirmation,

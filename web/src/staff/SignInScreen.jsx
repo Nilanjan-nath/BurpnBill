@@ -5,11 +5,10 @@ const FIELD =
   'min-h-12 w-full rounded-input border border-ink-300 bg-paper px-3 text-base font-semibold text-ink-900 ' +
   'focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30';
 
-// Two modes on one screen. Sign-up exists because an invite is only a
-// pre-authorised email (server/src/services/staffAdmin.js) — it deliberately
-// creates no login and sends no mail, so an invited person needs somewhere to
-// make their own account. Joining the cafe then happens by itself on their
-// first authenticated request.
+// Two modes on one screen. Sign-up is for someone starting their own café, and
+// for an invitee who would rather not use the emailed link: an invite is a
+// pre-authorised email (server/src/services/staffAdmin.js), so whoever signs in
+// with that address joins by themselves on their first authenticated request.
 export function SignInScreen({ session }) {
   const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
   const [email, setEmail] = useState('');
@@ -40,7 +39,7 @@ export function SignInScreen({ session }) {
             {signingUp ? 'Create your account' : 'Staff sign in'}
           </h1>
           {signingUp && (
-            <p className="mt-1.5 text-sm font-semibold text-ink-600">Invited to a café? Use the email address they invited.</p>
+            <p className="mt-1.5 text-sm font-semibold text-ink-600">Invited to a café? Open the link in your invite email, or use the address they invited.</p>
           )}
         </div>
         <label className="block">

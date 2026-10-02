@@ -32,7 +32,7 @@ import { getBill } from '../services/bills.js';
 import { listTables, createTable, updateTable, deleteTable, getTableBill, checkoutTable } from '../services/tables.js';
 import { getRestaurantProfile, updateRestaurantProfile, updateOwnProfile } from '../services/restaurantProfile.js';
 import { createRestaurant } from '../services/signup.js';
-import { listStaff, inviteStaff, revokeInvite, updateStaffRole, removeStaff } from '../services/staffAdmin.js';
+import { listStaff, inviteStaff, sendInviteEmail, resendInvite, revokeInvite, updateStaffRole, removeStaff } from '../services/staffAdmin.js';
 import { notFound, HttpError } from '../errors.js';
 import {
   parse,
@@ -67,7 +67,7 @@ import {
 // query is scoped to req.staff.restaurantId.
 //   owner: everything
 //   staff: work the order board, 86 items
-export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits }) {
+export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits, supabase, appBaseUrl }) {
   const router = Router();
   const staff = [requireStaff];
   const owner = [requireStaff, requireOwner];
@@ -384,14 +384,31 @@ export function staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore
   });
 
   // Staff management (step 6 slice 5) — owner only. An invite is a
-  // pre-authorised email, not an account: nothing is sent, and the person is
-  // linked on their first authenticated request (see middleware/auth.js).
+  // pre-authorised email: whoever signs in with it is linked on their first
+  // authenticated request (see middleware/auth.js). Supabase also emails them a
+  // link that signs them in, so joining is one click and a password.
+  // The link lands on /staff, which must be in Supabase's redirect allow-list.
   router.get('/staff', owner, async (req, res) => {
     res.json(await listStaff(db, req.staff.restaurantId));
   });
   router.post('/staff/invites', owner, async (req, res) => {
     const body = parse(inviteStaffBody, req.body);
-    res.status(201).json({ invite: await inviteStaff(db, req.staff.restaurantId, req.staff.userId, body) });
+    const invite = await inviteStaff(db, req.staff.restaurantId, req.staff.userId, body);
+    const email = await sendInviteEmail(supabase, {
+      email: invite.email,
+      role: invite.role,
+      restaurantName: req.staff.restaurantName,
+      redirectTo: `${appBaseUrl}/staff`,
+    });
+    res.status(201).json({ invite, email });
+  });
+  router.post('/staff/invites/:inviteId/resend', owner, async (req, res) => {
+    const { inviteId } = parse(inviteIdParams, req.params);
+    const email = await resendInvite(db, supabase, req.staff.restaurantId, inviteId, {
+      restaurantName: req.staff.restaurantName,
+      redirectTo: `${appBaseUrl}/staff`,
+    });
+    res.json({ email });
   });
   router.delete('/staff/invites/:inviteId', owner, async (req, res) => {
     const { inviteId } = parse(inviteIdParams, req.params);

@@ -1395,11 +1395,11 @@ live database is also the owner's to run** — the sandbox has refused it (corre
 
 Ordered by how badly each one hurts if it is missing on a Saturday.
 
-- [ ] **Custom SMTP for Supabase Auth — the one I would have missed.** Supabase's built-in email
-      sender is limited to a handful of messages per hour on the free plan. The landing page sends
-      people to *sign up*, and sign-up needs a confirmation email, so on a launch day the third
-      person to try gets nothing. Use a free transactional sender (Resend, Brevo or similar) on a
-      verified sender address on the new domain (SPF/DKIM records at Cloudflare/Namecheap)
+- [x] **Custom SMTP for Supabase Auth** (done 2026-10-03, production project). Brevo (300 a day free):
+      burpnbill.com authenticated with the Brevo code, two DKIM CNAMEs (grey cloud) and a DMARC `p=none`
+      record added beside the existing Namecheap MX and SPF (one SPF record only); sender
+      `no-reply@burpnbill.com`, name "BurpnBill"; `smtp-relay.brevo.com:587` entered in Supabase
+      Authentication > SMTP Settings. A real sign-up confirmation arrived in the inbox and its link worked
 - [x] **Rate limiting on the public routes** (branch `feat/rate-limiting`; no migration). Per guest session
       for `POST /orders` (10 a minute), `/orders/status` (20), cart and `/bill` (60); per IP for `/menu` (120),
       `/receipts` (30), `POST /restaurants` (5 an hour) and a 1000-a-minute backstop on every public route.
@@ -1617,3 +1617,27 @@ ordering app's styles; `Receipt.jsx` and `receipt.css` moved to `web/src/receipt
 same receipt without a code of its own, a "Print or save as PDF" button, and a noindex meta. Not built:
 WhatsApp/SMS sharing, a link on the customer's phone bill, expiring tokens. Tests: server 221, web 172.
 Mutation-checked: a QR that encodes the wrong path is caught.
+
+## Step 15 — Auth emails: confirmation lands on /staff, staff invites are emailed (branch `feat/auth-emails`)
+
+*Found on the first real sign-up (2026-10-03), once custom SMTP worked.*
+
+- [x] **Confirmation link:** `signUp` passes `emailRedirectTo: {origin}/staff`, so the link opens the dashboard
+      already signed in (the create-your-café screen for a new owner) instead of the home page
+- [x] **Invites are emailed.** `POST /staff/invites` saves the invite, then asks Supabase Auth to email the
+      invitee (`inviteUserByEmail`, redirect `{appBaseUrl}/staff`, metadata `invited`, café name, role). The
+      response carries `email: sent | has_account | failed`; the invite is saved in every case. `POST
+      /staff/invites/:id/resend` (owner only, scoped to the café) sends again and renews an expired invite
+- [x] **Set your password:** the invite link signs them in without a password, so `SetPasswordScreen` comes
+      before the dashboard until `password_set` is in their user metadata (so a reload cannot skip it)
+- [x] **Staff screen:** "Send invite", a notice saying what happened to the email, a Resend button per open
+      invite, the list renamed "Invited, not joined yet"
+- [x] Tests: server 239 (was 234), web 178 (was 173). Mutation-checked six ways (redirect dropped, the
+      has-account branch, resend not scoped to the café, invitation never detected, no `emailRedirectTo`,
+      the password step never clearing); each caught
+- [ ] **Owner steps before it works live:** add `https://www.burpnbill.com/**` to Redirect URLs in the production
+      Supabase project (Authentication > URL Configuration); optionally edit the "Invite user" email template
+      (Authentication > Email Templates) to read well, e.g. using `{{ .Data.restaurant_name }}`
+- [ ] **Not verified:** resending to someone whose first invite is still unaccepted (Supabase may answer "already
+      registered", which the screen words as "already has a login"); the invite link's 24-hour life (a Supabase
+      setting) against the invite row's 7 days

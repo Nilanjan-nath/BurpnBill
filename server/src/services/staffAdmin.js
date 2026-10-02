@@ -30,9 +30,10 @@ export async function listStaff(db, restaurantId) {
   return { members, invites };
 }
 
-// POST /staff/invites — pre-authorise an email. No email is sent: the person
-// signs up with this address themselves and is linked on their first
-// authenticated request (see middleware/auth.js). Re-inviting the same address
+// POST /staff/invites — pre-authorise an email, then email them (sendInviteEmail
+// below). The invite row is what grants access: whoever signs in with this
+// address is linked on their first authenticated request (see
+// middleware/auth.js), however they got an account. Re-inviting the same address
 // replaces the open invite rather than erroring, because "invite them again"
 // is what someone means when the first one expired or had the wrong role.
 export async function inviteStaff(db, restaurantId, invitedBy, { email, role, display_name }) {
@@ -56,6 +57,47 @@ export async function inviteStaff(db, restaurantId, invitedBy, { email, role, di
     [restaurantId, normalised, role, display_name ?? null, invitedBy],
   );
   return rows[0];
+}
+
+// Email the invitee through Supabase Auth, which sends it from the SMTP sender
+// configured in the dashboard. Their link signs them in and the dashboard asks
+// them to choose a password (`invited` below is how it knows to).
+//
+// Never throws: the invite row is already saved and is what grants access, so a
+// mail problem must not undo it or turn the owner's click into an error. The
+// caller learns what happened instead:
+//   'sent'        — Supabase accepted it
+//   'has_account' — that address already has a login. Nothing is sent; they just
+//                   sign in and the invite links them
+//   'failed'      — anything else (SMTP down, over the hourly email limit...)
+export async function sendInviteEmail(supabase, { email, role, restaurantName, redirectTo }) {
+  try {
+    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo,
+      data: { invited: true, restaurant_name: restaurantName, role },
+    });
+    if (!error) return 'sent';
+    if (error.code === 'email_exists' || /already (been )?registered/i.test(error.message ?? '')) return 'has_account';
+    console.error(`[invite] could not email ${email}:`, error.message);
+    return 'failed';
+  } catch (err) {
+    console.error(`[invite] could not email ${email}:`, err.message);
+    return 'failed';
+  }
+}
+
+// POST /staff/invites/:inviteId/resend — same email again, and a fresh seven
+// days if it had run out, since an expired invite is the usual reason to resend.
+export async function resendInvite(db, supabase, restaurantId, inviteId, { restaurantName, redirectTo }) {
+  const { rows } = await db.query(
+    `update public.staff_invites
+        set expires_at = greatest(expires_at, now() + interval '7 days')
+      where id = $1 and restaurant_id = $2 and accepted_at is null
+      returning email, role`,
+    [inviteId, restaurantId],
+  );
+  if (!rows.length) throw notFound('Invite not found');
+  return sendInviteEmail(supabase, { email: rows[0].email, role: rows[0].role, restaurantName, redirectTo });
 }
 
 // DELETE /staff/invites/:inviteId — withdraw one that hasn't been claimed.

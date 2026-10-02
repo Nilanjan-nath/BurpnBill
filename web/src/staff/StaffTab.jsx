@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Crown, ChefHat, Mail, Plus, UserMinus, X, Clock } from 'lucide-react';
+import { Crown, ChefHat, Mail, Plus, UserMinus, X, Clock, Send } from 'lucide-react';
 import { useStaffAdmin } from './useStaffAdmin.js';
 
 // Three roles, and what each one actually opens — the description is the point
@@ -28,6 +28,22 @@ export function StaffTab({ token }) {
           <div className="flex items-center justify-between gap-3 rounded-card border border-danger-200 bg-danger-50 px-4 py-2.5 text-sm font-semibold text-danger-700" role="alert">
             <span>{admin.error}</span>
             <button type="button" onClick={admin.dismissError} aria-label="Dismiss" className="text-lg leading-none">
+              ×
+            </button>
+          </div>
+        )}
+
+        {admin.notice && (
+          <div
+            className={`flex items-center justify-between gap-3 rounded-card border px-4 py-2.5 text-sm font-semibold ${
+              admin.notice.tone === 'ok'
+                ? 'border-butter-500 bg-butter-100 text-ink-900'
+                : 'border-danger-200 bg-danger-50 text-danger-700'
+            }`}
+            role="status"
+          >
+            <span>{admin.notice.text}</span>
+            <button type="button" onClick={admin.dismissNotice} aria-label="Dismiss" className="text-lg leading-none">
               ×
             </button>
           </div>
@@ -124,7 +140,7 @@ export function StaffTab({ token }) {
 
         {admin.invites.length > 0 && (
           <div>
-            <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Waiting to sign up</h3>
+            <h3 className="mb-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink-600">Invited, not joined yet</h3>
             <div className="rounded-card border border-ink-200 bg-paper">
               {admin.invites.map((i) => (
                 <div key={i.id} className="flex items-center gap-3 border-b border-ink-200 p-4 last:border-b-0">
@@ -141,6 +157,16 @@ export function StaffTab({ token }) {
                   <span className={`flex-none rounded-full px-3 py-1.5 text-xs font-bold ${roleChip(i.role)}`}>
                     {roleLabel(i.role)}
                   </span>
+                  <button
+                    type="button"
+                    aria-label={`Resend invite to ${i.email}`}
+                    title="Send the email again"
+                    disabled={admin.busyId === i.id}
+                    onClick={() => admin.resend(i)}
+                    className="flex h-10 w-10 items-center justify-center rounded-input text-ink-600 hover:bg-ink-100 hover:text-brand-700 disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                  </button>
                   <button
                     type="button"
                     aria-label={`Revoke invite for ${i.email}`}
@@ -181,10 +207,8 @@ function InviteForm({ admin, onDone }) {
   return (
     <form onSubmit={submit} className="rounded-card border border-ink-200 bg-paper p-5">
       <h3 className="text-base font-bold text-ink-900">Invite someone</h3>
-      {/* No email is sent — see server/src/services/staffAdmin.js. Saying so
-          here stops anyone waiting for a message that never comes. */}
       <p className="mt-1 text-sm font-semibold text-ink-600">
-        No email is sent. They sign up with this address themselves and join automatically.
+        We email them a link. They click it, choose a password, and join.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -260,7 +284,7 @@ function InviteForm({ admin, onDone }) {
           disabled={admin.busyId === 'new-invite'}
           className="min-h-12 rounded-card bg-brand px-4 text-sm font-bold text-white transition duration-150 ease-tap hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50"
         >
-          {admin.busyId === 'new-invite' ? 'Adding…' : 'Add to team'}
+          {admin.busyId === 'new-invite' ? 'Sending…' : 'Send invite'}
         </button>
       </div>
     </form>

@@ -66,7 +66,7 @@ export function createApp({
   const limits = createRateLimiters(config.rateLimit);
 
   app.use('/api', publicRoutes({ db, config, requireGuestSession, hub, limits }));
-  app.use('/api', staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits }));
+  app.use('/api', staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits, supabase, appBaseUrl: config.appBaseUrl }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -169,11 +169,19 @@ trigger enforces the same table as a backstop, in case the two ever drift apart.
   key to `auth.users` — so a person must already exist as an auth user before they can be
   linked. An invite is therefore a **pre-authorised email** in `staff_invites`, not an account:
   the owner adds an address and role, the person signs up themselves, and their first
-  authenticated request claims the invite (`middleware/auth.js`). **No email is sent** —
-  Supabase's built-in invite mail is rate-limited and unreliable without custom SMTP, and
-  nothing here should depend on deliverability. The address is only as trustworthy as
-  Supabase's own "Confirm email" setting, which is what proves the person owns the inbox;
-  invites expire after 7 days and can be revoked, to keep that window small.
+  authenticated request claims the invite (`middleware/auth.js`). **The invitee is emailed**
+  (step 15): `POST /staff/invites` saves the invite and then calls Supabase Auth's
+  `inviteUserByEmail`, which sends from the SMTP sender configured in the dashboard (Brevo).
+  The link lands on `/staff` already signed in, with `invited: true` in the user metadata; the
+  dashboard asks for a password (`SetPasswordScreen`, then `password_set: true`) and the first
+  request links them. The invite row is what grants access, so a mail failure never loses it:
+  the response says `email: sent | has_account | failed` and the Staff screen words each, with
+  a Resend button. An address that already has a login is not emailed; signing in is enough.
+  Revoking an invite leaves any login the email created alone (it grants no café). The address
+  is only as trustworthy as Supabase's own "Confirm email" setting, and an invite link click
+  is itself proof of the inbox; invites expire after 7 days and can be revoked, to keep that
+  window small. `/staff` must be in the project's Redirect URLs allow-list, for this link and
+  for the sign-up confirmation link (`emailRedirectTo`).
 - **Settings (decided, step 6)**: the café's profile and its seating plan are the café's, so
   they are the owner's — `PATCH /restaurant` and `PATCH /tables/:id` are owner-only, while the
   *reads* are open to any staff member because the currency alone decides how every price on

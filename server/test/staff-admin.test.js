@@ -21,6 +21,11 @@ let otherRestaurantId;
 // it. `valid-<id>` alone keeps working for users who need no email.
 const emails = new Map();
 
+// The invite email goes through Supabase Auth's admin API; record what the
+// server asked for, and let a test make Supabase answer with an error.
+let sentInvites = [];
+let inviteError = null;
+
 before(async () => {
   db = await createTestDb();
   const supabase = {
@@ -29,6 +34,12 @@ before(async () => {
         if (!token.startsWith('valid-')) return { data: null, error: new Error('bad token') };
         const id = token.slice(6);
         return { data: { user: { id, email: emails.get(id) } }, error: null };
+      },
+      admin: {
+        async inviteUserByEmail(email, options) {
+          sentInvites.push({ email, options });
+          return inviteError ? { data: null, error: inviteError } : { data: { user: { email } }, error: null };
+        },
       },
     },
   };
@@ -48,6 +59,8 @@ after(async () => {
 
 beforeEach(async () => {
   emails.clear();
+  sentInvites = [];
+  inviteError = null;
   await db.query('delete from public.staff_invites');
   await db.query('delete from public.staff_members');
   await db.query(
@@ -142,6 +155,71 @@ test('a revoked invite no longer opens the door', async () => {
 
   emails.set(NEWCOMER, 'nope@example.com');
   assert.equal((await call('GET', '/api/me', { as: NEWCOMER })).status, 403);
+});
+
+test('inviting emails the invitee a link to /staff, naming the café and the role', async () => {
+  const res = await invite(OWNER, { email: 'New.Hire@Example.com', role: 'kitchen' });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.email, 'sent');
+  assert.equal(sentInvites.length, 1);
+  assert.equal(sentInvites[0].email, 'new.hire@example.com');
+  assert.equal(sentInvites[0].options.redirectTo, 'http://localhost:5173/staff', 'the link lands on the dashboard, not the home page');
+  assert.deepEqual(sentInvites[0].options.data, { invited: true, restaurant_name: 'Chai Point Cafe', role: 'kitchen' });
+});
+
+test('an address that already has a login still gets the invite; it just is not emailed', async () => {
+  inviteError = { code: 'email_exists', message: 'A user with this email address has already been registered' };
+  const res = await invite(OWNER, { email: 'already@example.com', role: 'staff' });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.email, 'has_account');
+  assert.equal((await listStaff(OWNER)).body.invites.length, 1, 'the invite is what links them when they sign in');
+  emails.set(NEWCOMER, 'already@example.com');
+  assert.equal((await call('GET', '/api/me', { as: NEWCOMER })).status, 200, 'and signing in is enough to join');
+});
+
+test('an email that cannot be sent never loses the invite, and says so', async () => {
+  inviteError = { message: 'SMTP connection refused' };
+  const realError = console.error;
+  console.error = () => {};
+  try {
+    const res = await invite(OWNER, { email: 'unlucky@example.com', role: 'staff' });
+    assert.equal(res.status, 201, 'the owner\'s click still worked');
+    assert.equal(res.body.email, 'failed');
+    assert.equal((await listStaff(OWNER)).body.invites.length, 1);
+  } finally {
+    console.error = realError;
+  }
+});
+
+test('resend sends the same email again and renews an expired invite', async () => {
+  const created = await invite(OWNER, { email: 'again@example.com', role: 'kitchen' });
+  await db.query(`update public.staff_invites set expires_at = now() - interval '1 day'`);
+  sentInvites = [];
+
+  const res = await call('POST', `/api/staff/invites/${created.body.invite.id}/resend`, { as: OWNER });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.email, 'sent');
+  assert.equal(sentInvites.length, 1);
+  assert.equal(sentInvites[0].email, 'again@example.com');
+  assert.equal(sentInvites[0].options.data.role, 'kitchen');
+  assert.equal((await listStaff(OWNER)).body.invites[0].expired, false, 'a resend gives it a fresh week');
+});
+
+test('resend is owner only, scoped to your café, and refuses a spent invite', async () => {
+  const created = await invite(OWNER, { email: 'scoped@example.com', role: 'staff' });
+  const url = `/api/staff/invites/${created.body.invite.id}/resend`;
+  assert.equal((await call('POST', url, { as: STAFF })).status, 403);
+  assert.equal((await call('POST', url, { as: KITCHEN })).status, 403);
+
+  const { rows } = await db.query(
+    `insert into public.staff_invites (restaurant_id, email, role) values ($1, 'theirs2@example.com', 'staff') returning id`,
+    [otherRestaurantId],
+  );
+  assert.equal((await call('POST', `/api/staff/invites/${rows[0].id}/resend`, { as: OWNER })).status, 404, 'not your café\'s invite');
+
+  await db.query(`update public.staff_invites set accepted_at = now() where id = $1`, [created.body.invite.id]);
+  assert.equal((await call('POST', url, { as: OWNER })).status, 404, 'already claimed');
+  assert.equal(sentInvites.length, 1, 'only the first invite ever sent mail');
 });
 
 test('validates the invite: a real email and one of the three roles', async () => {

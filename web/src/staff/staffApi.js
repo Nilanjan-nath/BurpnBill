@@ -120,6 +120,7 @@ export const staffApi = {
     request('GET', `/dashboard/summary${tz ? `?tz=${encodeURIComponent(tz)}` : ''}`, { token }),
   listStaff: (token) => request('GET', '/staff', { token }),
   inviteStaff: (token, body) => request('POST', '/staff/invites', { token, body }),
+  resendInvite: (token, inviteId) => request('POST', `/staff/invites/${inviteId}/resend`, { token }),
   revokeInvite: (token, inviteId) => request('DELETE', `/staff/invites/${inviteId}`, { token }),
   updateStaffRole: (token, userId, role) => request('PATCH', `/staff/${userId}`, { token, body: { role } }),
   removeStaff: (token, userId) => request('DELETE', `/staff/${userId}`, { token }),

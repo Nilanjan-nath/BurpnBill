@@ -35,6 +35,17 @@ export default async function setup({ provide }) {
         const [id, email] = token.slice(6).split('|');
         return { data: { user: { id, ...(email && { email }) } }, error: null };
       },
+      // Supabase's invite email. Two addresses stand in for the two ways it can
+      // go wrong, so the dashboard's wording for each is testable end to end.
+      admin: {
+        async inviteUserByEmail(email) {
+          if (email === 'has-login@example.com') {
+            return { data: null, error: { code: 'email_exists', message: 'A user with this email address has already been registered' } };
+          }
+          if (email === 'smtp-down@example.com') return { data: null, error: { message: 'SMTP connection refused' } };
+          return { data: { user: { email } }, error: null };
+        },
+      },
     },
   };
 

@@ -92,16 +92,28 @@ async function placeUnapproved(table, itemName, note) {
 // Anything the dashboard hands Supabase's own client rather than our API —
 // today just the new password, which deliberately never touches the server.
 let passwordChanges = [];
+let signUpOptions = [];
+let metadataUpdates = [];
 beforeEach(() => {
   passwordChanges = [];
+  signUpOptions = [];
+  metadataUpdates = [];
 });
 
-function createFakeAuth(userId, { signUpAs, requiresConfirmation = false } = {}) {
-  let session = null;
+// `invitedAs`: arrive the way Supabase's invite link leaves you — already
+// signed in as the invited person, no password yet, `invited` in the metadata.
+function createFakeAuth(userId, { signUpAs, requiresConfirmation = false, invitedAs } = {}) {
+  let session = invitedAs
+    ? {
+        access_token: `valid-${invitedAs.id}|${invitedAs.email}`,
+        user: { id: invitedAs.id, email: invitedAs.email, user_metadata: { invited: true, restaurant_name: 'Chai Point Cafe' } },
+      }
+    : null;
   const listeners = new Set();
   return {
     auth: {
-      async signUp({ email }) {
+      async signUp({ email, options }) {
+        signUpOptions.push(options);
         if (email === 'taken@example.com') {
           return { data: {}, error: { message: 'User already registered' } };
         }
@@ -128,9 +140,13 @@ function createFakeAuth(userId, { signUpAs, requiresConfirmation = false } = {})
         listeners.forEach((fn) => fn('SIGNED_OUT', null));
         return { error: null };
       },
-      async updateUser({ password }) {
+      async updateUser({ password, data }) {
         if (password === 'password') return { data: {}, error: { message: 'Password is too weak' } };
         passwordChanges.push(password);
+        if (data) {
+          metadataUpdates.push(data);
+          if (session?.user) session = { ...session, user: { ...session.user, user_metadata: { ...session.user.user_metadata, ...data } } };
+        }
         return { data: { user: { id: userId } }, error: null };
       },
     },
@@ -1962,7 +1978,7 @@ describe('staff management (step 6 slice 5)', () => {
     await sql(`update staff_members set role = 'kitchen' where display_name = 'Bikash'`); // leave the fixture as found
   });
 
-  test('inviting pre-authorises an email — no account is created, and it shows as waiting', async () => {
+  test('inviting pre-authorises an email and emails them — they show as invited, not as members', async () => {
     const user = userEvent.setup();
     await openStaff(user);
 
@@ -1970,10 +1986,11 @@ describe('staff management (step 6 slice 5)', () => {
     await user.type(screen.getByLabelText(/Email address/), 'Newbie@Example.com');
     await user.type(screen.getByLabelText(/Name/), 'Newbie');
     await user.click(screen.getByRole('radio', { name: /Kitchen/ }));
-    await user.click(screen.getByRole('button', { name: 'Add to team' }));
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
     expect(await screen.findByText('newbie@example.com')).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Waiting to sign up' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Invited, not joined yet' })).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('Invite sent to newbie@example.com');
 
     // It's an invite, not a member: nothing was added to the team itself.
     const [{ n }] = await sql("select count(*)::int as n from staff_members where display_name = 'Newbie'");
@@ -1986,6 +2003,41 @@ describe('staff management (step 6 slice 5)', () => {
     await waitFor(() => expect(screen.queryByText('newbie@example.com')).not.toBeInTheDocument());
     const [{ n: left }] = await sql('select count(*)::int as n from staff_invites where accepted_at is null');
     expect(left).toBe(0);
+  });
+
+  test('an address that already has a login is told to just sign in; a mail failure says to try again', async () => {
+    const user = userEvent.setup();
+    await openStaff(user);
+
+    const inviteFrom = async (email) => {
+      await user.click(screen.getByRole('button', { name: /Invite someone/ }));
+      await user.type(screen.getByLabelText(/Email address/), email);
+      await user.click(screen.getByRole('button', { name: 'Send invite' }));
+    };
+
+    await inviteFrom('has-login@example.com');
+    expect(await screen.findByRole('status')).toHaveTextContent(/already has a BurpnBill login.*sign in/i);
+
+    await inviteFrom('smtp-down@example.com');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/could not be sent.*Resend/i));
+    // Neither failure lost the invite.
+    expect(await screen.findByText('smtp-down@example.com')).toBeInTheDocument();
+    expect(screen.getByText('has-login@example.com')).toBeInTheDocument();
+
+    await sql("delete from staff_invites where email in ('has-login@example.com','smtp-down@example.com')");
+  });
+
+  test('Resend emails an open invite again and says so', async () => {
+    const user = userEvent.setup();
+    await sql(`insert into staff_invites (restaurant_id, email, role) values ($1, 'resend-me@example.com', 'staff')`, [
+      '11111111-1111-1111-1111-111111111111',
+    ]);
+    await openStaff(user);
+
+    await user.click(await screen.findByRole('button', { name: /Resend invite to resend-me@example.com/ }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Invite sent to resend-me@example.com');
+
+    await sql("delete from staff_invites where email = 'resend-me@example.com'");
   });
 
   test('the last owner cannot be demoted — the API refuses and the screen says why', async () => {
@@ -2013,6 +2065,7 @@ describe('staff management (step 6 slice 5)', () => {
 
 describe('joining a café from an invite', () => {
   const NEWCOMER = '7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b';
+  const LINK_USER = '9d9d9d9d-9d9d-4d9d-8d9d-9d9d9d9d9d9d'; // its own id: NEWCOMER is already a member by the time later tests run
 
   test('an invited person signs up and lands in the café with the role they were given', async () => {
     const user = userEvent.setup();
@@ -2043,6 +2096,65 @@ describe('joining a café from an invite', () => {
     expect(row).toEqual({ role: 'kitchen', display_name: 'New Hire' }); // the invite's own name was used
     const [{ n }] = await sql('select count(*)::int as n from staff_invites where accepted_at is null');
     expect(n).toBe(0, 'the invite is spent');
+  });
+
+  test('the link in the invite email signs them in; they choose a password, then land in the café', async () => {
+    const user = userEvent.setup();
+    await sql(
+      `insert into staff_invites (restaurant_id, email, role, display_name)
+       values ($1, 'linkuser@example.com', 'kitchen', 'Link User')`,
+      ['11111111-1111-1111-1111-111111111111'],
+    );
+    render(<StaffApp auth={createFakeAuth(null, { invitedAs: { id: LINK_USER, email: 'linkuser@example.com' } })} />);
+
+    // Signed in by the link, but not yet in: the password comes first.
+    expect(await screen.findByRole('heading', { name: 'Set your password' })).toBeInTheDocument();
+    expect(screen.getByText(/invited to Chai Point Cafe/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Order board' })).not.toBeInTheDocument();
+
+    // Two different passwords never reach Supabase.
+    await user.type(screen.getByLabelText('Password'), 'longenough1');
+    await user.type(screen.getByLabelText('Type it again'), 'longenough2');
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/don't match/);
+    expect(passwordChanges).toEqual([]);
+
+    await user.clear(screen.getByLabelText('Type it again'));
+    await user.type(screen.getByLabelText('Type it again'), 'longenough1');
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+
+    expect(await screen.findByRole('heading', { name: 'Order board' })).toBeInTheDocument();
+    expect(passwordChanges).toEqual(['longenough1']);
+    expect(metadataUpdates).toEqual([{ password_set: true }]); // so a reload does not ask again
+    const [row] = await sql('select role, display_name from staff_members where user_id = $1', [LINK_USER]);
+    expect(row).toEqual({ role: 'kitchen', display_name: 'Link User' });
+    await sql('delete from staff_members where user_id = $1', [LINK_USER]); // leave the fixtures as found
+  });
+
+  test('a password Supabase rejects is explained on the same screen', async () => {
+    const user = userEvent.setup();
+    render(<StaffApp auth={createFakeAuth(null, { invitedAs: { id: NEWCOMER, email: 'weak@example.com' } })} />);
+    await screen.findByRole('heading', { name: 'Set your password' });
+
+    await user.type(screen.getByLabelText('Password'), 'password');
+    await user.type(screen.getByLabelText('Type it again'), 'password');
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password is too weak');
+    expect(screen.getByRole('heading', { name: 'Set your password' })).toBeInTheDocument();
+  });
+
+  test('the confirmation email for a new account lands on /staff, not the home page', async () => {
+    const user = userEvent.setup();
+    render(<StaffApp auth={createFakeAuth(null, { signUpAs: NEWCOMER, requiresConfirmation: true })} />);
+    await screen.findByRole('heading', { name: 'Staff sign in' });
+    await user.click(screen.getByRole('button', { name: /New here/ }));
+    await user.type(screen.getByLabelText('Email'), 'redirect@example.com');
+    await user.type(screen.getByLabelText('Password'), 'hunter22');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    await screen.findByRole('status');
+
+    expect(signUpOptions).toEqual([{ emailRedirectTo: `${window.location.origin}/staff` }]);
   });
 
   test('signing up without an invite joins no existing café — it offers a new one', async () => {
