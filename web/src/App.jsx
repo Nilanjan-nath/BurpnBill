@@ -4,6 +4,9 @@ import { Message } from './components/Message.jsx';
 // Loaded only once someone actually opens /staff — a customer scanning a
 // table's QR code never downloads any of the staff dashboard's code.
 const StaffApp = lazy(() => import('./staff/StaffApp.jsx'));
+// BurpnBill's own admin area. Its own chunk for the same reason: nobody at a table,
+// and no café's staff, should ever download it.
+const AdminApp = lazy(() => import('./admin/AdminApp.jsx'));
 // Same rule the other way: the landing page is for café owners, and a customer
 // at a table should never pay for it either. Verified in the production build.
 const LandingPage = lazy(() => import('./landing/LandingPage.jsx'));
@@ -35,6 +38,14 @@ export default function App() {
     return (
       <Suspense fallback={<Message title="Loading your receipt…">One moment.</Message>}>
         <ReceiptPage token={receiptToken} />
+      </Suspense>
+    );
+  }
+
+  if (path === '/admin' || path.startsWith('/admin/')) {
+    return (
+      <Suspense fallback={<Message title="Loading…">One moment.</Message>}>
+        <AdminApp />
       </Suspense>
     );
   }

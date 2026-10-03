@@ -116,6 +116,16 @@ A phone on mobile data should still load the site while your laptop is blocked.
 
 Sign-up confirmations and staff invites are sent by Supabase Auth through Brevo (Authentication > SMTP Settings: `smtp-relay.brevo.com`, port 587, sender `no-reply@burpnbill.com`; the login and SMTP key come from Brevo's SMTP & API page and live only in Supabase). Authentication > URL Configuration needs Site URL `https://www.burpnbill.com` **and** `https://www.burpnbill.com/**` in Redirect URLs, or the links in those emails fall back to the home page. DNS for the sender (Brevo code, two DKIM CNAMEs, DMARC) sits beside the Namecheap forwarding MX and SPF records; never add a second SPF record.
 
+## Platform admin (`/admin`)
+
+BurpnBill's own area: every café, the monthly report, who has paid. It signs in with the same login as `/staff`, but only a login listed in `platform_admins` gets in, and nothing creates that row for you. After the migration `20261003120000_platform_admin.sql` is applied, sign in once at `/staff` (or sign up), copy your user id from Supabase (Authentication > Users), and run, on the server:
+
+```bash
+psql "$DATABASE_URL" -c "insert into public.platform_admins (user_id) values ('<your user id>')"
+```
+
+Invoices to cafés print the seller details from the server's `.env` (`BILLING_SELLER_NAME`, `_ADDRESS`, `_PHONE`, `_EMAIL`, `_TAX_ID`; see `.env.production.example`). Set them before recording the first payment: they are copied onto each invoice when it is recorded, so changing them later does not alter invoices already sent.
+
 ## 8. Turn Cloudflare on (you)
 
 Once `https://www.burpnbill.com` works with the grey cloud, flip both A records to **Proxied (orange cloud)** in Cloudflare. Reload the site. The kitchen board's live stream keeps working (the API sends a heartbeat every 25 s, inside Cloudflare's 100 s idle limit). If the certificate is ever not renewing behind the proxy, set the records back to grey for a minute.

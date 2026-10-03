@@ -69,7 +69,7 @@ describe('the brand tokens', () => {
 
 // Every surface that takes the brand system, listed by directory. The customer
 // app (components/, customer/) deliberately does not and is not scanned.
-const BRANDED = ['staff', 'landing'];
+const BRANDED = ['staff', 'landing', 'admin'];
 const sources = BRANDED.flatMap((dir) =>
   fs
     .readdirSync(path.join(src, dir))

@@ -1,12 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler, notFoundHandler } from './errors.js';
-import { createRequireStaff, createRequireAuthUser } from './middleware/auth.js';
+import { createRequireStaff, createRequireAuthUser, createRequirePlatformAdmin } from './middleware/auth.js';
 import { createRequireGuestSession, GUEST_SESSION_HEADER } from './middleware/guestSession.js';
 import { createRateLimiters } from './middleware/rateLimit.js';
 import { createOrderEventHub } from './orderStream.js';
 import { publicRoutes } from './routes/public.js';
 import { staffRoutes } from './routes/staff.js';
+import { adminRoutes } from './routes/admin.js';
 import { createImageStore } from './services/itemImages.js';
 
 // Builds the Express app from its dependencies, so tests can pass fakes.
@@ -65,6 +66,9 @@ export function createApp({
   const requireGuestSession = createRequireGuestSession({ db, sessionTtlHours: config.guestSessionTtlHours });
   const limits = createRateLimiters(config.rateLimit);
 
+  // The platform owner's area; its own gate, separate from any café's staff.
+  const requirePlatformAdmin = createRequirePlatformAdmin({ supabase, db });
+  app.use('/api', adminRoutes({ db, requirePlatformAdmin, limits, billingSeller: config.billingSeller }));
   app.use('/api', publicRoutes({ db, config, requireGuestSession, hub, limits }));
   app.use('/api', staffRoutes({ db, requireStaff, requireAuthUser, hub, imageStore, limits, supabase, appBaseUrl: config.appBaseUrl }));
 

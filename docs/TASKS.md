@@ -12,7 +12,7 @@ Tick items off as they land.
 - [ ] **Verify the database certificate.** Download Supabase's CA certificate
       (Project Settings → Database → SSL Configuration) and set `DATABASE_CA_CERT` in `.env`.
       Until then the API's database connection is encrypted but not verified.
-- [ ] Once the API verifies the certificate, turn on **Enforce SSL** in the same dashboard section.
+- [ ] Turn on **Enforce SSL** in the same dashboard section (production project). The API already verifies the certificate there (2026-10-02), so this is safe; the owner has not confirmed it is on.
 - [ ] Add a `.gitattributes` with `*.sh text eol=lf`. On Windows, Git otherwise checks out
       `scripts/db.sh` with CRLF line endings and bash refuses to run it.
 - [ ] `.gitignore` lists `docs/schema.md`, `scripts/db.sh`, `scripts/verify_schema.sql`, the
@@ -1362,8 +1362,7 @@ The product name changes before the first real café sees it. It is small — ab
       handover; it decides where a confirmation link lands)
 - [ ] Supabase Auth: confirm **"Confirm email" is enabled** — self-serve signup and the invite model
       both trust it
-- [ ] `DATABASE_CA_CERT` set so the database connection is *verified*, then turn on **Enforce SSL** in
-      Supabase (both already on the housekeeping list)
+- [x] `DATABASE_CA_CERT` set (2026-10-02, production server: `/opt/burpnbill/supabase-ca.crt`), so the database connection is *verified*. **Still to do:** turn on **Enforce SSL** in Supabase (owner)
 - [ ] Express **`trust proxy`** — behind Caddy the client IP is otherwise the proxy's, which would
       make per-client rate limiting (below) limit everyone at once
 - [ ] Caddy: **no response buffering for `/api/orders/stream`** (`flush_interval -1`), or the kitchen
@@ -1415,9 +1414,12 @@ Ordered by how badly each one hurts if it is missing on a Saturday.
       recovery**, so a bad migration or a mistaken delete is unrecoverable without one. A nightly
       `pg_dump` to object storage (Oracle's free bucket, or Cloudflare R2), kept for a fortnight —
       and **one restore tried for real**, because an untested backup is a hope, not a backup
-- [ ] **An uptime monitor** (UptimeRobot or Better Stack, free) on `/health/ready`, which checks the
-      database and Supabase Auth. It also does a second job: **Supabase pauses a free project after
-      a week of inactivity**, and a check that touches the database every few minutes prevents it
+- [x] **An uptime monitor** (2026-10-03): UptimeRobot free plan, two monitors, checked every 5 minutes with email
+      alerts to the owner: an HTTP check on `https://www.burpnbill.com`, and a keyword check on
+      `/health/ready` that alerts when `"status":"ok"` is missing (it also touches the database, which keeps
+      Supabase from pausing the project). Not set up: SMS or phone alerts (paid), error tracking (Sentry was
+      discussed and deferred until the first café). The owner can press "Test Notification" once to see the
+      email arrive
 - [ ] **Verify staff tokens locally** (JWT signature) instead of a network call to Supabase Auth on
       every request. Already listed; on a free tier it removes a dependency from every screen and a
       round trip from every tap
@@ -1641,3 +1643,70 @@ Mutation-checked: a QR that encodes the wrong path is caught.
 - [ ] **Not verified:** resending to someone whose first invite is still unaccepted (Supabase may answer "already
       registered", which the screen words as "already has a login"); the invite link's 24-hour life (a Supabase
       setting) against the invite row's 7 days
+
+## Step 16 — Production Supabase project, cutover (done 2026-10-02/03)
+
+- [x] **A second Supabase project** (`burpnbill-prod`, Mumbai, free plan) now serves the live site; the original
+      project stays as the development project (the local `.env` still points at it). Created by the owner;
+      Auth: Site URL `https://www.burpnbill.com`, "Confirm email" on
+- [x] **Cutover run on the server**, not from the laptop: `postgresql-client` installed, the two env files backed
+      up as `.env.bak-20261002-174841` / `web/.env.bak-20261002-174841`, new values typed at prompts (never in
+      chat or shell history), `scripts/db.sh migrate` (all 11 migrations), `verify`, then `deploy.sh`. **No seed**:
+      production has no demo café. `/health/ready` ok on the new project
+- [x] **Verified database connection** with Supabase's CA certificate (`DATABASE_CA_CERT`); the journal shows no
+      "not verified" warning
+- [x] **Custom SMTP** (Brevo) on the production project; sign-up confirmation arrived and its link worked
+- [x] **Auth emails** (Step 15) deployed and tested live by the owner: the confirmation link lands on `/staff`,
+      and an invite email arrives, its link signs the invitee in, they set a password and join the café
+- [x] **Redirect URL** `https://www.burpnbill.com/**` in the production project (the links above only land on `/staff`
+      with it, and they did, so it is in place)
+- [ ] **Cleanup:** delete `.env.bak-20261002-174841`, `web/.env.bak-20261002-174841` and `/tmp/supabase-ca.crt` on the
+      server once the cutover has proved stable (the first one holds the old project's service-role key)
+- [ ] The old project's demo café and the owner's and friends' old staff logins did not move; people were invited
+      again from the new Staff tab
+- [ ] **Read-only production access for Claude** (a read-only database role) was raised and parked: until then
+      Claude cannot read live production data
+
+## Step 17 — Platform admin: the BurpnBill owner's dashboard, plans and payments (branch `feat/platform-admin`)
+
+*Plan agreed 2026-10-03: a 14-day trial, then a paid plan of ₹1499 for 6 months. No payment gateway yet and no company: money
+arrives by UPI or bank transfer, and the owner records it by hand. Steps 1 to 3 of the agreed build order are built; step 4
+(enforcement) is not.*
+
+- [x] **Migration `20261003120000_platform_admin.sql` — NOT YET APPLIED to the live database (owner runs it).** `orders.source`
+      (backfilled), `restaurants.trial_ends_at` / `paid_until` / `owner_email`, `subscription_payments`, `subscription_events`,
+      `platform_admins`. Deploy order: migrate, merge and push, deploy; then insert your own user into `platform_admins`
+      (DEPLOY.md)
+- [x] **`orders.source`** is written when an order is created (`qr` by the customer flow, `pos` by the POS), so QR vs counter is
+      recorded and no longer guessed. The café's own dashboard still infers it from `cart_id`; moving it over is a follow-up
+- [x] **`/admin` screens** (own lazy chunk, 34 kB, never loaded by customers or café staff): Overview (cafés by plan, trials
+      ending, plans expiring, trials with no orders, money received, sign-ups by week), Monthly report (per café: QR orders, POS
+      orders, order value, sales, change on last month, average order, cancelled, last order; a total row; month buttons; CSV),
+      Cafés list, and a café's detail (figures, a QR/POS-per-day chart, payments, plan activity)
+- [x] **Record a payment** (after the money arrives): amount, method, reference, months. The paid period starts at the latest of
+      now, the trial's end and the current plan's end, so paying early loses no trial days. Numbered invoice (`BNB-0001`),
+      printable page from a frozen snapshot, one transaction reference can only be recorded once. **Extend the trial** by 3 to 30
+      days. Both are audited with who did them
+- [x] **The gate:** `/api/admin/*` needs a login listed in `platform_admins` (a café's owner gets 403), behind its own rate limit.
+      The screen asks `GET /admin/me` first and shows a refusal and nothing else to anyone else
+- [x] Tests: server 258 (was 239; 18 in `platform-admin.test.js`, 1 in `rate-limit.test.js`), web 188 (was 178; the brand
+      palette test now also covers `admin/`). Mutation-checked eleven ways: the gate, QR vs POS, unaccepted/cancelled orders
+      counted, IST vs UTC months, the payment period ignoring the trial, a duplicate reference, the invoice reading the live
+      café instead of its snapshot, sales as order value, extending a lapsed trial from its old end, a refusal treated as
+      allowed, and the QR/POS columns swapped. Each caught
+- [x] Looked at in a browser (a throwaway API on an in-memory database with sample cafés, deleted after): Overview, Monthly
+      report, a café's detail and the payment dialog at desktop and at 375px. Nothing scrolls sideways on a phone except the
+      wide table, inside its own box. The admin stays light under a dark OS, like the other branded pages. Printing the invoice
+      was not tried on a real printer
+- [ ] **Step 4, not built: enforcement.** Plan state (`trialing` / `active` / `grace` / `locked`) is computed and shown to the
+      admin only. Nothing warns a café or locks one. Still to decide and build: a banner from day 10, the 3-day grace, what locks
+      (the dashboard goes to a "choose a plan" screen; customer ordering stops with the existing "ordering unavailable"
+      message), and the landing page's pricing section, which still says "no price set" (its honesty test forbids a price in
+      `#pricing` and would change with it)
+- [ ] **Owner decisions still open:** the name and address printed on invoices (set `BILLING_SELLER_*`; a personal name and
+      address will show to every café), how cafés reach you (for the banner), and an accountant's view of the invoice wording
+      (no tax lines are shown) and whether a GST-registered café can be given what it needs
+- [ ] **Not built:** lock/unlock buttons, automatic payment reminders (emails), a payment gateway (Razorpay was the candidate,
+      phase 2), refunds and credit notes, per-item reports in the admin, and a read-only production role for Claude
+- [ ] The migration's `trial_ends_at` backfill gives every existing café 14 days from `created_at`: a café older than that
+      starts in grace, not trial. Extend it from the admin before the migration reaches anyone who should not notice

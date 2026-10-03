@@ -373,6 +373,42 @@ Removed from v1: `GET /orders/:order_id` (customer tracking), `POST /payments`,
   code, found by its unguessable `public_token`. Returns the receipt fields only (no ids, no
   token, no kitchen notes), never cached, not indexed; a malformed token is a 404 with no query
 
+### Platform admin (BurpnBill's own area, `/api/admin`)
+
+The one part of the API that reads **across** cafés, so it has its own gate:
+`requirePlatformAdmin` accepts a valid login only if its user id is in `platform_admins`
+(inserted by hand; no API creates rows). Being a café's owner grants nothing here. A rate limit
+runs first (120 a minute per IP). Everything is read-only except recording a payment and
+extending a trial, both written to `subscription_events` with who did it.
+
+| Route | What it returns / does |
+|---|---|
+| `GET /admin/me` | 200 if this login is an admin (the screen asks before showing anything) |
+| `GET /admin/overview` | cafés by plan state, trials ending in 7 days, paid plans ending in 14, trials with no orders, money received this month, sign-ups by week |
+| `GET /admin/report?month=YYYY-MM` | per café: QR orders, POS orders, order value, **sales** (settled bills), average order, cancelled, last order, and the same figures for the previous month with the % change; plus a total row |
+| `GET /admin/restaurants` | the café list: plan, last order, orders and sales in 30 days, team size |
+| `GET /admin/restaurants/:id?month=` | one café: profile, plan, figures, a day-by-day series (QR / POS / money taken), payments, plan activity |
+| `POST /admin/restaurants/:id/payments` | record money already received `{amount, method, reference?, paid_on?, months?, note?}`; returns the payment (with its invoice number) and the new plan state |
+| `POST /admin/restaurants/:id/extend-trial` | `{days}` 1-60 |
+| `GET /admin/payments/:id/invoice` | the invoice, read from its frozen snapshot |
+
+Definitions, so the numbers can be argued with: a month is an **IST** month (Asia/Kolkata);
+an order counts once it is **accepted** (`approved_at`) and not cancelled; **sales** is the sum of
+settled bills in the month (money actually taken) and **order value** is everything accepted,
+settled or not; QR vs POS is `orders.source`, written by the API when the order is created.
+Money is summed in SQL, and the totals row in whole paise.
+
+**Plan state** is derived, never stored (`planState` in `services/platform.js`): `active` while
+`paid_until` is in the future, `trialing` while `trial_ends_at` is, `grace` for 3 days after the
+later of the two, then `locked`. **Nothing is enforced yet**: no café is locked or warned; the state is
+shown to the admin only. A payment's period starts at the latest of now, the trial's end and the
+current plan's end, so paying early loses no trial days and a renewal stacks.
+
+**Payments are recorded by hand** after the money has arrived (UPI or bank transfer). There is no
+payment gateway. A payment gets the next invoice number (`BNB-0001`, an identity column) and a
+snapshot of the café's and the seller's details (seller from `BILLING_SELLER_*`), so a reprint never
+changes. The same transaction reference cannot be recorded twice, against any café.
+
 ### Realtime (SSE)
 
 - Custom Server-Sent Events from Express — not Supabase Realtime, not websockets. Data flows

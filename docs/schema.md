@@ -139,6 +139,18 @@ check), `gst_rate` (0-28, default 5) and `fssai_number`. `bills` gains `gstin`, 
 check on `bills` enforces taxable + CGST + SGST = total, and CGST + SGST = tax, to the paisa. `tax_rate` null
 means GST was not charged.
 
+## Platform admin (migration 20261003120000, docs/TASKS.md Step 17)
+
+| Change | Why |
+|---|---|
+| `orders.source` (`qr` \| `pos`) | Which door an order came through, written by the API. The café dashboard used to infer it from `cart_id is not null`, which breaks if carts are ever cleaned up (`cart_id` is `on delete set null`). Backfilled from `cart_id`. The café dashboard still uses the inference; moving it onto `source` is a follow-up |
+| `restaurants.trial_ends_at` | End of the 14-day trial. Default now + 14 days; existing cafés backfilled to `created_at + 14 days`. Extendable by the platform admin |
+| `restaurants.paid_until` | End of the latest paid period; null = never paid. Plan state is derived from these two dates, not stored |
+| `restaurants.owner_email` | Contact only (grants nothing); set when the café is created, backfilled from the owner's login on Supabase |
+| `subscription_payments` | Money received from a café, one row per numbered invoice (`invoice_seq`, shown `BNB-0001`). Frozen `snapshot` of the café's and seller's details. `on delete restrict`: deleting a café never deletes a financial record. A unique index on `(lower(method), lower(reference))` stops the same transaction being recorded twice |
+| `subscription_events` | Audit trail: trial extended, payment recorded, and by whom |
+| `platform_admins` | Logins allowed into `/admin`. Inserted by hand; RLS on, no policies, no API |
+
 ## Known gaps, deliberately left
 
 - `order_items` / `cart_items` carry no `restaurant_id`, so their link to a menu

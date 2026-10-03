@@ -28,6 +28,15 @@ export function loadConfig(env = process.env) {
     guestSessionTtlHours: 3,
     // Caddy (on this machine) is the only proxy Express believes about client
     // addresses. Cloudflare's addresses are handled in the Caddyfile, not here.
+    // Who the invoices to cafés are from. Printed on every invoice and copied onto it when
+    // it is recorded, so changing these never rewrites an invoice already sent.
+    billingSeller: {
+      name: env.BILLING_SELLER_NAME?.trim() || 'BurpnBill',
+      address: env.BILLING_SELLER_ADDRESS?.trim() || null,
+      phone: env.BILLING_SELLER_PHONE?.trim() || null,
+      email: env.BILLING_SELLER_EMAIL?.trim() || null,
+      tax_id: env.BILLING_SELLER_TAX_ID?.trim() || null,
+    },
     trustProxy: env.TRUST_PROXY?.trim() || 'loopback',
     // Per-client limits on the public routes; see middleware/rateLimit.js for
     // what each number means. RATE_LIMIT=off switches them all off.

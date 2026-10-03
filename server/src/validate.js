@@ -304,3 +304,35 @@ export function parse(schema, data) {
     { issues: result.error.issues.map((i) => ({ field: i.path.join('.') || null, message: i.message })) },
   );
 }
+
+// --- platform admin (routes/admin.js) ------------------------------------------
+export const adminMonthQuery = z.strictObject({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Month must look like 2026-10').optional(),
+});
+export const adminRestaurantParams = z.strictObject({ restaurantId: id });
+export const adminPaymentParams = z.strictObject({ paymentId: id });
+
+// Money arrives as text or a number and is passed to Postgres as text, never summed
+// in JavaScript floats. Two decimals at most.
+const rupees = z
+  .union([z.string().trim(), z.number()])
+  .transform((v) => String(v))
+  .refine((v) => /^\d{1,8}(\.\d{1,2})?$/.test(v), 'Enter an amount like 1499 or 1499.00')
+  .refine((v) => Number(v) > 0, 'The amount must be more than zero');
+
+export const recordPaymentBody = z.strictObject({
+  amount: rupees,
+  method: z.enum(['upi', 'bank_transfer', 'cash', 'other']),
+  // Exactly what the café sent (a UTR). Blank counts as none.
+  reference: z
+    .string()
+    .trim()
+    .max(80)
+    .transform((s) => (s === '' ? undefined : s))
+    .optional(),
+  paid_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-03').optional(),
+  months: z.number().int().min(1).max(36).optional(),
+  note: z.string().trim().max(280).transform((s) => (s === '' ? undefined : s)).optional(),
+});
+
+export const extendTrialBody = z.strictObject({ days: z.number().int().min(1).max(60) });

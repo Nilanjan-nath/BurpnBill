@@ -9,15 +9,22 @@
    top layer and browsers print that inconsistently. Hidden on screen; on paper
    it is the only thing left. */
 .bnb-print-receipt,
-.bnb-print-sheet {
+.bnb-print-sheet,
+.bnb-print-invoice {
   display: none;
 }
 @media print {
   body > #root {
     display: none !important;
   }
-  .bnb-print-receipt {
+  .bnb-print-receipt,
+  .bnb-print-invoice {
     display: block !important;
+  }
+  .bnb-print-invoice .bnb-invoice {
+    margin: 0 auto;
+    max-width: 40rem;
+    padding: 0;
   }
   .bnb-print-receipt .bnb-receipt {
     margin: 0 auto;

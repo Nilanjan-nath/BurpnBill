@@ -123,6 +123,11 @@ test('create-a-cafe: a handful per ip per hour, counted before sign-in is checke
   assert.deepEqual(await sequentially(3, () => call('POST', '/api/restaurants', { body: {} })), [401, 401, 429]);
 });
 
+test('the platform admin area is limited per ip, counted before sign-in is checked', async () => {
+  const call = await start({ rateLimit: { adminPerMinute: 2 } });
+  assert.deepEqual(await sequentially(3, () => call('GET', '/api/admin/me')), [401, 401, 429]);
+});
+
 test('the forwarded address is believed only when the proxy is trusted', async () => {
   const trusted = await start({ rateLimit: { menuPerMinute: 2 }, trustProxy: 'loopback' });
   const codes = await sequentially(3, (i) => trusted('GET', `/api/menu/${token}`, { ip: `203.0.113.${i + 1}` }));

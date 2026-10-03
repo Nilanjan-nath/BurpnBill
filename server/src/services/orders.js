@@ -50,8 +50,8 @@ export function placeOrder(db, guest, { cart_id }) {
 
     const { rows: orders } = await tx.query(
       `insert into public.orders
-         (restaurant_id, table_id, guest_session_id, cart_id, subtotal, total_amount)
-       select $1, $2, $3, $4, s.subtotal, s.subtotal
+         (restaurant_id, table_id, guest_session_id, cart_id, subtotal, total_amount, source)
+       select $1, $2, $3, $4, s.subtotal, s.subtotal, 'qr'::public.order_source
          from (select coalesce(sum(mi.price * ci.quantity), 0) as subtotal
                  from public.cart_items ci
                  join public.menu_items mi on mi.id = ci.menu_item_id

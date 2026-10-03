@@ -16,6 +16,8 @@ const SECOND_STAFF_USER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 // Three roles since step 6 slice 5: 'staff' is front of house (and reaches
 // POS), 'kitchen' is the board and 86'ing only.
 const KITCHEN_USER_ID = 'a9a9a9a9-a9a9-4a9a-8a9a-a9a9a9a9a9a9';
+// A BurpnBill platform admin (not a member of any café): the /admin screens' login.
+const PLATFORM_ADMIN_ID = 'd4d4d4d4-d4d4-4d4d-8d4d-d4d4d4d4d4d4';
 
 export default async function setup({ provide }) {
   const db = await createTestDb();
@@ -81,6 +83,8 @@ export default async function setup({ provide }) {
     [STAFF_USER_ID, SECOND_STAFF_USER_ID, RESTAURANT_ID, KITCHEN_USER_ID],
   );
 
+  await db.query('insert into platform_admins (user_id) values ($1)', [PLATFORM_ADMIN_ID]);
+
   const server = createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/__test/sql') {
       let raw = '';
@@ -102,6 +106,7 @@ export default async function setup({ provide }) {
   provide('staffUserId', STAFF_USER_ID);
   provide('secondStaffUserId', SECOND_STAFF_USER_ID);
   provide('kitchenUserId', KITCHEN_USER_ID);
+  provide('platformAdminId', PLATFORM_ADMIN_ID);
 
   return async () => {
     server.close();

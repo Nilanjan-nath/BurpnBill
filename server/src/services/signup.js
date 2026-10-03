@@ -36,9 +36,9 @@ export async function createRestaurant(db, user, { name, currency_code, table_co
     }
 
     const { rows: created } = await tx.query(
-      `insert into public.restaurants (name, currency_code) values ($1, $2)
+      `insert into public.restaurants (name, currency_code, owner_email) values ($1, $2, $3)
        returning id, name, currency_code`,
-      [name, currency_code],
+      [name, currency_code, user.email ?? null],
     );
     const restaurant = created[0];
 

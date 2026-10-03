@@ -388,8 +388,8 @@ export function placeStaffOrder(db, restaurantId, actorId, { table_id, items }) 
     );
 
     const { rows: orders } = await tx.query(
-      `insert into public.orders (restaurant_id, table_id, guest_session_id, approved_at)
-       values ($1, $2, $3, now()) returning id`,
+      `insert into public.orders (restaurant_id, table_id, guest_session_id, approved_at, source)
+       values ($1, $2, $3, now(), 'pos') returning id`,
       [restaurantId, table_id, sessions[0].id],
     );
     const orderId = orders[0].id;

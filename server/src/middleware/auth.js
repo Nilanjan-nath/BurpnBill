@@ -105,6 +105,27 @@ export function createRequireAuthUser({ supabase }) {
   };
 }
 
+// The platform owner's area (/api/admin). Not a role inside any café: a platform
+// admin is a login listed in `platform_admins`, inserted by hand, and being a café's
+// owner grants nothing here. Everything behind this reads ACROSS cafés, so this is
+// the check the whole area rests on: a valid login that is not listed gets 403, and
+// no request value is ever used to decide who is an admin.
+export function createRequirePlatformAdmin({ supabase, db }) {
+  return async function requirePlatformAdmin(req, res, next) {
+    const [scheme, token] = (req.get('authorization') || '').split(' ');
+    if (scheme !== 'Bearer' || !token) throw unauthorized();
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) throw unauthorized('Session expired or invalid — sign in again');
+
+    const { rows } = await db.query('select 1 from public.platform_admins where user_id = $1', [data.user.id]);
+    if (!rows.length) throw forbidden('Not allowed');
+
+    req.admin = { userId: data.user.id };
+    next();
+  };
+}
+
 export function requireOwner(req, res, next) {
   if (req.staff?.role !== 'owner') throw forbidden('Only the owner can do this');
   next();

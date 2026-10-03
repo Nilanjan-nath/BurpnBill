@@ -20,6 +20,8 @@ export const DEFAULT_RATE_LIMITS = {
   orderPerMinute: 10,
   statusPerMinute: 20,
   cartPerMinute: 60,
+  // The platform admin area: one person, so this only has to stop a guessing script.
+  adminPerMinute: 120,
 };
 
 const MINUTE = 60_000;
@@ -42,6 +44,7 @@ export function createRateLimiters(settings) {
       order: passthrough,
       status: passthrough,
       cart: passthrough,
+      admin: passthrough,
     };
   }
   const s = { ...DEFAULT_RATE_LIMITS, ...settings };
@@ -80,5 +83,6 @@ export function createRateLimiters(settings) {
     order: make(MINUTE, s.orderPerMinute, bySession),
     status: make(MINUTE, s.statusPerMinute, bySession),
     cart: make(MINUTE, s.cartPerMinute, bySession),
+    admin: make(MINUTE, s.adminPerMinute, byIp),
   };
 }

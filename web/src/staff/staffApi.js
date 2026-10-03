@@ -14,7 +14,7 @@ export class StaffApiError extends Error {
   }
 }
 
-async function request(method, path, { token, body } = {}) {
+export async function request(method, path, { token, body } = {}) {
   let res;
   try {
     res = await fetch(BASE + path, {
